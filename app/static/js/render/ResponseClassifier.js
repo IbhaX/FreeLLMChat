@@ -23,18 +23,33 @@
   // Matches a fenced block whose language tag is nova-response. Captures the
   // inner JSON. Allows trailing/leading whitespace and other markdown around.
   const FENCE_RE = /```nova-response\s*\n([\s\S]*?)\n```/;
+  // Unterminated fence: model forgot the closing ``` (or stream was cut).
+  const FENCE_OPEN_RE = /```nova-response\s*\n([\s\S]*)$/;
+
+  function parseEnvelopeJson(inner, match) {
+    try {
+      const obj = JSON.parse(inner.trim());
+      if (!obj || typeof obj !== "object" || !obj.response_type) return null;
+      return { envelope: obj, match };
+    } catch (_) {
+      return null;
+    }
+  }
 
   function tryParseEnvelope(text) {
     if (typeof text !== "string") return null;
     const m = text.match(FENCE_RE);
-    if (!m) return null;
-    try {
-      const obj = JSON.parse(m[1].trim());
-      if (!obj || typeof obj !== "object" || !obj.response_type) return null;
-      return { envelope: obj, match: m };
-    } catch (_) {
-      return null;
-    }
+    if (m) return parseEnvelopeJson(m[1], m);
+    const m2 = text.match(FENCE_OPEN_RE);
+    if (!m2) return null;
+    const inner = m2[1];
+    // try whole inner, then progressively trimmed to the last '}' so
+    // trailing prose after the JSON doesn't break detection
+    let r = parseEnvelopeJson(inner, m2);
+    if (r) return r;
+    const last = inner.lastIndexOf("}");
+    if (last > 0) r = parseEnvelopeJson(inner.slice(0, last + 1), m2);
+    return r;
   }
 
   // Strip the envelope fence from text, returning the surrounding prose.
@@ -109,10 +124,15 @@
     const env = tryParseEnvelope(text);
     if (env) {
       const prose = stripEnvelope(text, env.match);
+      // Keep surrounding prose AND the envelope's own content — the prose
+      // is usually an intro line, not a substitute for the body text.
+      const content = env.envelope.content;
+      const parts = [prose];
+      if (content && content.trim() && content.trim() !== prose.trim()) parts.push(content);
       return {
         kind: "envelope",
         envelope: env.envelope,
-        prose: prose || env.envelope.content || "",
+        prose: parts.join("\n\n") || env.envelope.content || "",
       };
     }
 

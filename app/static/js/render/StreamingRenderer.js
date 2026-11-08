@@ -62,6 +62,26 @@
 
     function doRender() {
       let text = acc;
+      // A nova-response envelope still streaming looks like raw JSON to
+      // markdown — show a soft placeholder until the fence closes and the
+      // real component render can take over.
+      if (/```nova-response/.test(text)) {
+        const env = Nova.ResponseClassifier.tryParseEnvelope(text);
+        if (!env) {
+          const html = '<div class="nova-composing">✨ Composing response…</div>' + CURSOR;
+          if (html !== lastHtml) {
+            host.innerHTML = html;
+            lastHtml = html;
+            maybeScroll();
+          }
+        } else {
+          // envelope complete mid-stream: render components live
+          Nova.ResponseRenderer.render(Nova.ResponseClassifier.classify(text), host);
+          lastHtml = host.innerHTML;
+          maybeScroll();
+        }
+        return;
+      }
       const fenceCount = (text.match(/```/g) || []).length;
       const parseText = fenceCount % 2 ? text + "\n```" : text;
       const html = Nova.MarkdownRenderer.render(parseText) + CURSOR;

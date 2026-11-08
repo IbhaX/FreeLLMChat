@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <link rel="stylesheet" href="/static/css/theme.css">
+<link rel="stylesheet" href="/static/css/render.css">
 <style>
   body{display:block;overflow:auto}
   .wrap{max-width:760px;margin:0 auto;padding:24px 16px 80px}
@@ -40,10 +41,33 @@
 </div>
 <script src="/static/js/render/ns.js"></script>
 <script src="/static/js/render/ComponentRegistry.js"></script>
+<script src="/static/js/render/ResponseClassifier.js"></script>
 <script src="/static/js/render/MarkdownRenderer.js"></script>
+<script src="/static/js/render/CodeRenderer.js"></script>
+<script src="/static/js/render/TableRenderer.js"></script>
+<script src="/static/js/render/ChartRenderer.js"></script>
+<script src="/static/js/render/Cards.js"></script>
+<script src="/static/js/render/JsonViewer.js"></script>
+<script src="/static/js/render/StatusRenderers.js"></script>
+<script src="/static/js/render/MediaRenderer.js"></script>
+<script src="/static/js/render/InteractiveRenderer.js"></script>
+<script src="/static/js/render/Visuals.js"></script>
+<script src="/static/js/render/SuggestedPrompts.js"></script>
+<script src="/static/js/render/MessageActions.js"></script>
+<script src="/static/js/render/ResponseRenderer.js"></script>
 <script>
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const md=t=>{try{return window.NovaRender?.MarkdownRenderer?.render(t)||esc(t)}catch(e){return esc(t)}};
+// Render each bubble through the same engine the chat uses (decodes
+// nova-response envelopes into components); fall back to plain markdown.
+const bubbleFor=m=>{
+  const b=document.createElement('div');b.className='sh-bubble';
+  if(!m.role||m.role==='user'){b.innerHTML=md(m.text||m.content||'');return b;}
+  if(window.NovaRender?.ResponseRenderer){
+    try{NovaRender.ResponseRenderer.renderMessage(m,b,{showActions:false});return b;}catch(e){}
+  }
+  b.innerHTML=md(m.text||m.content||'');return b;
+};
 const id=location.pathname.split('/').pop();
 fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
   document.getElementById('title').textContent=d.title||'Shared conversation';
@@ -51,13 +75,18 @@ fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(
   const host=document.getElementById('msgs');
   const msgs=d.messages||[];
   if(!msgs.length){host.innerHTML='<div class="sh-empty">This conversation is empty.</div>';return;}
-  host.innerHTML=msgs.map(m=>{
+  host.innerHTML='';
+  msgs.forEach(m=>{
     const isUser=m.role==='user';
     const name=isUser?'You':(m.agentName||m.name||'Nova');
     const av=isUser?'U':name[0].toUpperCase();
-    return `<div class="sh-msg ${isUser?'user':''}"><div class="sh-av ${isUser?'me':'ai'}">${esc(av)}</div>`+
-      `<div class="sh-body"><div class="sh-name">${esc(name)}</div><div class="sh-bubble">${md(m.text||m.content||'')}</div></div></div>`;
-  }).join('');
+    const row=document.createElement('div');row.className=`sh-msg ${isUser?'user':''}`;
+    row.innerHTML=`<div class="sh-av ${isUser?'me':'ai'}">${esc(av)}</div><div class="sh-body"><div class="sh-name">${esc(name)}</div></div>`;
+    row.querySelector('.sh-body').append(bubbleFor(m));
+    host.append(row);
+  });
+  // suggested-prompt chips are interactive in the app; inert here
+  host.querySelectorAll('[data-q]').forEach(n=>n.removeAttribute('data-q'));
 }).catch(()=>{document.getElementById('msgs').innerHTML='<div class="sh-empty">Shared conversation not found.</div>';});
 </script>
 <script src="/static/js/theme.js"></script>

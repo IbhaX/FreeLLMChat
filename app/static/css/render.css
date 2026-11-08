@@ -480,3 +480,4 @@
   .nova-metric-grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
   .nova-metric-value{font-size:24px}
 }
+.nova-composing{color:var(--text-3);font-size:13px;padding:10px 2px;animation:uiFade .3s ease}
