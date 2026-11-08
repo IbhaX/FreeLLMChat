@@ -48,6 +48,13 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # Astra DB vector memory (optional — memory is off when unset).
+    astra_db_application_token: Optional[str] = None
+    astra_db_api_endpoint: Optional[str] = None
+    astra_db_keyspace: Optional[str] = None
+    memory_short_limit: int = 6
+    memory_long_limit: int = 6
+
 
 @lru_cache
 def get_settings() -> Settings:

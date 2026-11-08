@@ -113,6 +113,21 @@ async def embeddings(
     )
 
 
+def _remember(gateway, conv_id: str | None, user_text: str, reply: str) -> None:
+    """Fire-and-forget: store the turn in short-term memory and extract facts."""
+    if not conv_id:
+        return
+    import asyncio
+
+    from app.services import astra_memory
+
+    async def _bg() -> None:
+        astra_memory.store_short(str(conv_id), "assistant", reply)
+        await astra_memory.extract_and_store(gateway, user_text, reply)
+
+    asyncio.create_task(_bg())
+
+
 @router.post("/chat/completions")
 async def chat_completions(
     body: ChatCompletionRequest,
@@ -141,10 +156,20 @@ async def chat_completions(
             )
         else:
             payload["messages"].insert(0, {"role": "system", "content": struct_prompt})
+    last_user = next(
+        (m.get("content", "") for m in reversed(payload.get("messages") or [])
+         if m.get("role") == "user" and isinstance(m.get("content"), str)),
+        "",
+    )
+    conv_id = payload.pop("conversation_id", None)
     try:
+        from app.services import astra_memory
         from app.services.agents import get_memory_text
 
-        mem = await get_memory_text()
+        astra_memory.ensure_collections()
+        if last_user and conv_id:
+            astra_memory.store_short(str(conv_id), "user", last_user)
+        mem = await get_memory_text(last_user, conv_id and str(conv_id))
         if mem and isinstance(payload.get("messages"), list):
             # Append memory alongside any existing system prompt; never replace it.
             sys_idx = next(
@@ -216,6 +241,8 @@ async def chat_completions(
                 text = ""
                 for c in res.get("choices", []):
                     text += (c.get("message") or {}).get("content") or ""
+                if last_user:
+                    _remember(gateway, conv_id, last_user, text)
                 chunk = {"choices": [{"index": 0, "delta": {"content": text},
                                       "finish_reason": "stop"}]}
                 yield f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
@@ -232,8 +259,21 @@ async def chat_completions(
                 "key_label": key.label,
                 "model": model,
             })
+            reply = ""
             async for chunk in stream:
+                if last_user:
+                    try:
+                        for part in chunk.split(b"data: "):
+                            part = part.strip()
+                            if not part or part == b"[DONE]":
+                                continue
+                            for ch in _json.loads(part).get("choices", []):
+                                reply += (ch.get("delta") or {}).get("content") or ""
+                    except Exception:
+                        pass
                 yield chunk
+            if last_user:
+                _remember(gateway, conv_id, last_user, reply)
 
         return StreamingResponse(
             gen(),
@@ -242,6 +282,11 @@ async def chat_completions(
         )
     try:
         result, provider, key, model = await gateway.chat(session, payload)
+        if last_user:
+            reply = ""
+            for c in (result or {}).get("choices", []):
+                reply += ((c.get("message") or {}).get("content")) or ""
+            _remember(gateway, conv_id, last_user, reply)
     except GatewayExhausted as e:
         return JSONResponse(
             status_code=e.last_status or 503,

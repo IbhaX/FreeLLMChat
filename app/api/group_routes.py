@@ -125,6 +125,13 @@ async def group_stream(
         await session.commit()
         await session.refresh(orc)
 
+    from app.services import astra_memory
+
+    conv_id = str(body.conversation_id) if body.conversation_id else None
+    astra_memory.ensure_collections()
+    if conv_id:
+        astra_memory.store_short(conv_id, "user", body.message)
+
     transcript: list[dict[str, Any]] = list(body.history or [])
     transcript.append({"role": "user", "name": "You", "content": body.message})
     # run_agent ignores `history` for tool-less agents, so context is
@@ -178,9 +185,11 @@ async def group_stream(
             answers_txt = "\n\n".join(
                 f"--- {a.name} ---\n{text}" for a, text in answers
             )
+            mem = astra_memory.recall_text(body.message, conv_id)
             synth = (
                 f"The user asked:\n{body.message}\n\n"
-                f"Recent context:\n{transcript_txt}\n\n"
+                + (f"{mem}\n\n" if mem else "")
+                + f"Recent context:\n{transcript_txt}\n\n"
                 f"Each specialist answered independently:\n\n{answers_txt}\n\n"
                 "Synthesize ONE final answer for the user: reconcile conflicts, "
                 "deduplicate, keep the strongest points. Reply ONLY with the "
@@ -193,6 +202,11 @@ async def group_stream(
             transcript.append(
                 {"role": "assistant", "name": ORCHESTRATOR_NAME, "content": final}
             )
+            if conv_id:
+                astra_memory.store_short(conv_id, "assistant", final)
+                asyncio.ensure_future(
+                    astra_memory.extract_and_store(gw, body.message, final)
+                )
             yield _meta({"event": "agent_message",
                          "agent": ORCHESTRATOR_NAME, "content": final})
             yield _meta({"event": "group_done", "text": "Done"})
