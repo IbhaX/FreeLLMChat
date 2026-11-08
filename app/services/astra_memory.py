@@ -66,7 +66,10 @@ def ensure_collections() -> None:
         for name in (SHORT, LONG):
             if name not in existing:
                 try:
-                    db.create_collection(name, service=_VECTORIZE)
+                    db.create_collection(
+                        name,
+                        definition={"vector": {"service": _VECTORIZE}},
+                    )
                 except Exception:
                     db.create_collection(name)  # no vectorize → plain store
     except Exception:
