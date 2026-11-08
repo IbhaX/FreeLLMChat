@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     request_timeout_s: float = 120.0
     connect_timeout_s: float = 15.0
     stream_idle_timeout_s: float = 90.0
+    # Bail to the next key/provider if the first SSE chunk takes too long.
+    first_chunk_timeout_s: float = 20.0
 
     model_cache_ttl_s: int = 3600
     circuit_breaker_failures: int = 5

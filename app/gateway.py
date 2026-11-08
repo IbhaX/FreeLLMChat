@@ -325,7 +325,18 @@ class Gateway:
                 adapter = build_adapter(provider)
                 stream = adapter.chat_stream(self.client, raw, body)
                 try:
-                    first = await anext(stream)  # wait for first SSE chunk
+                    first = await asyncio.wait_for(
+                        anext(stream),  # wait for first SSE chunk
+                        timeout=self.settings.first_chunk_timeout_s,
+                    )
+                except (asyncio.TimeoutError, TimeoutError):
+                    last_err = ProviderError(
+                        f"no response in {self.settings.first_chunk_timeout_s:.0f}s",
+                        retryable=True,
+                    )
+                    await self._record_failure(session, key, provider, last_err)
+                    emit({"event": "retry", "text": f"{provider.name} · {key.label} — no response, trying next"})
+                    continue
                 except StopAsyncIteration:
                     last_err = ProviderError("empty stream", retryable=True)
                     await self._record_failure(session, key, provider, last_err)
