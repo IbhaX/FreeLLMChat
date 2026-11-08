@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import secrets
 from typing import Any
@@ -18,6 +19,40 @@ from app.models import AgentConfig, SharedConversation
 from app.services.agents import run_agent
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_gateway_key)])
+
+ORCHESTRATOR_NAME = "Orchestrator"
+
+ORCHESTRATOR_PROMPT = """You are the Orchestrator of a multi-agent chat.
+Several specialist agents each answered the user's message independently.
+Read all their answers, reconcile disagreements, deduplicate, and produce
+ONE final best answer for the user.
+
+Always reply with exactly one fenced code block tagged `nova-response`
+containing valid JSON — and nothing else:
+
+```nova-response
+{"response_type": "complex",
+ "content": "<markdown summary of the final answer>",
+ "components": [{"type": "<component>", "data": {}}],
+ "suggested_prompts": ["<short follow-up>", "..."]}
+```
+
+Available component types (use only when they genuinely help; an empty
+components list is fine):
+  table {title, columns:[...], rows:[[...]]}
+  keyvalue {title, pairs:[{key, value}]}
+  callout {variant: info|warn|success|error, title, message}
+  code {language, code, title}
+  stat_grid {stats:[{label, value, delta}]}
+  comparison {title, options:[{name, pros:[], cons:[]}]}
+  chart {chart_type: bar|line|pie|doughnut, title, labels:[], datasets:[{label, data:[]}]}
+  timeline {items:[{label, text}]}
+  math {expression}
+  instructions {steps:[{title, detail}]}
+  json_viewer {data}
+
+Never invent agents' names, never mention "specialists" or that you are
+an orchestrator — speak as the single voice of the answer."""
 
 
 class GroupChatRequest(BaseModel):
@@ -71,46 +106,96 @@ async def group_stream(
                                "type": "not_found"}},
         )
     gw = _gateway(request)
-    rounds = max(1, min(int(body.rounds or 1), 5))
+
+    # Orchestrator agent: get-or-create a persistent, user-editable config.
+    orc = (
+        await session.execute(
+            select(AgentConfig).where(AgentConfig.name == ORCHESTRATOR_NAME)
+        )
+    ).scalar_one_or_none()
+    if orc is None:
+        orc = AgentConfig(
+            name=ORCHESTRATOR_NAME,
+            description="Combines solo agent answers into one structured reply",
+            system_prompt=ORCHESTRATOR_PROMPT,
+            model="auto",
+            enabled=True,
+        )
+        session.add(orc)
+        await session.commit()
+        await session.refresh(orc)
+
+    transcript: list[dict[str, Any]] = list(body.history or [])
+    transcript.append({"role": "user", "name": "You", "content": body.message})
+    # run_agent ignores `history` for tool-less agents, so context is
+    # inlined into the prompt itself.
+    transcript_txt = "\n".join(
+        f"{h.get('name') or ('You' if h.get('role') == 'user' else 'Agent')}: {h.get('content', '')}"
+        for h in transcript[-30:]
+    )
+
+    async def solo(a: AgentConfig) -> tuple[AgentConfig, str]:
+        prompt = (
+            f"Conversation so far:\n{transcript_txt}\n\n"
+            f"Answer the latest user message as {a.name}. Be concise but complete."
+        )
+        try:
+            return a, await run_agent(gw, a, prompt, [])
+        except Exception as e:
+            return a, f"*(error: {e})*"
 
     async def gen():
         try:
-            transcript: list[dict[str, Any]] = list(body.history or [])
-            transcript.append({"role": "user", "name": "You", "content": body.message})
             names = ", ".join(a.name for a in agents)
             yield _meta({"event": "group_start",
-                         "text": f"Group chat: {names}",
-                         "agents": [a.name for a in agents]})
-            for rnd in range(rounds):
-                for a in agents:
-                    yield _meta({"event": "agent_start",
-                                 "agent": a.name,
-                                 "text": f"{a.name} is thinking…"})
-                    others = ", ".join(x.name for x in agents if x.id != a.id) or "the user"
-                    # run_agent ignores `history` for tool-less agents, so the
-                    # transcript is inlined in the prompt itself.
-                    transcript_txt = "\n".join(
-                        f"{h.get('name') or ('You' if h.get('role') == 'user' else 'Agent')}: {h.get('content', '')}"
-                        for h in transcript[-30:]
-                    )
-                    prompt = (
-                        f"You are {a.name}, one participant in a group chat with "
-                        f"{others} and the user.\n\n"
-                        f"Transcript so far:\n{transcript_txt}\n\n"
-                        f"Speak next as {a.name}: respond to the latest points, "
-                        f"be concise (1-4 sentences), and don't repeat what "
-                        f"others already said."
-                    )
-                    try:
-                        text = await run_agent(gw, a, prompt, [])
-                    except Exception as e:
-                        text = f"*(error: {e})*"
+                         "text": f"Orchestrating: {names}",
+                         "agents": [a.name for a in agents] + [ORCHESTRATOR_NAME]})
+            # Phase 1 — every agent answers solo, in parallel.
+            for a in agents:
+                yield _meta({"event": "agent_start",
+                             "agent": a.name,
+                             "text": f"{a.name} is thinking…"})
+            pending = {asyncio.ensure_future(solo(a)): a for a in agents}
+            answers: list[tuple[AgentConfig, str]] = []
+            while pending:
+                done, _ = await asyncio.wait(
+                    set(pending), return_when=asyncio.FIRST_COMPLETED
+                )
+                for t in done:
+                    a = pending.pop(t)
+                    a, text = t.result()
+                    answers.append((a, text))
                     transcript.append(
                         {"role": "assistant", "name": a.name, "content": text}
                     )
                     yield _meta({"event": "agent_message",
                                  "agent": a.name, "content": text})
-            yield _meta({"event": "group_done", "text": "Group round complete"})
+            # Phase 2 — orchestrator combines everything and decides the
+            # rendered components itself via a nova-response envelope.
+            yield _meta({"event": "agent_start",
+                         "agent": ORCHESTRATOR_NAME,
+                         "text": f"{ORCHESTRATOR_NAME} is combining answers…"})
+            answers_txt = "\n\n".join(
+                f"--- {a.name} ---\n{text}" for a, text in answers
+            )
+            synth = (
+                f"The user asked:\n{body.message}\n\n"
+                f"Recent context:\n{transcript_txt}\n\n"
+                f"Each specialist answered independently:\n\n{answers_txt}\n\n"
+                "Synthesize ONE final answer for the user: reconcile conflicts, "
+                "deduplicate, keep the strongest points. Reply ONLY with the "
+                "nova-response envelope defined in your instructions."
+            )
+            try:
+                final = await run_agent(gw, orc, synth, [])
+            except Exception as e:
+                final = f"*(orchestrator error: {e})*"
+            transcript.append(
+                {"role": "assistant", "name": ORCHESTRATOR_NAME, "content": final}
+            )
+            yield _meta({"event": "agent_message",
+                         "agent": ORCHESTRATOR_NAME, "content": final})
+            yield _meta({"event": "group_done", "text": "Done"})
             yield b"data: [DONE]\n\n"
         except Exception as e:
             yield _meta({"event": "error", "text": f"group error: {e}"})
