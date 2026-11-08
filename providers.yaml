@@ -1,31 +1,36 @@
 # FreeLLM Gateway provider seed file.
-# Quota figures change without notice — check docs_url / verified_on before relying.
-# limits keys: rpm, rpd, tpm, tpd (requests/tokens per minute/day). null = unknown.
+# Refreshed: 2026-11-08
+# IMPORTANT:
+# - Free-tier eligibility and quotas can vary by account, region, model, and provider policy.
+# - null/omitted limits mean unknown; do not treat them as unlimited.
+# - Prefer dynamic model discovery for aggregators with frequently changing free catalogs.
+# - Verify docs_url and account dashboard before production use.
 
 providers:
   - name: gemini
-    display_name: Google Gemini (AI Studio)
+    display_name: Google Gemini API (AI Studio)
     adapter: openai_compat
     base_url: https://generativelanguage.googleapis.com/v1beta/openai/
     auth_style: bearer
     default_env_key: GEMINI_API_KEY
     default_models:
-      - gemini-2.5-flash
-      - gemini-2.5-flash-lite
-      - gemini-2.5-pro
-      - gemma-3-27b-it
-    limits: {}                      # limits shown per-model in AI Studio; per project
+      - gemini-3.8-flash
+      - gemini-3.5-flash-lite
+    limits: {}
     daily_reset_tz: America/Los_Angeles
     requires_card: false
     commercial_ok: true
     rotation_strategy: least_used
-    auto_route_tags: [coding, fast, general]
-    docs_url: https://ai.google.dev/gemini-api/docs/rate-limits
-    notes: Limits enforced per Google Cloud project, not per key — use quota_group per project.
-    verified_on: "2026-10"
+    auto_route_tags: [fast, general, coding]
+    docs_url: https://ai.google.dev/gemini-api/docs/models
+    notes: >
+      Use current stable model IDs. Free-tier quotas are model- and project-specific;
+      verify the AI Studio quota page. Gemini 2.5 models are legacy for new projects
+      and Google recommends newer model families.
+    verified_on: "2026-11-08"
 
   - name: groq
-    display_name: Groq
+    display_name: GroqCloud
     adapter: openai_compat
     base_url: https://api.groq.com/openai/v1
     auth_style: bearer
@@ -33,24 +38,25 @@ providers:
     default_models:
       - openai/gpt-oss-120b
       - openai/gpt-oss-20b
-      - llama-3.3-70b-versatile
-      - meta-llama/llama-4-scout-17b-16e-instruct
-      - qwen/qwen3-32b
+      - qwen/qwen3.8-27b
     limits:
       rpm: 30
       rpd: 1000
       tpm: 8000
       tpd: 200000
     requires_card: false
-    commercial_ok: true
+    commercial_ok: false
     rotation_strategy: least_used
     auto_route_tags: [fast, coding, general]
     docs_url: https://console.groq.com/docs/rate-limits
-    notes: Limits vary per model; these reflect gpt-oss-120b free tier.
-    verified_on: "2026-10"
+    notes: >
+      Base free-plan limits shown for GPT-OSS models; actual limits are model- and
+      organization-specific. Read rate-limit headers and do not apply these figures
+      blindly to every model. Confirm commercial terms before production use.
+    verified_on: "2026-11-08"
 
   - name: openrouter
-    display_name: OpenRouter (:free models)
+    display_name: OpenRouter (dynamic free-model routing)
     adapter: openai_compat
     base_url: https://openrouter.ai/api/v1
     auth_style: bearer
@@ -59,39 +65,21 @@ providers:
       HTTP-Referer: http://localhost:8000
       X-Title: FreeLLM Gateway
     default_models:
-      - deepseek/deepseek-chat-v3.1:free
-      - meta-llama/llama-3.3-70b-instruct:free
-      - qwen/qwen3-235b-a22b:free
-      - google/gemini-2.0-flash-exp:free
+      - openrouter/free
     limits:
       rpm: 20
       rpd: 50
     requires_card: false
-    commercial_ok: true
+    commercial_ok: false
     rotation_strategy: round_robin
-    auto_route_tags: [general]
+    auto_route_tags: [general, coding, fast]
     docs_url: https://openrouter.ai/docs/api-reference/limits
-    notes: 50 req/day on :free models; 1,000/day after a one-time $10 credit purchase.
-    verified_on: "2026-10"
-
-  - name: mistral
-    display_name: Mistral (La Plateforme free tier)
-    adapter: openai_compat
-    base_url: https://api.mistral.ai/v1
-    auth_style: bearer
-    default_env_key: MISTRAL_API_KEY
-    default_models:
-      - mistral-small-latest
-      - codestral-latest
-      - mistral-large-latest
-    limits: {}                      # free-tier limits visible in admin panel
-    requires_card: false
-    commercial_ok: true
-    rotation_strategy: least_used
-    auto_route_tags: [coding, general]
-    docs_url: https://docs.mistral.ai/platform/pricing/
-    notes: Free "experiment" tier requires opt-in data sharing; check terms.
-    verified_on: "2026-10"
+    notes: >
+      Prefer openrouter/free instead of pinning model IDs because the free catalog
+      changes frequently. Free model variants are generally limited to 20 RPM and
+      50 requests/day; the daily limit increases to 1,000 after at least $10 in
+      purchased credits. Provider/model terms still apply; verify commercial rights.
+    verified_on: "2026-11-08"
 
   - name: cloudflare
     display_name: Cloudflare Workers AI
@@ -101,102 +89,40 @@ providers:
     default_env_key: CLOUDFLARE_API_TOKEN
     account_id_env: CLOUDFLARE_ACCOUNT_ID
     default_models:
-      - "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
-      - "@cf/meta/llama-3.1-8b-instruct"
-      - "@cf/qwen/qwen2.5-coder-32b-instruct"
+      - "@cf/deepseek-ai/deepseek-v4.1-flash-1017"
+      - "@cf/zai-org/glm-5.3"
+      - "@cf/google/gemma-4-26b-a4b-it"
+      - "@cf/qwen/qwen3.8-27b"
     limits:
       daily_neurons: 10000
     daily_reset_tz: UTC
     requires_card: false
     commercial_ok: true
     rotation_strategy: least_used
-    auto_route_tags: [fast, general]
-    docs_url: https://developers.cloudflare.com/workers-ai/platform/limits/
-    notes: 10,000 Neurons/day per account; resets 00:00 UTC. Needs account ID + API token.
-    verified_on: "2026-10"
-
-  - name: nvidia
-    display_name: NVIDIA API Catalog
-    adapter: openai_compat
-    base_url: https://integrate.api.nvidia.com/v1
-    auth_style: bearer
-    default_env_key: NVIDIA_API_KEY
-    default_models:
-      - meta/llama-3.3-70b-instruct
-      - deepseek-ai/deepseek-r1
-      - qwen/qwen3-coder-480b-a35b-instruct
-    limits: {}                      # varies per model; intended for prototyping
-    requires_card: false
-    commercial_ok: false
-    rotation_strategy: least_used
-    auto_route_tags: [coding, general]
-    docs_url: https://docs.api.nvidia.com/
-    notes: Free for prototyping/evaluation; not licensed for production use.
-    verified_on: "2026-10"
+    auto_route_tags: [fast, coding, general]
+    docs_url: https://developers.cloudflare.com/workers-ai/models/
+    notes: >
+      Free Workers allocation is 10,000 Neurons/day, resetting at 00:00 UTC.
+      Cloudflare announced removals for several older models effective November
+      20, 2026; these defaults use the announced replacement families. Check the
+      live catalog and per-model billing requirements before use.
+    verified_on: "2026-11-08"
 
   - name: cohere
-    display_name: Cohere (trial)
+    display_name: Cohere (trial/evaluation)
     adapter: openai_compat
     base_url: https://api.cohere.ai/compatibility/v1
     auth_style: bearer
     default_env_key: COHERE_API_KEY
     default_models:
-      - command-r-plus
-      - command-r
       - command-a-03-2025
+      - command-r7b-12-2024
+      - north-mini-code
     limits:
       rpm: 20
       monthly_calls: 1000
     requires_card: false
     commercial_ok: false
     rotation_strategy: least_used
-    auto_route_tags: [general]
-    docs_url: https://docs.cohere.com/docs/rate-limits
-    notes: "Trial keys: ~1,000 calls/month, 20 chat RPM, non-commercial use only."
-    verified_on: "2026-10"
-
-  - name: sambanova
-    display_name: SambaNova Cloud
-    adapter: openai_compat
-    base_url: https://api.sambanova.ai/v1
-    auth_style: bearer
-    default_env_key: SAMBANOVA_API_KEY
-    default_models:
-      - Meta-Llama-3.3-70B-Instruct
-      - DeepSeek-R1-Distill-Llama-70B
-      - Qwen3-32B
-    limits:
-      rpm: 20
-      rpd: 20
-      tpd: 200000
-    requires_card: false
-    commercial_ok: true
-    rotation_strategy: round_robin
-    auto_route_tags: [general]
-    docs_url: https://docs.sambanova.ai/cloud/docs/rate-limits
-    notes: Very low daily request cap — keep as fallback, not primary.
-    verified_on: "2026-10"
-
-  - name: cerebras
-    display_name: Cerebras Inference
-    adapter: openai_compat
-    base_url: https://api.cerebras.ai/v1
-    auth_style: bearer
-    default_env_key: CEREBRAS_API_KEY
-    default_models:
-      - llama-3.3-70b
-      - qwen-3-235b-a22b-instruct-2507
-    limits: {}                      # $5 credits / 30 days; check console
-    requires_card: true
-    commercial_ok: true
-    rotation_strategy: least_used
-    auto_route_tags: [fast, coding]
-    docs_url: https://inference-docs.cerebras.ai/
-    notes: $5 free credits (30 days) require a verified payment method.
-    verified_on: "2026-10"
-
-# Default failover chain used when a model is addressed as "auto".
-fallback:
-  auto: [groq, gemini, mistral, openrouter, nvidia, sambanova, cohere, cloudflare, cerebras]
-  "auto:coding": [groq, mistral, gemini, nvidia, cerebras, openrouter]
-  "auto:fast": [groq, sambanova, cerebras, cloudflare, gemini, mistral]
+    auto_route_tags: [coding, general]
+    docs_url: https://docs.cohere.com/v2/docs/rate-limits
