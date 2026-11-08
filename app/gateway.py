@@ -278,11 +278,16 @@ class Gateway:
     # ---------- streaming ----------
 
     async def chat_stream(
-        self, session: AsyncSession, payload: dict[str, Any]
+        self,
+        session: AsyncSession,
+        payload: dict[str, Any],
+        on_event: Any | None = None,
     ) -> tuple[AsyncIterator[bytes], Provider, ApiKey, str]:
         """Open a stream. Retries transparently until the first byte is
         yielded; callers receive an iterator whose mid-stream failures
-        emit a terminal SSE error event."""
+        emit a terminal SSE error event. ``on_event`` (sync callable) is
+        invoked with activity dicts as routing/failover progresses."""
+        emit = on_event or (lambda ev: None)
         request_id = self._request_id()
         requested = payload["model"]
         candidates = await self._attempts(session, requested)
@@ -297,6 +302,7 @@ class Gateway:
             if p.name not in seen:
                 seen.add(p.name)
                 by_provider.append((p, m))
+        emit({"event": "routing", "text": f"Routing '{requested}' across {len(by_provider)} provider(s)"})
 
         last_err: ProviderError | None = None
         tried: set[int] = set()
@@ -304,6 +310,7 @@ class Gateway:
         for provider, model in by_provider:
             if not self.breaker.allow(provider.name):
                 continue
+            emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
             body = dict(payload)
             body["model"] = model
             body["stream"] = True
@@ -322,16 +329,19 @@ class Gateway:
                 except StopAsyncIteration:
                     last_err = ProviderError("empty stream", retryable=True)
                     await self._record_failure(session, key, provider, last_err)
+                    emit({"event": "retry", "text": f"{provider.name} · {key.label} — empty stream, next key"})
                     continue
                 except ProviderError as e:
                     last_err = e
                     await self._record_failure(session, key, provider, e)
+                    emit({"event": "retry", "text": f"{provider.name} · {key.label} failed ({e.status_code or 'error'})"})
                     if not e.retryable:
                         break
                     continue
                 except Exception as e:
                     last_err = ProviderError(str(e), retryable=True)
                     await self._record_failure(session, key, provider, last_err)
+                    emit({"event": "retry", "text": f"{provider.name} · {key.label} — {e}, retrying"})
                     continue
                 return (
                     self._wrap_stream(
