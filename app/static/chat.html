@@ -191,9 +191,13 @@
   .act-item.done .act-dot{background:var(--success);box-shadow:none;animation:none}
 
   /* group chat stage */
-  #groupStage{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
-    padding:8px 16px;border-bottom:1px solid var(--border-1);background:var(--surface-1,var(--bg-1))}
-  .gagent{display:inline-flex;align-items:center;gap:7px;padding:4px 10px 4px 5px;
+  #groupStage{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;
+    padding:6px 12px;border-bottom:1px solid var(--border-1);background:var(--surface-1,var(--bg-1))}
+  .gpods{display:flex;gap:8px;align-items:center;flex:1;min-width:0;
+    overflow-x:auto;padding:4px 0;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .gpods::-webkit-scrollbar{display:none}
+  .gctl{display:flex;gap:8px;align-items:center;flex:none}
+  .gagent{display:inline-flex;align-items:center;gap:7px;padding:4px 10px 4px 5px;flex:none;
     border-radius:999px;border:1px solid var(--border-1);background:var(--bg-0,var(--surface-1));
     transition:box-shadow .25s,border-color .25s}
   .gagent .gav{width:22px;height:22px;border-radius:999px;background:var(--gc,#8b5cf6);
@@ -214,6 +218,15 @@
     50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--gc,#8b5cf6) 10%,transparent)}}
   #gRounds{background:var(--bg-0,var(--surface-1));color:var(--text-1);
     border:1px solid var(--border-1);border-radius:8px;padding:2px 6px;font-size:12px}
+  @media(max-width:767px){
+    .topbar{gap:6px;padding:8px 10px}
+    .topbar .chat-status{display:none}
+    .pill-btn{padding:4px 9px;font-size:12px}
+    .pill-btn .tb-tx{display:none}
+    .gagent .gname{max-width:74px;font-size:11.5px}
+    .gagent .grm{opacity:.5}
+    .gctl{font-size:11px;gap:6px}
+  }
   .regen-note{font-size:11px;color:var(--text-3);margin-top:5px}
   /* ---------- Composer ---------- */
   .composer{flex:none;padding:10px 12px 12px;border-top:1px solid var(--border-1);
@@ -351,7 +364,7 @@
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         <div class="model-menu ui-menu" id="modelMenu"></div>
       </button>
-      <button class="pill-btn" id="agentBtn">🤖 Agents</button>
+      <button class="pill-btn" id="agentBtn" title="Agents">🤖<span class="tb-tx"> Agents</span></button>
       <button class="pill-btn" id="agentNewBtn" title="Create agent">＋</button>
       <button class="pill-btn" id="agentEditBtn" title="Edit agent" style="display:none">✏️</button>
       <button class="pill-btn" id="agentDelBtn" title="Delete agent" style="display:none;color:var(--error)">🗑</button>
