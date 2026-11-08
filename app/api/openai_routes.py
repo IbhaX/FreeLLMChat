@@ -166,6 +166,9 @@ async def chat_completions(
         import json as _json
 
         events: asyncio.Queue[dict] = asyncio.Queue()
+        # `builtin_tools` (extra field): run the server-side tool-call loop
+        # over the gateway's built-in tools instead of plain streaming.
+        builtin = payload.pop("builtin_tools", None)
 
         async def _open():
             try:
@@ -175,7 +178,18 @@ async def chat_completions(
             except Exception as e:  # surfaced as an SSE error below
                 return e
 
-        task = asyncio.create_task(_open())
+        async def _tool_run():
+            from app.services.tools import run_tool_loop
+
+            try:
+                return await run_tool_loop(
+                    gateway, session, payload, builtin,
+                    emit=events.put_nowait,
+                )
+            except Exception as e:
+                return e
+
+        task = asyncio.create_task(_tool_run() if builtin else _open())
 
         def _meta(ev: dict) -> bytes:
             chunk = {
@@ -194,6 +208,18 @@ async def chat_completions(
                     continue
                 yield _meta(ev)
             res = task.result()
+            if builtin:
+                if isinstance(res, Exception) or not isinstance(res, dict):
+                    err = {"error": {"message": str(res), "type": "gateway_exhausted", "code": 503}}
+                    yield f"data: {_json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
+                    return
+                text = ""
+                for c in res.get("choices", []):
+                    text += (c.get("message") or {}).get("content") or ""
+                chunk = {"choices": [{"index": 0, "delta": {"content": text},
+                                      "finish_reason": "stop"}]}
+                yield f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
+                return
             if not isinstance(res, tuple):
                 err = {"error": {"message": str(res), "type": "gateway_exhausted", "code": 503}}
                 yield f"data: {_json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
