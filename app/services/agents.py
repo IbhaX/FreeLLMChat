@@ -245,24 +245,33 @@ def _tool_names(agent_cfg: AgentConfig) -> list[str]:
     return list(tools) if isinstance(tools, list) and tools else ["*"]
 
 
-async def get_memory_text() -> str:
-    """Fetch persistent memories and format them for system-prompt injection."""
+async def get_memory_text(query: str = "", conversation_id: str | None = None) -> str:
+    """Fetch persistent + vector memories for system-prompt injection."""
     from sqlalchemy import select
 
     from app.db import get_session_factory
     from app.models import Memory
+    from app.services import astra_memory
 
+    parts: list[str] = []
     try:
         async with get_session_factory()() as s:
             rows = (
                 (await s.execute(select(Memory).order_by(Memory.id).limit(50)))
                 .scalars().all()
             )
+        if rows:
+            parts.append("## Long-term Memory\n"
+                         + "\n".join(f"- {m.content}" for m in rows))
     except Exception:
-        return ""
-    if not rows:
-        return ""
-    return "## Long-term Memory\n" + "\n".join(f"- {m.content}" for m in rows)
+        pass
+    try:
+        astra = astra_memory.recall_text(query, conversation_id)
+        if astra:
+            parts.append(astra)
+    except Exception:
+        pass
+    return "\n\n".join(parts)
 
 
 def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -289,7 +298,12 @@ async def _chat_with_tools(
 
     tool_names = _tool_names(agent_cfg)
     specs = specs_for(tool_names)
-    mem = await get_memory_text()
+    query = next(
+        (m.get("content", "") for m in reversed(messages)
+         if m.get("role") == "user" and isinstance(m.get("content"), str)),
+        "",
+    )
+    mem = await get_memory_text(query)
     if mem:
         messages.insert(1 if messages and messages[0].get("role") == "system" else 0,
                         {"role": "system", "content": mem})
@@ -387,7 +401,7 @@ async def stream_agent(
     Yields SSE bytes compatible with the chat UI's stream parser.
     """
     openai_messages = _messages(agent_cfg, message, history)
-    mem = await get_memory_text()
+    mem = await get_memory_text(message)
     if mem:
         openai_messages.insert(
             1 if openai_messages and openai_messages[0].get("role") == "system" else 0,

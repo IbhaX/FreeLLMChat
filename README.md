@@ -119,6 +119,23 @@ it's OpenAI-compatible. Custom adapters live in `app/providers/`; register in
 - Per-*account* quotas mean extra keys don't multiply capacity — use `quota_group`.
 - Don't point two gateway instances at the same keys; quota tracking is local.
 
+## Memory (Astra DB — optional)
+
+Set these env vars to give chats and agents vector memory on DataStax Astra DB
+(no embedding model needed — uses Astra's built-in NVIDIA `$vectorize`):
+
+```bash
+ASTRA_DB_APPLICATION_TOKEN=AstraCS:...   # Database Administrator token
+ASTRA_DB_API_ENDPOINT=https://<db>-<region>.apps.astra.datastax.com
+ASTRA_DB_KEYSPACE=default_keyspace       # optional
+```
+
+Two collections are auto-created: `mem_short` (per-conversation turns,
+recalled by similarity to the latest message) and `mem_long` (durable facts
+extracted from each reply, recalled into every chat/agent/orchestrator
+prompt). Without the env vars memory is simply off; a dead Astra never
+breaks chat. Tune hits via `MEMORY_SHORT_LIMIT` / `MEMORY_LONG_LIMIT`.
+
 ## Development
 
 ```bash
