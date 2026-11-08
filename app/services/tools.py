@@ -244,6 +244,77 @@ def specs_for(names: list[str] | None) -> list[dict[str, Any]]:
     return [TOOLS[n].openai_spec() for n in names if n in TOOLS]
 
 
+async def run_tool_loop(
+    gateway: Any,
+    session: Any,
+    payload: dict[str, Any],
+    names: Any,
+    emit: Callable[[dict[str, Any]], None] | None = None,
+    max_rounds: int = 5,
+) -> dict[str, Any]:
+    """Server-side tool-call loop over the built-in tools.
+
+    Sends ``payload`` (non-streaming) through the gateway with the requested
+    built-in tool specs; executes any tool_calls locally and re-calls until the
+    model answers directly (or rounds are exhausted). ``emit`` gets activity
+    dicts for each executed call. Returns the final completion dict.
+    """
+    import json as _json
+
+    emit = emit or (lambda ev: None)
+    if names is True or names in (None, [], "*"):
+        names = ["*"]
+    specs = specs_for(list(names))
+    if not specs:
+        result, _p, _k, _m = await gateway.chat(session, payload)
+        return result
+
+    body = dict(payload)
+    body["stream"] = False
+    body["tools"] = specs
+    body["tool_choice"] = "auto"
+    messages = body["messages"]
+
+    result: dict[str, Any] = {}
+    for _ in range(max_rounds):
+        result, _p, _k, _m = await gateway.chat(session, body)
+        msg = ((result.get("choices") or [{}])[0]).get("message", {})
+        calls = msg.get("tool_calls") or []
+        if not calls:
+            return result
+        messages.append({
+            "role": "assistant",
+            "content": msg.get("content") or "",
+            "tool_calls": calls,
+        })
+        for tc in calls:
+            fn = tc.get("function", {})
+            name = fn.get("name", "")
+            try:
+                args = _json.loads(fn.get("arguments") or "{}")
+            except Exception:
+                args = {}
+            emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
+            out = await run_tool(name, args)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id", ""),
+                "content": out,
+            })
+    return result
+
+
+def _brief_args(args: dict[str, Any]) -> str:
+    """Compact 'query="x"'-style arg preview for activity events."""
+    parts = []
+    for k, v in args.items():
+        s = str(v)
+        if len(s) > 40:
+            s = s[:40] + "…"
+        parts.append(f"{k}={s!r}")
+    return ", ".join(parts)
+
+
 async def run_tool(name: str, args: dict[str, Any]) -> str:
     t = TOOLS.get(name)
     if t is None:
