@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shared conversation — FreeLLM</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<link rel="stylesheet" href="/static/css/theme.css">
+<style>
+  body{display:block;overflow:auto}
+  .wrap{max-width:760px;margin:0 auto;padding:24px 16px 80px}
+  .sh-msg{margin:14px 0;display:flex;gap:12px}
+  .sh-av{width:34px;height:34px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+  .sh-av.me{background:var(--accent,#7c6cf5);color:#fff}
+  .sh-av.ai{background:var(--bg-2,#1a1f2b);color:var(--text-1);border:1px solid var(--border-1)}
+  .sh-body{flex:1;min-width:0}
+  .sh-name{font-size:12.5px;color:var(--text-3);margin-bottom:4px;font-weight:600}
+  .sh-bubble{background:var(--bg-1);border:1px solid var(--border-1);border-radius:14px;padding:12px 16px}
+  .sh-msg.user .sh-bubble{background:var(--accent,#7c6cf5);color:#fff;border-color:transparent}
+  .sh-msg.user .sh-name{text-align:right}
+  .sh-msg.user{flex-direction:row-reverse}
+  .sh-bubble p{margin:0 0 8px}
+  .sh-bubble p:last-child{margin-bottom:0}
+  .sh-bubble pre{overflow-x:auto;font-size:12.5px}
+  .sh-empty{color:var(--text-3);text-align:center;padding:60px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px">
+    <div>
+      <h1 id="title" style="font-size:20px;font-weight:700;margin:0">Shared conversation</h1>
+      <div id="sub" style="font-size:12.5px;color:var(--text-3);margin-top:4px"></div>
+    </div>
+    <a href="/chat" style="font-size:12.5px;color:var(--accent,#7c6cf5);text-decoration:none">Open chat →</a>
+  </div>
+  <div id="msgs"><div class="sh-empty">Loading…</div></div>
+</div>
+<script src="/static/js/render/ns.js"></script>
+<script src="/static/js/render/ComponentRegistry.js"></script>
+<script src="/static/js/render/MarkdownRenderer.js"></script>
+<script>
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const md=t=>{try{return window.NovaRender?.MarkdownRenderer?.render(t)||esc(t)}catch(e){return esc(t)}};
+const id=location.pathname.split('/').pop();
+fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
+  document.getElementById('title').textContent=d.title||'Shared conversation';
+  document.getElementById('sub').textContent=new Date(d.created_at).toLocaleString()+' · '+(d.messages||[]).length+' messages';
+  const host=document.getElementById('msgs');
+  const msgs=d.messages||[];
+  if(!msgs.length){host.innerHTML='<div class="sh-empty">This conversation is empty.</div>';return;}
+  host.innerHTML=msgs.map(m=>{
+    const isUser=m.role==='user';
+    const name=isUser?'You':(m.agentName||m.name||'Nova');
+    const av=isUser?'U':name[0].toUpperCase();
+    return `<div class="sh-msg ${isUser?'user':''}"><div class="sh-av ${isUser?'me':'ai'}">${esc(av)}</div>`+
+      `<div class="sh-body"><div class="sh-name">${esc(name)}</div><div class="sh-bubble">${md(m.text||m.content||'')}</div></div></div>`;
+  }).join('');
+}).catch(()=>{document.getElementById('msgs').innerHTML='<div class="sh-empty">Shared conversation not found.</div>';});
+</script>
+<script src="/static/js/theme.js"></script>
+</body>
+</html>

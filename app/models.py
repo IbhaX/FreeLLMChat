@@ -158,6 +158,19 @@ class Conversation(Base):
     )
 
 
+class SharedConversation(Base):
+    """A read-only, publicly linkable snapshot of a conversation."""
+
+    __tablename__ = "shared_conversations"
+
+    id: Mapped[str] = mapped_column(String(24), primary_key=True)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    messages: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
 class AgentConfig(Base):
     """A named agent: system prompt + model + tools config, served via Pydantic AI."""
 
