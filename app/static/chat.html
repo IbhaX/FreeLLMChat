@@ -250,17 +250,19 @@
   /* ---------- Wizard layout (mobile-first: stacked) ---------- */
   #agentModal .wiz-card{width:100%;max-width:96vw;height:94vh;max-height:900px;
     display:flex;overflow:hidden;padding:0;flex-direction:column}
-  .wiz-left{width:100%;min-width:0;border-right:none;border-bottom:1px solid var(--border-1);
+  .wiz-left{width:100%;min-width:0;flex:none;border-right:none;border-bottom:1px solid var(--border-1);
     padding:10px 14px;display:flex;flex-direction:row;overflow-x:auto;background:var(--surface-2)}
-  .wiz-mid{flex:1;min-width:0;display:flex;flex-direction:column}
-  .wiz-right{width:100%;min-width:0;border-left:none;border-top:1px solid var(--border-1);
+  .wiz-mid{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+  .wiz-right{width:100%;min-width:0;flex:none;border-left:none;border-top:1px solid var(--border-1);
     background:var(--surface-2);display:flex;flex-direction:column;max-height:220px}
-  .wiz-body{flex:1;overflow-y:auto;padding:16px 18px;-webkit-overflow-scrolling:touch}
+  .wiz-body{flex:1;min-height:0;overflow-y:auto;padding:16px 18px;-webkit-overflow-scrolling:touch}
   .wiz-foot{border-top:1px solid var(--border-1);padding:12px 18px;
     display:flex;align-items:center;gap:10px;flex:none;flex-wrap:wrap}
   .wiz-rail{flex-direction:row;overflow-x:auto;gap:4px}
   .wiz-step-item{padding:6px 10px;white-space:nowrap}
   .wiz-step-item .sd{display:none}
+  /* short phones: drop the preview pane so Back/Next stay on screen */
+  @media(max-width:1023px) and (max-height:760px){.wiz-right{display:none}}
 
   /* ===== TABLET+ (>=768px) ===== */
   @media(min-width:768px){
