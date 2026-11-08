@@ -161,19 +161,60 @@ async def chat_completions(
                 payload["messages"].insert(0, {"role": "system", "content": mem})
     except Exception:
         pass
+    if body.stream:
+        import asyncio
+        import json as _json
+
+        events: asyncio.Queue[dict] = asyncio.Queue()
+
+        async def _open():
+            try:
+                return await gateway.chat_stream(
+                    session, payload, on_event=events.put_nowait
+                )
+            except Exception as e:  # surfaced as an SSE error below
+                return e
+
+        task = asyncio.create_task(_open())
+
+        def _meta(ev: dict) -> bytes:
+            chunk = {
+                "id": "freellm-activity",
+                "object": "chat.completion.chunk",
+                "choices": [],
+                "freellm": ev,
+            }
+            return f"data: {_json.dumps(chunk)}\n\n".encode()
+
+        async def gen():
+            while not (task.done() and events.empty()):
+                try:
+                    ev = await asyncio.wait_for(events.get(), timeout=0.1)
+                except (asyncio.TimeoutError, TimeoutError):
+                    continue
+                yield _meta(ev)
+            res = task.result()
+            if not isinstance(res, tuple):
+                err = {"error": {"message": str(res), "type": "gateway_exhausted", "code": 503}}
+                yield f"data: {_json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
+                return
+            stream, provider, key, model = res
+            yield _meta({
+                "event": "connected",
+                "text": f"Connected via {provider.name} · {key.label} · {model}",
+                "provider": provider.name,
+                "key_label": key.label,
+                "model": model,
+            })
+            async for chunk in stream:
+                yield chunk
+
+        return StreamingResponse(
+            gen(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
     try:
-        if body.stream:
-            stream, provider, key, model = await gateway.chat_stream(session, payload)
-            return StreamingResponse(
-                stream,
-                media_type="text/event-stream",
-                headers={
-                    "X-Gateway-Provider": provider.name,
-                    "X-Gateway-Key-Label": key.label,
-                    "X-Gateway-Model": model,
-                    "Cache-Control": "no-cache",
-                },
-            )
         result, provider, key, model = await gateway.chat(session, payload)
     except GatewayExhausted as e:
         return JSONResponse(
