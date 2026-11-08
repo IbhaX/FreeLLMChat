@@ -126,3 +126,8 @@ providers:
     rotation_strategy: least_used
     auto_route_tags: [coding, general]
     docs_url: https://docs.cohere.com/v2/docs/rate-limits
+
+fallback:
+  auto: [groq, gemini, openrouter, cloudflare, cohere]
+  "auto:coding": [groq, gemini, openrouter, cloudflare, cohere]
+  "auto:fast": [groq, cloudflare, gemini, openrouter, cohere]

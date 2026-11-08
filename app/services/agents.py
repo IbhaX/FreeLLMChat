@@ -19,6 +19,13 @@ from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
 from app.db import get_session_factory
 from app.gateway import Gateway
 from app.models import AgentConfig
+from app.response_protocol import (
+    RESPONSE_FENCE_TAG,
+    ResponseEnvelope,
+    envelope_to_fence,
+    structured_system_prompt,
+    validate_envelope,
+)
 
 
 class GatewayModel(Model):
@@ -39,11 +46,28 @@ class GatewayModel(Model):
     async def request(
         self, messages: list[ModelMessage], model_settings, params: ModelRequestParameters
     ) -> ModelResponse:
-        """Non-streaming request through the gateway."""
+        """Non-streaming request through the gateway.
+
+        Forwards safe request parameters (temperature, response_format, etc.)
+        from pydantic-ai model_settings onto the gateway payload so structured
+        output can leverage provider-level JSON mode when available.
+        """
         openai_messages = _convert_messages(messages)
+        payload: dict[str, Any] = {
+            "model": self._model_name,
+            "messages": openai_messages,
+            "stream": False,
+        }
+        forward = {
+            "temperature", "top_p", "max_tokens", "stop", "seed",
+            "response_format", "presence_penalty", "frequency_penalty",
+        }
+        for k, v in (model_settings or {}).items():
+            if k in forward and v is not None:
+                payload[k] = v
         async with get_session_factory()() as session:
             result, provider, key, model = await self._gateway.chat(
-                session, {"model": self._model_name, "messages": openai_messages, "stream": False}
+                session, payload
             )
         text = ""
         for choice in result.get("choices", []):
@@ -162,20 +186,49 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
 
     if agent_cfg.output_format == "json":
         parts.append("Always respond with valid JSON only — no prose, no markdown fences.")
+    if agent_cfg.output_format == "structured":
+        from app.response_protocol import component_schemas
+
+        parts.append(
+            "## Structured Output\n"
+            "Respond using the structured response envelope. Put conversational "
+            "text in `content` (markdown allowed) and rich data in `components`. "
+            "Available component types: "
+            + ", ".join(sorted(component_schemas().keys()))
+            + ". Choose the component type that best fits the data; do not invent "
+            "missing values."
+        )
 
     return "\n\n".join(parts) if parts else "You are a helpful assistant."
 
 
-def _build_agent(agent_cfg: AgentConfig, gateway: Gateway) -> Agent[None, str]:
+def _build_agent(agent_cfg: AgentConfig, gateway: Gateway) -> Agent:
     from pydantic_ai import Agent
+    from pydantic_ai.output import PromptedOutput
 
     model = GatewayModel(agent_cfg.model, gateway)
-    system_prompt = _compile_system_prompt(agent_cfg)
+    # Always append the structured-output protocol so agent responses are
+    # rendered as rich components, not plain text.
+    system_prompt = _compile_system_prompt(agent_cfg) + "\n\n" + structured_system_prompt()
     settings: dict[str, Any] = {}
     if agent_cfg.temperature is not None:
         settings["temperature"] = agent_cfg.temperature
     if agent_cfg.max_tokens is not None:
         settings["max_tokens"] = agent_cfg.max_tokens
+
+    # Structured output: pydantic-ai injects the ResponseEnvelope JSON schema
+    # into the prompt, parses the model's JSON text, and validates it against
+    # the envelope — with automatic retries on invalid output. We also request
+    # provider-level JSON mode so providers that support it emit clean JSON.
+    if agent_cfg.output_format == "structured":
+        settings["response_format"] = {"type": "json_object"}
+        return Agent(
+            model,
+            output_type=PromptedOutput(ResponseEnvelope),
+            system_prompt=system_prompt,
+            model_settings=settings,
+        )
+
     return Agent(
         model,
         system_prompt=system_prompt,
@@ -220,8 +273,10 @@ def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]
         if role in ("user", "assistant") and content:
             msgs.insert(0, {"role": role, "content": content})
     system_prompt = _compile_system_prompt(agent_cfg)
-    if system_prompt:
-        msgs.insert(0, {"role": "system", "content": system_prompt})
+    # Always inject the structured-output protocol so agent responses are
+    # rendered as rich components, not plain text.
+    system_prompt = system_prompt + "\n\n" + structured_system_prompt()
+    msgs.insert(0, {"role": "system", "content": system_prompt})
     return msgs
 
 
@@ -243,7 +298,7 @@ async def _chat_with_tools(
         payload["temperature"] = agent_cfg.temperature
     if agent_cfg.max_tokens is not None:
         payload["max_tokens"] = agent_cfg.max_tokens
-    if agent_cfg.output_format == "json":
+    if agent_cfg.output_format in ("json", "structured"):
         payload["response_format"] = {"type": "json_object"}
     execution = (agent_cfg.config or {}).get("execution", {})
     timeout_s = execution.get("timeout")
@@ -283,15 +338,45 @@ async def _chat_with_tools(
 async def run_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]]
 ) -> str:
-    """Run an agent non-streaming; uses the tool loop when tools are enabled."""
+    """Run an agent non-streaming; uses the tool loop when tools are enabled.
+
+    When ``output_format == "structured"``, pydantic-ai validates the model
+    output into a :class:`ResponseEnvelope`, which we serialize into the
+    ``nova-response`` fenced block the frontend classifier renders.
+    """
     if _tool_names(agent_cfg):
         messages = _messages(agent_cfg, message, history)
         result = await _chat_with_tools(gateway, agent_cfg, messages)
         choice = (result.get("choices") or [{}])[0]
-        return (choice.get("message") or {}).get("content") or ""
+        content = (choice.get("message") or {}).get("content") or ""
+        return _maybe_structured(agent_cfg, content)
     agent = _build_agent(agent_cfg, gateway)
     result = await agent.run(message)
-    return result.output
+    out = result.output
+    if isinstance(out, ResponseEnvelope):
+        return envelope_to_fence(out)
+    return out
+
+
+def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
+    """Validate raw model content as a ResponseEnvelope when structured mode
+    is on; embed it as a ``nova-response`` fence. Falls back to the raw text
+    if the content isn't a valid envelope (graceful degradation)."""
+    if agent_cfg.output_format != "structured" or not content:
+        return content
+    candidates = [content.strip()]
+    # Model may wrap JSON in a ```json fence — strip and retry once.
+    import re
+
+    fence_match = re.search(r"```(?:json)?\s*\n?([\s\S]*?)```", content.strip())
+    if fence_match:
+        candidates.append(fence_match.group(1).strip())
+    for candidate in candidates:
+        try:
+            return envelope_to_fence(validate_envelope(json.loads(candidate)))
+        except Exception:
+            continue
+    return content
 
 
 async def stream_agent(
@@ -308,6 +393,20 @@ async def stream_agent(
             1 if openai_messages and openai_messages[0].get("role") == "system" else 0,
             {"role": "system", "content": mem},
         )
+
+    # Structured output can't be streamed incrementally (partial JSON is not a
+    # valid envelope), so run the agent non-streaming and emit the validated
+    # nova-response fence as a single SSE chunk — the frontend classifier
+    # renders it into structured components. Same pattern as the tool loop.
+    if agent_cfg.output_format == "structured":
+        try:
+            text = await run_agent(gateway, agent_cfg, message, history)
+            chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
+            yield f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
+        except Exception as e:
+            err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
+            yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
+        return
 
     # When tools are enabled, run the tool loop non-streaming (tool calls can't
     # be executed mid-stream), then emit the final answer as SSE.

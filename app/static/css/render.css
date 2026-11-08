@@ -1,0 +1,481 @@
+/* ==========================================================================
+   Nova Render Engine — component styles.
+   Layered on top of theme.css tokens (--bg-*, --surface-*, --text-*, etc).
+   Dark and light themes are both supported via the token system.
+   ========================================================================== */
+
+/* ---------- Response host ---------- */
+.nova-response{font-size:14px;line-height:1.65;color:var(--text-1);word-wrap:break-word;max-width:100%}
+.nova-response .nova-prose{margin-bottom:8px}
+.nova-response .nova-prose p{margin:0 0 10px}
+.nova-response .nova-prose p:last-child{margin-bottom:0}
+.nova-response .nova-prose h1,.nova-response .nova-prose h2,.nova-response .nova-prose h3{margin:18px 0 8px;line-height:1.3}
+.nova-response .nova-prose h1{font-size:1.5em}
+.nova-response .nova-prose h2{font-size:1.3em}
+.nova-response .nova-prose h3{font-size:1.1em}
+.nova-response .nova-prose ul,.nova-response .nova-prose ol{margin:6px 0 10px;padding-left:22px}
+.nova-response .nova-prose li{margin-bottom:4px}
+.nova-response .nova-prose ul{list-style:disc}
+.nova-response .nova-prose ol{list-style:decimal}
+.nova-response .nova-prose blockquote{border-left:3px solid var(--border-3);padding:2px 12px;color:var(--text-2);margin:8px 0}
+.nova-response .nova-prose code.ic{background:var(--surface-3);border:1px solid var(--border-1);padding:1px 6px;border-radius:5px;font-family:var(--font-mono);font-size:.88em}
+.nova-response .nova-prose a{color:var(--accent)}
+.nova-response .nova-prose table{margin:10px 0}
+.nova-response .nova-prose hr{border:none;border-top:1px solid var(--border-1);margin:14px 0}
+
+/* streaming cursor */
+.nova-cursor{display:inline-block;width:7px;height:15px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:novaBlink .8s step-end infinite;border-radius:2px}
+@keyframes novaBlink{50%{opacity:0}}
+
+/* math fallback */
+.nova-math-fallback{font-family:var(--font-mono);background:var(--surface-2);padding:6px 10px;border-radius:var(--r-sm);overflow-x:auto;margin:8px 0}
+.nova-math-display{margin:10px 0;text-align:center}
+.nova-math-label{font-size:11px;color:var(--text-3);margin-bottom:4px}
+
+/* ---------- Section title ---------- */
+.nova-section-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin:14px 0 8px}
+
+/* ---------- Empty ---------- */
+.nova-empty{padding:20px;text-align:center;color:var(--text-3);border:1px dashed var(--border-2);border-radius:var(--r-md);font-size:13px}
+
+/* ---------- Unsupported / fallback ---------- */
+.nova-unsupported{padding:8px 12px;font-size:12px;color:var(--text-3);background:var(--surface-2);border:1px dashed var(--border-2);border-radius:var(--r-sm);margin:6px 0}
+.nova-comp-slot{margin:6px 0}
+.nova-comp-slot:first-child{margin-top:0}
+
+/* ---------- Code block ---------- */
+.nova-codeblock{background:var(--code-bg);border:1px solid var(--border-1);border-radius:var(--r-md);margin:12px 0;overflow:hidden}
+.nova-codehead{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;background:rgba(255,255,255,.04);border-bottom:1px solid var(--border-1)}
+.nova-code-lang{font-size:11px;color:#8a99ac;font-family:var(--font-mono);text-transform:lowercase}
+.nova-code-actions{display:flex;gap:4px}
+.nova-code-btn{background:none;border:1px solid transparent;color:#8a99ac;cursor:pointer;font:inherit;font-size:11px;padding:3px 8px;border-radius:5px;transition:.15s}
+.nova-code-btn:hover{background:rgba(255,255,255,.08);color:#fff}
+.nova-codebody{display:flex;overflow:hidden}
+.nova-linenumbers{flex:none;padding:12px 8px 12px 12px;text-align:right;background:rgba(255,255,255,.03);color:#5b6b7e;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;user-select:none;border-right:1px solid var(--border-1)}
+.nova-linenumbers span{display:block}
+.nova-codeblock pre{flex:1;margin:0;padding:12px 14px;overflow-x:auto;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;color:#dbe7f3}
+.nova-codeblock code{font-family:var(--font-mono)}
+.nova-codeblock.collapsed .nova-codebody{max-height:340px;overflow:hidden;position:relative}
+.nova-codeblock.collapsed .nova-codebody::after{content:"";position:absolute;left:0;right:0;bottom:0;height:80px;background:linear-gradient(transparent,var(--code-bg));pointer-events:none}
+
+/* ---------- Table ---------- */
+.nova-table-wrap{margin:10px 0;border:1px solid var(--border-1);border-radius:var(--r-md);overflow:hidden;background:var(--surface-1)}
+.nova-table-tools{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--border-1)}
+.nova-table-title{font-size:12px;font-weight:600;color:var(--text-2)}
+.nova-table-actions{display:flex;gap:4px}
+.nova-tool-btn{background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-2);cursor:pointer;font:inherit;font-size:11px;padding:3px 9px;border-radius:5px;transition:.15s}
+.nova-tool-btn:hover{background:var(--surface-1);color:var(--text-1);border-color:var(--border-3)}
+.nova-table-scroll{overflow-x:auto;max-height:420px}
+.nova-table{width:100%;border-collapse:collapse;font-size:13px}
+.nova-table thead th{position:sticky;top:0;background:var(--surface-2);text-align:left;padding:9px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);border-bottom:1px solid var(--border-1);z-index:1}
+.nova-table tbody td{padding:9px 12px;border-bottom:1px solid var(--border-1);vertical-align:middle}
+.nova-table tbody tr:hover{background:var(--surface-2)}
+.nova-table tbody tr:last-child td{border-bottom:none}
+.nova-table td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono);font-size:12.5px}
+
+/* ---------- Chart ---------- */
+.nova-chart-wrap{margin:12px 0;padding:14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.nova-chart-title{font-size:13px;font-weight:600;margin-bottom:10px}
+.nova-chart-host{position:relative;height:260px}
+.nova-chart-fallback{margin-top:8px}
+
+/* ---------- Metric cards ---------- */
+.nova-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:10px 0}
+.nova-metric{display:flex;gap:10px;align-items:center;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.nova-metric-ico{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:15px;flex:none}
+.nova-metric-body{min-width:0}
+.nova-metric-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3)}
+.nova-metric-value{font-size:20px;font-weight:600;letter-spacing:-.02em;color:var(--text-1)}
+.nova-metric-delta{font-size:11px;font-weight:600;margin-left:6px}
+.nova-metric-delta.up{color:var(--success)}
+.nova-metric-delta.down{color:var(--error)}
+
+/* ---------- Search results ---------- */
+.nova-search-wrap{margin:10px 0}
+.nova-search-list{display:flex;flex-direction:column;gap:8px}
+.nova-search-card{padding:12px 14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md);transition:.15s}
+.nova-search-card:hover{border-color:var(--border-3);box-shadow:var(--shadow-1)}
+.nova-search-head{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.nova-fav{width:16px;height:16px;border-radius:3px;flex:none}
+.nova-thumb{width:40px;height:40px;border-radius:var(--r-sm);object-fit:cover;flex:none}
+.nova-search-meta{min-width:0}
+.nova-search-source{font-size:11px;color:var(--text-3)}
+.nova-search-url{font-size:11px;color:var(--accent);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nova-search-title{font-size:13.5px;font-weight:600;color:var(--text-1);margin-bottom:3px}
+.nova-search-title:hover{text-decoration:underline}
+.nova-search-desc{font-size:12.5px;color:var(--text-2);line-height:1.5}
+.nova-search-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+
+/* ---------- Product cards ---------- */
+.nova-product-wrap{margin:10px 0}
+.nova-product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.nova-product-card{background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md);overflow:hidden;transition:.15s}
+.nova-product-card:hover{border-color:var(--border-3);box-shadow:var(--shadow-2);transform:translateY(-1px)}
+.nova-product-img{width:100%;height:130px;object-fit:cover;background:var(--surface-3)}
+.nova-product-body{padding:10px 12px}
+.nova-product-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.nova-product-merchant{font-size:11px;color:var(--text-3)}
+.nova-product-price{font-size:15px;font-weight:700;color:var(--accent);margin:4px 0}
+.nova-product-rating{font-size:12px;color:var(--warn);margin-bottom:4px}
+.nova-product-desc{font-size:12px;color:var(--text-2);line-height:1.4;max-height:54px;overflow:hidden}
+.nova-product-link{display:inline-block;margin-top:6px;font-size:12px;font-weight:500}
+
+/* ---------- Business cards ---------- */
+.nova-biz-wrap{margin:10px 0}
+.nova-biz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.nova-biz-card{padding:12px 14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.nova-biz-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px}
+.nova-biz-name{font-size:13.5px;font-weight:600}
+.nova-biz-rating{font-size:12px;color:var(--warn);white-space:nowrap}
+.nova-biz-row{font-size:12px;color:var(--text-2);margin-bottom:3px}
+.nova-biz-map{display:inline-block;margin-top:6px;font-size:12px}
+
+/* ---------- Weather ---------- */
+.nova-weather{padding:14px 16px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md);max-width:340px;margin:10px 0}
+.nova-weather-top{display:flex;gap:12px;align-items:center;margin-bottom:8px}
+.nova-weather-ico{font-size:34px}
+.nova-weather-temp{font-size:28px;font-weight:600;letter-spacing:-.02em}
+.nova-weather-cond{font-size:13px;color:var(--text-2);font-weight:400}
+.nova-weather-loc{font-size:12.5px;color:var(--text-3);margin-bottom:6px}
+.nova-weather-meta{display:flex;gap:12px;font-size:12px;color:var(--text-2);flex-wrap:wrap;margin-bottom:10px}
+.nova-weather-forecast{display:flex;gap:6px;justify-content:space-between;border-top:1px solid var(--border-1);padding-top:10px}
+.nova-fc-day{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--text-2)}
+.nova-fc-ico{font-size:16px}
+.nova-fc-temp{font-weight:600;color:var(--text-1)}
+
+/* ---------- Financial ---------- */
+.nova-fin-wrap{margin:10px 0}
+.nova-fin-period{font-size:11px;color:var(--text-3);margin-bottom:8px}
+
+/* ---------- JSON viewer ---------- */
+.nova-json-viewer{background:var(--code-bg);border:1px solid var(--border-1);border-radius:var(--r-md);margin:10px 0;overflow:hidden}
+.nova-json-tools{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;background:rgba(255,255,255,.04);border-bottom:1px solid var(--border-1)}
+.nova-json-title{font-size:11px;color:#8a99ac;font-family:var(--font-mono)}
+.nova-json-row{font-family:var(--font-mono);font-size:12.5px;line-height:1.6;color:#dbe7f3;padding:1px 12px;white-space:pre-wrap;word-break:break-word}
+.nova-json-branch{cursor:pointer}
+.nova-json-toggle{color:var(--text-3);user-select:none;display:inline-block;width:14px}
+.nova-json-key{color:#7dd3fc}
+.nova-json-str{color:#86efac}
+.nova-json-num{color:#fbbf24}
+.nova-json-bool{color:#f0abfc}
+.nova-json-null{color:var(--text-3)}
+.nova-json-summary{color:var(--text-3);font-size:11px}
+.nova-json-children{margin-left:4px}
+.nova-json-raw{padding:12px;color:var(--text-2);margin:0}
+
+/* ---------- Status (error/warning/success) ---------- */
+.nova-status{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--r-md);margin:10px 0;border:1px solid}
+.nova-status-ico{font-size:18px;flex:none;margin-top:1px}
+.nova-status-body{flex:1;min-width:0}
+.nova-status-title{font-size:13px;font-weight:600;margin-bottom:2px}
+.nova-status-msg{font-size:13px;color:var(--text-2);line-height:1.5}
+.nova-status-code{font-size:11px;color:var(--text-3);font-family:var(--font-mono);margin-top:4px}
+.nova-status-recovery{font-size:12px;color:var(--text-2);margin-top:6px;padding:6px 10px;background:var(--surface-2);border-radius:var(--r-sm)}
+.nova-status-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.nova-error{background:var(--error-soft);border-color:var(--error)}
+.nova-error .nova-status-ico{color:var(--error)}
+.nova-error .nova-status-title{color:var(--error)}
+.nova-warning{background:var(--warn-soft);border-color:var(--warn)}
+.nova-warning .nova-status-ico{color:var(--warn)}
+.nova-warning .nova-status-title{color:var(--warn)}
+.nova-success{background:var(--success-soft);border-color:var(--success)}
+.nova-success .nova-status-ico{color:var(--success)}
+.nova-success .nova-status-title{color:var(--success)}
+.nova-stream-abort{margin-top:8px}
+
+/* ---------- Progress ---------- */
+.nova-progress-wrap{margin:10px 0}
+.nova-progress-label{font-size:12px;color:var(--text-2);margin-bottom:5px}
+.nova-progress-bar{height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.nova-progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s ease}
+.nova-progress-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-top:4px}
+
+/* ---------- Gallery ---------- */
+.nova-gallery-wrap{margin:10px 0}
+.nova-gallery{display:grid;gap:8px;margin-top:6px}
+.nova-gallery-cell{margin:0;cursor:pointer}
+.nova-gallery-cell img{width:100%;height:120px;object-fit:cover;border-radius:var(--r-sm);border:1px solid var(--border-1);transition:.15s}
+.nova-gallery-cell img:hover{border-color:var(--border-3);transform:scale(1.02)}
+.nova-gallery-cell figcaption{font-size:11px;color:var(--text-3);margin-top:4px;text-align:center}
+.nova-lightbox{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);display:grid;place-items:center;cursor:zoom-out;animation:novaFade .15s ease}
+.nova-lightbox img{max-width:92vw;max-height:92vh;border-radius:var(--r-md);box-shadow:var(--shadow-4)}
+@keyframes novaFade{from{opacity:0}}
+
+/* ---------- Video / Audio ---------- */
+.nova-video-card,.nova-audio-card{margin:10px 0}
+.nova-media-meta{font-size:11px;color:var(--text-3);margin-top:4px}
+
+/* ---------- File preview ---------- */
+.nova-files-wrap{margin:10px 0}
+.nova-files-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.nova-file-card{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.nova-file-ico{font-size:22px;flex:none}
+.nova-file-body{min-width:0}
+.nova-file-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nova-file-meta{display:flex;gap:8px;font-size:11px;color:var(--text-3);margin-top:2px}
+.nova-file-link{font-size:11px;font-weight:500;display:inline-block;margin-top:3px}
+
+/* ---------- Instructions ---------- */
+.nova-instructions{margin:10px 0}
+.nova-steps{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.nova-step{display:flex;gap:12px;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.nova-step-num{width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700}
+.nova-step-body{flex:1;min-width:0}
+.nova-step-title{font-size:13px;font-weight:600;margin-bottom:3px}
+.nova-step-text{font-size:13px;color:var(--text-2);line-height:1.55}
+
+/* ---------- Interactive form ---------- */
+.nova-interactive{margin:10px 0}
+.nova-interactive-form{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.nova-field{display:flex;flex-direction:column;gap:4px}
+.nova-field-label{font-size:12px;font-weight:600;color:var(--text-2)}
+.nova-field-help{font-size:11px;color:var(--text-3)}
+.nova-radio-group{display:flex;flex-direction:column;gap:5px}
+.nova-radio{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+.nova-radio input{flex:none}
+
+/* ---------- Sources ---------- */
+.nova-sources{margin-top:12px;padding-top:10px;border-top:1px solid var(--border-1)}
+.nova-sources-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);margin-bottom:6px}
+.nova-sources-list{display:flex;flex-wrap:wrap;gap:6px}
+.nova-source{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:var(--surface-2);border:1px solid var(--border-1);border-radius:99px;font-size:11.5px;color:var(--text-2);text-decoration:none}
+.nova-source:hover{background:var(--surface-3);color:var(--text-1);text-decoration:none}
+.nova-source-title{font-weight:500}
+.nova-source-name{color:var(--text-3)}
+
+/* ---------- Suggested prompts ---------- */
+.nova-suggest{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border-1)}
+.nova-suggest-chip{padding:6px 12px;border-radius:99px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-2);cursor:pointer;font:inherit;font-size:12.5px;transition:.15s}
+.nova-suggest-chip:hover{border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent)}
+
+/* ---------- Message actions ---------- */
+.nova-msg-actions{display:flex;gap:2px;margin-top:8px;opacity:0;transition:opacity .15s;flex-wrap:wrap}
+.nova-response:hover .nova-msg-actions,.nova-msg-actions:focus-within{opacity:1}
+.nova-act{display:inline-flex;align-items:center;gap:4px;border:none;background:none;color:var(--text-3);cursor:pointer;padding:4px 8px;border-radius:6px;font:inherit;font-size:11px;transition:.15s}
+.nova-act:hover{background:var(--surface-2);color:var(--text-1)}
+.nova-act.reacted{color:var(--accent)}
+.nova-act.on{color:var(--accent)}
+.nova-act-ico{font-size:12px}
+.nova-act-lbl{font-size:11px}
+
+/* ---------- Comparison ---------- */
+.nova-comparison .nova-table tbody tr td:first-child{font-weight:600;color:var(--text-1)}
+
+/* ---------- Timeline ---------- */
+.nova-timeline{margin:10px 0}
+.nova-timeline-list{display:flex;flex-direction:column;gap:0;position:relative;padding-left:8px}
+.nova-timeline-list::before{content:"";position:absolute;left:17px;top:8px;bottom:8px;width:2px;background:var(--border-2)}
+.nova-timeline-item{display:flex;gap:12px;padding:8px 0;position:relative}
+.nova-timeline-dot{width:18px;height:18px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:9px;background:var(--accent-soft);color:var(--accent);border:2px solid var(--surface-1);z-index:1;margin-top:2px}
+.nova-timeline-body{flex:1;min-width:0}
+.nova-timeline-date{font-size:11px;color:var(--text-3);font-weight:600;margin-bottom:2px}
+.nova-timeline-title{font-size:13px;font-weight:600;margin-bottom:2px}
+.nova-timeline-desc{font-size:12.5px;color:var(--text-2);line-height:1.5}
+
+/* ---------- Stat Grid ---------- */
+.nova-stat-grid-wrap{margin:10px 0}
+
+/* ---------- Callout ---------- */
+.nova-callout{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--r-md);margin:10px 0;border-left:3px solid}
+.nova-callout-ico{font-size:18px;flex:none}
+.nova-callout-body{flex:1;min-width:0}
+.nova-callout-title{font-size:13px;font-weight:600;margin-bottom:3px}
+.nova-callout-msg{font-size:13px;color:var(--text-2);line-height:1.55}
+.nova-callout-info{background:var(--accent-soft);border-color:var(--accent)}
+.nova-callout-tip{background:var(--success-soft);border-color:var(--success)}
+.nova-callout-important{background:var(--warn-soft);border-color:var(--warn)}
+.nova-callout-quote{background:var(--surface-2);border-color:var(--border-3)}
+
+/* ---------- Gauge ---------- */
+.nova-gauge-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;margin:12px 0}
+.nova-gauge-label{font-size:12px;color:var(--text-2);font-weight:600}
+
+/* ---------- Sparkline ---------- */
+.nova-sparkline-wrap{margin:8px 0;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-sm)}
+.nova-sparkline-label{font-size:11px;color:var(--text-3);margin-bottom:4px}
+
+/* ---------- Key-Value ---------- */
+.nova-kv-wrap{margin:10px 0}
+.nova-kv-grid{display:flex;flex-direction:column;gap:1px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md);overflow:hidden}
+.nova-kv-row{display:flex;justify-content:space-between;gap:12px;padding:8px 12px;background:var(--surface-1)}
+.nova-kv-row:nth-child(even){background:var(--surface-2)}
+.nova-kv-row.highlight{background:var(--accent-soft)}
+.nova-kv-row.highlight .nova-kv-val{font-weight:600;color:var(--accent)}
+.nova-kv-key{font-size:12.5px;color:var(--text-2)}
+.nova-kv-val{font-size:12.5px;color:var(--text-1);text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- Badge ---------- */
+.nova-badge-wrap{margin:8px 0}
+.nova-badge-row{display:flex;flex-wrap:wrap;gap:6px}
+.nova-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;font-size:11.5px;font-weight:500;border:1px solid}
+.nova-badge-ico{font-size:12px}
+.nova-badge-default{background:var(--surface-2);border-color:var(--border-2);color:var(--text-2)}
+.nova-badge-info{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.nova-badge-success{background:var(--success-soft);border-color:var(--success);color:var(--success)}
+.nova-badge-warning{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.nova-badge-error{background:var(--error-soft);border-color:var(--error);color:var(--error)}
+
+/* ---------- Quote ---------- */
+.nova-quote{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;background:var(--surface-2);border-left:3px solid var(--accent);border-radius:var(--r-md);margin:10px 0}
+.nova-quote-img{width:48px;height:48px;border-radius:50%;object-fit:cover;flex:none}
+.nova-quote-text{font-size:14px;font-style:italic;color:var(--text-1);line-height:1.6;flex:1}
+.nova-quote-author{font-size:12px;color:var(--text-3);margin-top:6px}
+.nova-quote-source{color:var(--text-3)}
+
+/* ---------- Diff ---------- */
+.nova-diff-wrap{margin:10px 0}
+.nova-diff-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nova-diff-col{background:var(--code-bg);border:1px solid var(--border-1);border-radius:var(--r-md);overflow:hidden}
+.nova-diff-head{padding:6px 10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);border-bottom:1px solid var(--border-1)}
+.nova-diff-before .nova-diff-head{color:var(--error)}
+.nova-diff-after .nova-diff-head{color:var(--success)}
+.nova-diff-col pre{margin:0;padding:10px 12px;font-family:var(--font-mono);font-size:12px;line-height:1.5;color:var(--text-2);overflow-x:auto;white-space:pre-wrap}
+
+/* ---------- Heatmap ---------- */
+.nova-heatmap-wrap{margin:10px 0;overflow-x:auto}
+.nova-heatmap{display:inline-flex;flex-direction:column;gap:2px;min-width:max-content}
+.nova-heatmap-row{display:flex;gap:2px;align-items:center}
+.nova-heatmap-label{width:70px;font-size:11px;color:var(--text-3);text-align:right;padding-right:6px;flex:none}
+.nova-heatmap-cell{width:28px;height:28px;display:grid;place-items:center;font-size:9px;color:var(--text-1);border-radius:3px;cursor:default;transition:.15s}
+.nova-heatmap-cell:hover{outline:2px solid var(--accent)}
+.nova-heatmap-xlabel{width:28px;text-align:center;font-size:10px;color:var(--text-3);flex:none}
+
+/* ---------- Tag Cloud ---------- */
+.nova-tagcloud-wrap{margin:10px 0}
+.nova-tagcloud{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.nova-tag{font-weight:600;line-height:1.2;transition:.15s;cursor:default}
+.nova-tag:hover{transform:scale(1.1)}
+
+/* ---------- Divider ---------- */
+.nova-divider-wrap{margin:14px 0}
+.nova-divider{border:none;border-top:1px solid var(--border-1)}
+.nova-divider-label{text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);position:relative;padding:0 16px}
+.nova-divider-label::before,.nova-divider-label::after{content:"";position:absolute;top:50%;width:calc(50% - 60px);height:1px;background:var(--border-1)}
+.nova-divider-label::before{left:0}
+.nova-divider-label::after{right:0}
+
+/* ---------- Mobile-first base (defaults target small screens) ---------- */
+.nova-diff-grid{grid-template-columns:1fr}
+.nova-metric-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.nova-product-grid,.nova-biz-grid{grid-template-columns:1fr}
+.nova-chart-host{height:200px}
+.nova-weather{max-width:100%}
+.nova-act-lbl{display:none}
+.nova-act{padding:6px}
+.nova-kv-grid{font-size:11.5px}
+.nova-heatmap-cell{width:22px;height:22px}
+.nova-gauge-wrap svg{width:110px;height:110px}
+.nova-suggest{gap:4px}
+.nova-suggest-chip{font-size:11.5px;padding:5px 10px}
+
+/* ===== TABLET+ (>=640px) ===== */
+@media(min-width:640px){
+  .nova-diff-grid{grid-template-columns:1fr 1fr}
+  .nova-metric-grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+  .nova-product-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+  .nova-biz-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  .nova-chart-host{height:260px}
+  .nova-act-lbl{display:inline}
+  .nova-act{padding:4px 8px}
+  .nova-heatmap-cell{width:28px;height:28px}
+  .nova-gauge-wrap svg{width:140px;height:140px}
+  .nova-suggest-chip{font-size:12.5px;padding:6px 12px}
+}
+
+/* ===== DESKTOP (>=1024px) ===== */
+@media(min-width:1024px){
+  .nova-weather{max-width:340px}
+}
+
+/* ==========================================================================
+   POLISH LAYER — refined typography and component finish.
+   Declared last so it wins over earlier base rules.
+   ========================================================================== */
+
+/* Response rhythm: consistent vertical spacing between blocks */
+.nova-response{font-size:14.5px;line-height:1.7}
+.nova-response > * + *{margin-top:14px}
+.nova-response .nova-comp-slot{margin:0}
+.nova-response .nova-comp-slot + .nova-comp-slot{margin-top:14px}
+.nova-response .nova-prose{margin:0}
+
+/* Prose typography */
+.nova-response .nova-prose p{margin:0 0 12px;color:var(--text-1)}
+.nova-response .nova-prose h1,.nova-response .nova-prose h2{font-weight:650;letter-spacing:-.015em;margin:22px 0 10px}
+.nova-response .nova-prose h2{font-size:1.18em;padding-bottom:6px;border-bottom:1px solid var(--border-1)}
+.nova-response .nova-prose h3{font-size:1.05em;font-weight:600;margin:18px 0 6px}
+.nova-response .nova-prose strong{font-weight:650;color:var(--text-1)}
+.nova-response .nova-prose ul,.nova-response .nova-prose ol{padding-left:22px;margin:4px 0 12px}
+.nova-response .nova-prose li{margin:4px 0;padding-left:2px}
+.nova-response .nova-prose li::marker{color:var(--accent)}
+.nova-response .nova-prose blockquote{margin:12px 0;padding:10px 14px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 var(--r-sm) var(--r-sm) 0;color:var(--text-1)}
+
+/* Section titles: quiet label above each component */
+.nova-section-title{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin:0 0 10px}
+
+/* Inline code inside components */
+.nova-response code.ic{background:var(--surface-3);border:1px solid var(--border-1);padding:1px 5px;border-radius:4px;font-family:var(--font-mono);font-size:.88em}
+
+/* ---------- Metric / stat cards: vertical, readable labels ---------- */
+.nova-metric-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:0}
+.nova-metric{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:10px;transition:border-color .15s,box-shadow .15s}
+.nova-metric:hover{border-color:var(--border-3);box-shadow:var(--shadow-1)}
+.nova-metric-head{display:flex;align-items:flex-start;gap:8px;min-width:0}
+.nova-metric-ico{width:26px;height:26px;border-radius:7px;font-size:14px;flex:none;display:grid;place-items:center;background:var(--accent-soft)}
+.nova-metric-label{font-size:12.5px;font-weight:500;line-height:1.35;color:var(--text-2);text-transform:none;letter-spacing:0;overflow-wrap:normal;word-break:normal;hyphens:auto}
+.nova-metric-value{font-size:22px;font-weight:650;letter-spacing:-.02em;line-height:1.15;color:var(--text-1);font-variant-numeric:tabular-nums;display:flex;align-items:baseline;flex-wrap:wrap;gap:6px}
+.nova-metric-delta{font-size:11.5px;font-weight:600;margin:0;padding:1px 6px;border-radius:99px}
+.nova-metric-delta.up{color:var(--success);background:var(--success-soft)}
+.nova-metric-delta.down{color:var(--error);background:var(--error-soft)}
+.nova-metric-bar{height:4px;border-radius:99px;background:var(--surface-3);overflow:hidden;margin-top:2px}
+.nova-metric-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .5s ease}
+.nova-metric-desc{font-size:12px;color:var(--text-3);line-height:1.45}
+
+/* ---------- Callout ---------- */
+.nova-callout{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;margin:0;border:1px solid var(--border-1);border-left-width:3px;border-radius:8px}
+.nova-callout-ico{font-size:15px;line-height:1.5;flex:none;width:18px;text-align:center}
+.nova-callout-title{font-size:13.5px;font-weight:600;margin-bottom:2px;color:var(--text-1)}
+.nova-callout-msg{font-size:13.5px;line-height:1.6;color:var(--text-2)}
+.nova-callout-info{background:var(--accent-soft);border-color:var(--accent-line);border-left-color:var(--accent)}
+.nova-callout-info .nova-callout-ico{color:var(--accent)}
+.nova-callout-tip{background:var(--success-soft);border-color:transparent;border-left-color:var(--success)}
+.nova-callout-important{background:var(--warn-soft);border-color:transparent;border-left-color:var(--warn)}
+.nova-callout-quote{background:var(--surface-2);border-color:transparent;border-left-color:var(--border-3)}
+
+/* ---------- Timeline: connected rail with dots ---------- */
+.nova-timeline{margin:0}
+.nova-timeline-list{list-style:none;margin:0;padding:0 0 0 4px;position:relative}
+.nova-timeline-list::before{content:"";position:absolute;left:10px;top:10px;bottom:10px;width:2px;background:var(--border-2);border-radius:2px}
+.nova-timeline-item{display:flex;gap:14px;padding:0 0 16px;position:relative}
+.nova-timeline-item:last-child{padding-bottom:0}
+.nova-timeline-dot{position:relative;z-index:1;flex:none;width:14px;height:14px;margin-top:4px;border-radius:50%;background:var(--bg-1);border:3px solid var(--accent);display:grid;place-items:center;font-size:0}
+.nova-timeline-item:first-child .nova-timeline-dot{background:var(--accent)}
+.nova-timeline-body{flex:1;min-width:0;padding:0 0 0 2px}
+.nova-timeline-date{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--accent);background:var(--accent-soft);padding:1px 8px;border-radius:99px;margin-bottom:4px}
+.nova-timeline-title{font-size:13.5px;font-weight:600;color:var(--text-1);margin-bottom:2px}
+.nova-timeline-desc{font-size:13px;color:var(--text-2);line-height:1.55}
+
+/* ---------- Key-value, quote, badges: tighter finish ---------- */
+.nova-kv-wrap,.nova-badge-wrap,.nova-quote,.nova-gauge-wrap,.nova-sparkline-wrap,.nova-tagcloud-wrap,.nova-heatmap-wrap,.nova-diff-wrap,.nova-chart-wrap,.nova-table-wrap{margin:0}
+.nova-kv-grid{border-radius:10px}
+.nova-kv-row{padding:9px 14px;align-items:baseline}
+.nova-kv-key{font-size:13px;color:var(--text-3);flex:none;max-width:45%}
+.nova-kv-val{font-size:13px;color:var(--text-1);text-align:right}
+.nova-quote{border-radius:0 10px 10px 0}
+.nova-quote-text{font-size:14.5px}
+.nova-chart-wrap{border-radius:10px;padding:14px 14px 10px}
+
+/* ---------- Suggested prompts ---------- */
+.nova-suggest{border-top:none;padding-top:4px;gap:6px}
+.nova-suggest-chip{border-radius:99px;background:transparent;border:1px solid var(--border-2);color:var(--text-2)}
+.nova-suggest-chip:hover{background:var(--surface-2);border-color:var(--accent-line);color:var(--text-1)}
+
+/* ---------- Action bar ---------- */
+.nova-msg-actions{margin-top:6px;gap:0}
+.nova-act{color:var(--text-3);padding:5px 7px;border-radius:6px}
+.nova-act:hover{color:var(--text-1);background:var(--surface-2)}
+
+@media(min-width:640px){
+  .nova-metric-grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+  .nova-metric-value{font-size:24px}
+}

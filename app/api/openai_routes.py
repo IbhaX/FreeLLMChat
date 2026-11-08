@@ -10,6 +10,7 @@ from app.api.deps import require_gateway_key
 from app.db import get_session
 from app.gateway import Gateway, GatewayExhausted
 from app.logging_config import new_request_id
+from app.response_protocol import protocol_descriptor, structured_system_prompt
 from app.schemas import ChatCompletionRequest
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_gateway_key)])
@@ -36,6 +37,24 @@ async def list_models(
         for alias in ("auto", "auto:coding", "auto:fast")
     ]
     return {"object": "list", "data": data}
+
+
+@router.get("/render-protocol")
+async def render_protocol() -> dict:
+    """Self-describing structured response protocol contract."""
+
+    return protocol_descriptor()
+
+
+@router.get("/render-protocol/prompt")
+async def render_protocol_prompt() -> dict:
+    """The structured-output system prompt the frontend injects by default.
+
+    Exposed so the chat UI can fetch it once at load and append it to every
+    request, ensuring responses are always structured envelopes.
+    """
+
+    return {"prompt": structured_system_prompt()}
 
 
 @router.get("/models/{model_id:path}")
@@ -103,6 +122,25 @@ async def chat_completions(
     new_request_id()
     gateway = _gateway(request)
     payload = body.model_dump(exclude_none=True)
+    # Inject the structured-output system prompt so responses are always
+    # structured envelopes (unless the caller explicitly opts out via the
+    # `nova_structured: false` extra field).
+    if payload.get("nova_structured", True) and isinstance(payload.get("messages"), list):
+        from app.response_protocol import structured_system_prompt
+
+        sys_idx = next(
+            (i for i, m in enumerate(payload["messages"])
+             if m.get("role") == "system"),
+            None,
+        )
+        struct_prompt = structured_system_prompt()
+        if sys_idx is not None:
+            payload["messages"][sys_idx] = dict(
+                payload["messages"][sys_idx],
+                content=f"{payload['messages'][sys_idx].get('content', '')}\n\n{struct_prompt}",
+            )
+        else:
+            payload["messages"].insert(0, {"role": "system", "content": struct_prompt})
     try:
         from app.services.agents import get_memory_text
 

@@ -127,7 +127,7 @@ const BODIES={
     </div>
     ${g2(fld('Temperature (0–2)',`<div class="slider-row"><input type="range" class="ui-slider" id="w_temperature" min="0" max="20" value="${W.temperature===''?7:W.temperature*10}" style="--fill:${(W.temperature===''?7:W.temperature*10)*5}%"><span class="slider-val" id="wv_temperature">${W.temperature===''?'0.7':W.temperature}</span></div>`)+
          fld('Max tokens',`<input id="w_max_tokens" type="number" class="ui-input" placeholder="4096" value="${V('max_tokens')}">`)+
-         fld('Output format',sel('output_format',['text','json','markdown'])))}
+         fld('Output format',sel('output_format',['text','json','markdown','structured'])))}
     <details class="ui-acc" style="margin-top:6px">
       <summary>Advanced execution</summary>
       <div class="acc-body" style="padding-top:12px">

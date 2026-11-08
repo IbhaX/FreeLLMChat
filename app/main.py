@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api.admin_routes import router as admin_router
@@ -68,7 +69,20 @@ static_dir = BASE_DIR / "app" / "static"
 static_dir.mkdir(parents=True, exist_ok=True)
 
 
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+class RevalidatingStaticFiles(StaticFiles):
+    """Static files that browsers must revalidate on every load.
+
+    ETag/Last-Modified still yield cheap 304s, but edits to JS/CSS are picked
+    up immediately instead of being masked by heuristic browser caching.
+    """
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", RevalidatingStaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/", include_in_schema=False)
