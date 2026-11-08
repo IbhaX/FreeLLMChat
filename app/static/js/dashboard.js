@@ -52,12 +52,27 @@ async function refresh(){
         <button class="ui-btn ui-btn-ghost ui-btn-sm ui-btn-danger" onclick="delKey(${k.id})">del</button>
       </div></td></tr>`;}).join('');
 
-  document.querySelector('#reqs tbody').innerHTML=reqs.map(r=>`<tr>
+  const reqMeta=r=>[
+    ['Request ID',r.request_id],['Time',r.ts?new Date(r.ts).toLocaleString():'—'],
+    ['Model requested',r.model_requested],['Model served',r.model_served||'—'],
+    ['Provider',r.provider||'—'],['Key',r.key_label||'—'],
+    ['Status',`${r.status}${r.http_status?' ('+r.http_status+')':''}`],
+    ['Latency',r.latency_ms?Math.round(r.latency_ms)+' ms':'—'],
+    ['Tokens in',r.tokens_in??'—'],['Tokens out',r.tokens_out??'—'],
+    ['Total tokens',(r.tokens_in||0)+(r.tokens_out||0)||'—'],
+    ['Error',r.error||'—'],
+  ].map(([k,v])=>`<div class="rq-item"><span class="rq-k">${k}</span><span class="rq-v">${esc(String(v??'—'))}</span></div>`).join('');
+  document.querySelector('#reqs tbody').innerHTML=reqs.map((r,i)=>`<tr class="rq-row" data-i="${i}">
     <td class="tx-3">${fmt.time(r.ts)}</td><td class="mono t-xs">${esc(r.model_requested)}</td>
     <td>${esc(r.model_served||'—')}</td><td>${esc(r.provider||'—')}</td>
     <td>${esc(r.key_label||'—')}</td>
     <td><span class="pill ${r.status==='ok'?'ok':'bad'}">${r.status}</span></td>
-    <td class="tx-2">${r.latency_ms?Math.round(r.latency_ms):'—'}</td></tr>`).join('');
+    <td class="tx-2">${r.latency_ms?Math.round(r.latency_ms):'—'}</td></tr>
+    <tr class="rq-detail" style="display:none"><td colspan="7"><div class="rq-grid">${reqMeta(r)}</div></td></tr>`).join('');
+  document.querySelectorAll('#reqs .rq-row').forEach(row=>row.onclick=()=>{
+    const d=row.nextElementSibling,open=d.style.display!=='none';
+    d.style.display=open?'none':'table-row';row.classList.toggle('open',!open);
+  });
 }
 
 async function addKeys(){
