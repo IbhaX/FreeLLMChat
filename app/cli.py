@@ -1,7 +1,10 @@
 """`chat` command / `python -m chat`: start the gateway and open the chat UI."""
 
 import os
+import shutil
 import socket
+import subprocess
+import sys
 import threading
 import time
 import webbrowser
@@ -12,6 +15,23 @@ PORT = int(os.environ.get("PORT", "8000"))
 HOST = "127.0.0.1"
 
 
+def _open_browser(url: str) -> None:
+    # Termux / Android: no webbrowser support — use the Termux opener or am.
+    if "com.termux" in sys.prefix or shutil.which("termux-open-url"):
+        if shutil.which("termux-open-url"):
+            subprocess.run(["termux-open-url", url], check=False)
+            return
+        subprocess.run(
+            ["am", "start", "-a", "android.intent.action.VIEW", "-d", url],
+            check=False,
+        )
+        return
+    try:
+        webbrowser.get("google-chrome").open(url)
+    except webbrowser.Error:
+        webbrowser.open(url)
+
+
 def _open_when_up(url: str) -> None:
     while True:
         try:
@@ -19,10 +39,7 @@ def _open_when_up(url: str) -> None:
                 break
         except OSError:
             time.sleep(0.2)
-    try:
-        webbrowser.get("google-chrome").open(url)
-    except webbrowser.Error:
-        webbrowser.open(url)
+    _open_browser(url)
 
 
 def main() -> None:
