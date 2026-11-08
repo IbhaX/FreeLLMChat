@@ -12,6 +12,13 @@ cp .env.example .env          # set ADMIN_TOKEN and any provider keys you have
 uvicorn app.main:app --port 8000
 ```
 
+Or one command — starts the server and opens the chat UI in Chrome:
+
+```bash
+pip install -e .    # once — installs the `chat` command
+chat                # or: python -m chat
+```
+
 On first run an `ENCRYPTION_KEY` is generated and stored in `data/.encryption_key`
 (printed once to stderr). API keys are Fernet-encrypted at rest; only `key_hint`
 (last 4 chars) is ever exposed.
