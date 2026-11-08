@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.env
+data/
+.venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+uvicorn*.log
+nul
+data/
+__pycache__/
+*.pyc

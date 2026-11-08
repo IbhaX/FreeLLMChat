@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>API Keys — FreeLLM Gateway</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  .prov-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;margin-bottom:18px}
+  .prov-strip::-webkit-scrollbar{height:6px}
+  .prov-card{min-width:150px;flex:none;padding:12px 14px;cursor:pointer}
+  .prov-card .pn{font-weight:600;font-size:var(--t-sm)}
+  .prov-card .pk{font-size:var(--t-xs);color:var(--text-3);margin-top:2px}
+  .prov-card.sel .pk{color:var(--accent)}
+  .addgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .addgrid .full{grid-column:1/-1}
+  @media(max-width:700px){.addgrid{grid-template-columns:1fr}}
+  .key-hint{font-family:var(--font-mono);font-size:11px;color:var(--text-3)}
+  .inline-edit{border:none;background:transparent;color:var(--text-1);font:inherit;font-size:var(--t-sm);width:110px;border-bottom:1px dashed var(--border-3);padding:1px 2px}
+  .inline-edit:focus{outline:none;border-bottom-color:var(--accent)}
+</style>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
+      <div>
+        <h1>API Keys</h1>
+        <div class="sub">Encrypted at rest · rotated automatically per request · pooled by quota group</div>
+      </div>
+      <div class="acts">
+        <button class="ui-btn" onclick="importEnv()">⇓ Import .env</button>
+        <label class="ui-btn" style="cursor:pointer">⇪ CSV
+          <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="importCsv(this)">
+        </label>
+        <button class="ui-btn ui-btn-primary" onclick="document.getElementById('keyArea').scrollIntoView({behavior:'smooth'})">+ Add keys</button>
+      </div>
+    </div>
+
+    <div class="prov-strip" id="provStrip"></div>
+
+    <div class="ui-card ui-card-pad" id="addPanel" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <h3 style="font-size:var(--t-md)">Add keys</h3>
+        <span class="tx-3 t-xs">one per line or comma-separated</span>
+      </div>
+      <div class="addgrid">
+        <div class="full">
+          <textarea id="keyArea" class="ui-textarea" rows="3" placeholder="sk-...&#10;sk-...&#10;sk-..." style="font-family:var(--font-mono);font-size:12px"></textarea>
+        </div>
+        <div>
+          <label class="label">Label prefix</label>
+          <input id="keyLabel" class="ui-input" placeholder="work- (→ work-1, work-2…)">
+        </div>
+        <div>
+          <label class="label ui-tooltip" data-tip="Keys sharing a group are treated as one quota pool">Quota group ⓘ</label>
+          <input id="keyQuota" class="ui-input" placeholder="e.g. project-a">
+        </div>
+        <div>
+          <label class="label">Priority <span class="tx-3">(lower = first)</span></label>
+          <input id="keyPriority" class="ui-input" type="number" value="100">
+        </div>
+        <div>
+          <label class="label">Weight</label>
+          <input id="keyWeight" class="ui-input" type="number" value="1">
+        </div>
+        <div class="full">
+          <label class="label">Notes</label>
+          <input id="keyNotes" class="ui-input" placeholder="optional">
+        </div>
+        <div class="full" style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="ui-btn ui-btn-primary" onclick="addKeys()">Add keys</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-title">Keys <span id="keyCount" class="tx-3" style="text-transform:none;letter-spacing:0"></span></div>
+    <table class="ui-table" id="keyTable"><thead><tr>
+      <th>Provider</th><th>Label</th><th>Hint</th><th>Group</th><th>Pri</th><th>Wt</th>
+      <th>Req/day</th><th>Cooldown</th><th>Status</th><th style="text-align:right">Actions</th>
+    </tr></thead><tbody></tbody></table>
+    <div id="keyEmpty" class="ui-empty" style="display:none">
+      <div class="ico">⚿</div>
+      <div class="t-sm">No keys yet for this provider.</div>
+      <button class="ui-btn ui-btn-primary ui-btn-sm" style="margin-top:12px" onclick="document.getElementById('keyArea').focus()">Add your first key</button>
+    </div>
+
+    <div class="sec-title">Provider settings</div>
+    <div class="ui-card ui-card-pad" id="provSettings"></div>
+  </div>
+</main>
+
+<!-- Edit key drawer -->
+<div id="keyDrawer" class="ui-drawer" style="display:none;padding:20px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <h3>Edit key</h3>
+    <button class="ui-btn ui-btn-ghost ui-btn-icon" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="field"><label class="label">Label</label><input id="edLabel" class="ui-input"></div>
+  <div class="field"><label class="label">Quota group</label><input id="edQuota" class="ui-input"></div>
+  <div class="addgrid">
+    <div class="field"><label class="label">Priority</label><input id="edPriority" type="number" class="ui-input"></div>
+    <div class="field"><label class="label">Weight</label><input id="edWeight" type="number" class="ui-input"></div>
+  </div>
+  <div class="field"><label class="label">Notes</label><textarea id="edNotes" class="ui-textarea" rows="2"></textarea></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+    <button class="ui-btn" onclick="closeDrawer()">Cancel</button>
+    <button class="ui-btn ui-btn-primary" onclick="saveKey()">Save</button>
+  </div>
+</div>
+
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/keys.js"></script>
+</body>
+</html>

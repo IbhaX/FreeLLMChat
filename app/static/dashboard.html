@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Dashboard — FreeLLM Gateway</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
+      <div>
+        <h1>Dashboard</h1>
+        <div class="sub">Gateway health, providers, and live request activity</div>
+      </div>
+      <div class="acts">
+        <span id="health" class="pill mut"></span>
+        <button class="ui-btn ui-btn-sm" onclick="location.reload()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="stat-grid" id="stats"></div>
+
+    <div class="sec-title">Providers</div>
+    <table class="ui-table" id="providers"><thead><tr>
+      <th>Provider</th><th>Strategy</th><th>Keys</th><th>Healthy</th><th>Limits</th><th style="text-align:right">Actions</th>
+    </tr></thead><tbody></tbody></table>
+
+    <div class="sec-title">API Keys</div>
+    <div class="ui-card ui-card-pad" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="kp" class="ui-select" style="width:160px"></select>
+      <input type="text" id="kl" class="ui-input" placeholder="label prefix (optional)" style="width:160px">
+      <input type="text" id="kg" class="ui-input" placeholder="quota group (optional)" style="width:150px">
+      <input type="text" id="kv" class="ui-input" placeholder="api key(s), comma separated" style="flex:1;min-width:240px">
+      <button class="ui-btn ui-btn-primary" onclick="addKeys()">Add</button>
+      <a class="ui-btn ui-btn-ghost ui-btn-sm" href="/keys">Manage keys →</a>
+    </div>
+    <table class="ui-table" id="keys"><thead><tr>
+      <th>Provider</th><th>Label</th><th>Hint</th><th>Quota grp</th><th>Req/day</th>
+      <th>Tok/day</th><th>Cooldown</th><th>Status</th><th style="text-align:right">Actions</th>
+    </tr></thead><tbody></tbody></table>
+
+    <div class="sec-title">Recent requests</div>
+    <table class="ui-table" id="reqs"><thead><tr>
+      <th>Time</th><th>Model</th><th>Served</th><th>Provider</th><th>Key</th>
+      <th>Status</th><th>ms</th>
+    </tr></thead><tbody></tbody></table>
+  </div>
+</main>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>
