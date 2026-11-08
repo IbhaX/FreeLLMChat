@@ -189,6 +189,31 @@
     background:var(--accent);box-shadow:0 0 5px var(--accent-soft);animation:tp 1.2s infinite}
   .act-item.done{color:var(--text-3)}
   .act-item.done .act-dot{background:var(--success);box-shadow:none;animation:none}
+
+  /* group chat stage */
+  #groupStage{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    padding:8px 16px;border-bottom:1px solid var(--border-1);background:var(--surface-1,var(--bg-1))}
+  .gagent{display:inline-flex;align-items:center;gap:7px;padding:4px 10px 4px 5px;
+    border-radius:999px;border:1px solid var(--border-1);background:var(--bg-0,var(--surface-1));
+    transition:box-shadow .25s,border-color .25s}
+  .gagent .gav{width:22px;height:22px;border-radius:999px;background:var(--gc,#8b5cf6);
+    color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;position:relative}
+  .gagent .gname{font-size:12px;color:var(--text-2);max-width:110px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .gagent.live{border-color:var(--gc,#8b5cf6);
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--gc,#8b5cf6) 25%,transparent);
+    animation:gpulse 1.4s ease-in-out infinite}
+  .gagent.live .gname{color:var(--text-1)}
+  .gagent.done .gav::after{content:'✓';position:absolute;right:-5px;bottom:-5px;
+    width:12px;height:12px;border-radius:999px;background:var(--success);color:#fff;
+    font-size:8px;line-height:12px;text-align:center}
+  .gagent .grm{border:none;background:none;color:var(--text-3);cursor:pointer;
+    font-size:11px;padding:0 2px;opacity:0;transition:opacity .15s}
+  .gagent:hover .grm{opacity:1}
+  @keyframes gpulse{0%,100%{box-shadow:0 0 0 3px color-mix(in srgb,var(--gc,#8b5cf6) 25%,transparent)}
+    50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--gc,#8b5cf6) 10%,transparent)}}
+  #gRounds{background:var(--bg-0,var(--surface-1));color:var(--text-1);
+    border:1px solid var(--border-1);border-radius:8px;padding:2px 6px;font-size:12px}
   .regen-note{font-size:11px;color:var(--text-3);margin-top:5px}
   /* ---------- Composer ---------- */
   .composer{flex:none;padding:10px 12px 12px;border-top:1px solid var(--border-1);
@@ -328,13 +353,17 @@
       <button class="pill-btn" id="agentNewBtn" title="Create agent">＋</button>
       <button class="pill-btn" id="agentEditBtn" title="Edit agent" style="display:none">✏️</button>
       <button class="pill-btn" id="agentDelBtn" title="Delete agent" style="display:none;color:var(--error)">🗑</button>
+      <button class="pill-btn" id="shareBtn" title="Share conversation (link)">🔗</button>
     </div>
   </div>
+
+  <div id="groupStage" style="display:none"></div>
 
   <div class="ui-menu" id="agentMenu" style="display:none;position:absolute;top:56px;right:16px;z-index:200;min-width:270px">
     <div class="mi-head">Select agent</div>
     <div id="agentList" style="max-height:240px;overflow-y:auto"></div>
     <div style="border-top:1px solid var(--border-1);margin-top:4px;padding-top:4px">
+      <div class="mi" id="agentGroupBtn" style="color:var(--text-2)">👥 Group chat — pick agents to talk together</div>
       <div class="mi" id="agentNoneBtn" style="color:var(--text-2)">✕ No agent (raw model)</div>
     </div>
   </div>
