@@ -60,6 +60,7 @@ class GroupChatRequest(BaseModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
     agent_ids: list[int]
     rounds: int = 2  # autonomous back-and-forth rounds after the user speaks
+    conversation_id: str | None = None  # scopes short-term vector memory
 
 
 class ShareRequest(BaseModel):
