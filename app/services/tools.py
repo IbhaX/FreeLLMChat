@@ -14,7 +14,8 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
-from urllib.parse import urljoin, urlparse
+from html import unescape
+from urllib.parse import unquote, urljoin, urlparse
 
 import httpx
 
@@ -131,24 +132,41 @@ async def _http_get(url: str, max_chars: int = 4000) -> str:
         return f"fetch error: {e}"
 
 
-async def _web_search(query: str, max_results: int = 3) -> str:
-    """DuckDuckGo instant-answer API — free, no key."""
+async def _web_search(query: str, max_results: int = 5) -> str:
+    """DuckDuckGo lite HTML search — free, no key.
+
+    The instant-answer JSON API only covers a few encyclopedic queries, so we
+    scrape the lightweight result page instead: title, snippet and URL per hit.
+    """
     try:
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.get(
-                "https://api.duckduckgo.com/",
-                params={"q": query, "format": "json", "no_redirect": 1, "no_html": 1},
+                "https://lite.duckduckgo.com/lite/",
+                params={"q": query},
+                headers={"User-Agent": "Mozilla/5.0"},
             )
-            d = r.json()
+        text = r.text
+        links = re.findall(
+            r"<a[^>]+href=\"([^\"]+)\"[^>]*class='result-link'[^>]*>(.*?)</a>", text
+        )
+        snippets = re.findall(r"<td class='result-snippet'>(.*?)</td>", text, re.S)
+
+        def _real_url(href: str) -> str:
+            # DDG wraps targets as //duckduckgo.com/l/?uddg=<urlencoded>
+            m = re.search(r"[?&]uddg=([^&]+)", href)
+            return unquote(m.group(1)) if m else href
+
+        def _clean(s: str) -> str:
+            return unescape(re.sub(r"<[^>]+>", "", s)).strip()
+
         parts: list[str] = []
-        if d.get("AbstractText"):
-            parts.append(d["AbstractText"])
-            if d.get("AbstractURL"):
-                parts.append(f"Source: {d['AbstractURL']}")
-        for t in (d.get("RelatedTopics") or [])[:max_results]:
-            if isinstance(t, dict) and t.get("Text"):
-                parts.append(f"• {t['Text']} ({t.get('FirstURL','')})")
-        return "\n".join(parts) or "No instant answer found."
+        for i, (href, title) in enumerate(links[:max_results]):
+            snip = _clean(snippets[i]) if i < len(snippets) else ""
+            entry = f"{i + 1}. {_clean(title)}\n   {_real_url(href)}"
+            if snip:
+                entry += f"\n   {snip}"
+            parts.append(entry)
+        return "\n".join(parts) or "No results found."
     except Exception as e:
         return f"search error: {e}"
 
@@ -181,7 +199,7 @@ TOOLS: dict[str, Tool] = {
         Tool(
             name="web_search",
             icon="🌐",
-            description="Search the web for facts, definitions, or quick answers (DuckDuckGo instant answers).",
+            description="Search the web and return ranked results with titles, URLs and snippets (DuckDuckGo, no key needed).",
             parameters={
                 "type": "object",
                 "properties": {
