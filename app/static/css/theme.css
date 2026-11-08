@@ -484,6 +484,15 @@ h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.01em;line-height:1.25}
 .ui-fadein{animation:uiFadeUp .3s ease both}
 @keyframes uiFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
+/* ---------- Expandable request rows ---------- */
+.rq-row{cursor:pointer}
+.rq-row.open td{border-bottom-color:transparent}
+.rq-detail td{background:var(--surface-2);padding:12px 14px}
+.rq-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 18px}
+.rq-item{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rq-k{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3)}
+.rq-v{font-size:var(--t-sm);color:var(--text-1);font-family:var(--font-mono);word-break:break-all}
+
 /* ---------- Table scroll wrapper (small screens) ---------- */
 .ui-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--r-lg)}
 .ui-table-scroll>.ui-table{min-width:600px}
