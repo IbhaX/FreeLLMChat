@@ -73,6 +73,14 @@ class GatewayModel(Model):
         for choice in result.get("choices", []):
             msg = choice.get("message", {})
             text += msg.get("content", "")
+        # Structured output expects raw JSON — models often wrap it in a
+        # fence anyway; salvage the JSON payload before validation.
+        if "response_format" in payload and "```" in text:
+            import re as _re
+
+            m = _re.search(r"```[^\n`]*\n?([\s\S]*?)```", text)
+            if m:
+                text = m.group(1).strip()
         return ModelResponse(parts=[TextPart(content=text)])
 
     async def request_stream(
@@ -92,9 +100,11 @@ def _convert_messages(messages: list[ModelMessage]) -> list[dict[str, Any]]:
         if hasattr(m, "parts"):
             for part in m.parts:
                 if hasattr(part, "content"):
-                    content += part.content
+                    c = part.content
+                    content += "".join(str(x) for x in c) if isinstance(c, list) else str(c)
         elif hasattr(m, "content"):
-            content = m.content
+            c = m.content
+            content = "".join(str(x) for x in c) if isinstance(c, list) else str(c)
         if content:
             out.append({"role": role, "content": content})
     return out
@@ -207,9 +217,9 @@ def _build_agent(agent_cfg: AgentConfig, gateway: Gateway) -> Agent:
     from pydantic_ai.output import PromptedOutput
 
     model = GatewayModel(agent_cfg.model, gateway)
-    # Always append the structured-output protocol so agent responses are
-    # rendered as rich components, not plain text.
-    system_prompt = _compile_system_prompt(agent_cfg) + "\n\n" + structured_system_prompt()
+    system_prompt = _compile_system_prompt(agent_cfg)
+    if agent_cfg.output_format == "structured":
+        system_prompt += "\n\n" + structured_system_prompt()
     settings: dict[str, Any] = {}
     if agent_cfg.temperature is not None:
         settings["temperature"] = agent_cfg.temperature
@@ -282,9 +292,8 @@ def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]
         if role in ("user", "assistant") and content:
             msgs.insert(0, {"role": role, "content": content})
     system_prompt = _compile_system_prompt(agent_cfg)
-    # Always inject the structured-output protocol so agent responses are
-    # rendered as rich components, not plain text.
-    system_prompt = system_prompt + "\n\n" + structured_system_prompt()
+    if agent_cfg.output_format == "structured":
+        system_prompt += "\n\n" + structured_system_prompt()
     msgs.insert(0, {"role": "system", "content": system_prompt})
     return msgs
 
