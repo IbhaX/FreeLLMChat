@@ -245,7 +245,16 @@ class Gateway:
                 try:
                     raw = decrypt_key(key.encrypted_key)
                     adapter = build_adapter(provider)
-                    result = await adapter.chat_completion(self.client, raw, body)
+                    try:
+                        result = await asyncio.wait_for(
+                            adapter.chat_completion(self.client, raw, body),
+                            timeout=self.settings.attempt_timeout_s,
+                        )
+                    except asyncio.TimeoutError:
+                        raise ProviderError(
+                            f"no response in {self.settings.attempt_timeout_s:.0f}s",
+                            retryable=True,
+                        )
                 except ProviderError as e:
                     last_err = e
                     await self._record_failure(session, key, provider, e)
