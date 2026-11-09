@@ -108,23 +108,25 @@ async def group_stream(
         )
     gw = _gateway(request)
 
-    # Orchestrator agent: get-or-create a persistent, user-editable config.
-    orc = (
+    # Orchestrator is built-in (not a user agent): wipe any stale row so it
+    # never shows up in the agents list/dropdown, then use an in-memory config.
+    stale = (
         await session.execute(
             select(AgentConfig).where(AgentConfig.name == ORCHESTRATOR_NAME)
         )
     ).scalar_one_or_none()
-    if orc is None:
-        orc = AgentConfig(
-            name=ORCHESTRATOR_NAME,
-            description="Combines solo agent answers into one structured reply",
-            system_prompt=ORCHESTRATOR_PROMPT,
-            model="auto",
-            enabled=True,
-        )
-        session.add(orc)
+    if stale is not None:
+        await session.delete(stale)
         await session.commit()
-        await session.refresh(orc)
+    orc = AgentConfig(
+        id=-1,
+        name=ORCHESTRATOR_NAME,
+        description="Built-in: combines solo agent answers into one structured reply",
+        system_prompt=ORCHESTRATOR_PROMPT,
+        model="auto",
+        output_format="structured",
+        enabled=True,
+    )
 
     from app.services import astra_memory
 
