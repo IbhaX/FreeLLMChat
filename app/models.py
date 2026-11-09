@@ -122,6 +122,17 @@ class RequestLog(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class StickyRoute(Base):
+    """Last working (provider, model) per requested model/alias — tried
+    first so routing doesn't sweep every provider on each request."""
+    __tablename__ = "sticky_routes"
+
+    requested: Mapped[str] = mapped_column(String(128), primary_key=True)
+    provider_name: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(255))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ModelCache(Base):
     __tablename__ = "model_cache"
 
