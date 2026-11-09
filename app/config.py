@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     max_retries_per_request: int = 6
     cooldown_base_s: float = 30.0
     cooldown_max_s: float = 3600.0
+    preflight_quota_check: bool = False
 
     log_level: str = "INFO"
 

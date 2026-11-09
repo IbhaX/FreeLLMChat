@@ -59,6 +59,15 @@ class Gateway:
         if cache and cache.models and model in cache.models:
             cache.models = [m for m in cache.models if m != model]
             await session.commit()
+        elif cache is None and provider.default_models and model in provider.default_models:
+            # No cache row yet: persist the seeded list minus the dead model
+            # so catalog reads stop retrying it.
+            session.add(ModelCache(
+                provider_id=provider.id,
+                models=[m for m in provider.default_models if m != model],
+                fetched_at=datetime.now(timezone.utc),
+            ))
+            await session.commit()
 
     # ---------- model catalog ----------
 
@@ -336,14 +345,18 @@ class Gateway:
                         )
                 except ProviderError as e:
                     last_err = e
-                    await self._record_failure(session, key, provider, e)
-                    emit({"event": "fail",
-                          "text": f"{provider.name} failed: {e.message[:80]}"})
                     if e.status_code == 404 and "model" in e.message.lower():
+                        # Dead model: the key is fine — don't cool it or
+                        # trip the provider breaker.
                         await self._mark_model_dead(session, provider, model)
+                        emit({"event": "fail",
+                              "text": f"{provider.name} failed: {e.message[:80]}"})
                         emit({"event": "next",
                               "text": "Model unavailable — next provider"})
                         break
+                    await self._record_failure(session, key, provider, e)
+                    emit({"event": "fail",
+                          "text": f"{provider.name} failed: {e.message[:80]}"})
                     if not e.retryable:
                         break
                     emit({"event": "next", "text": "Retrying with next key"})
@@ -441,6 +454,12 @@ class Gateway:
                         continue
                     except ProviderError as e:
                         last_err = e
+                        if e.status_code == 404 and "model" in e.message.lower():
+                            # Dead model: don't cool the key.
+                            await self._mark_model_dead(session, provider, model)
+                            emit({"event": "retry",
+                                  "text": f"{provider.name} · {key.label} — model unavailable, next provider"})
+                            break
                         await self._record_failure(session, key, provider, e)
                         emit({"event": "retry", "text": f"{provider.name} · {key.label} failed ({e.status_code or 'error'})"})
                         if not e.retryable:
