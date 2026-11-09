@@ -266,7 +266,7 @@ async def run_tool_loop(
         names = ["*"]
     specs = specs_for(list(names))
     if not specs:
-        result, _p, _k, _m = await gateway.chat(session, payload)
+        result, _p, _k, _m = await gateway.chat(session, payload, on_event=emit)
         return result
 
     body = dict(payload)
@@ -277,7 +277,7 @@ async def run_tool_loop(
 
     result: dict[str, Any] = {}
     for _ in range(max_rounds):
-        result, _p, _k, _m = await gateway.chat(session, body)
+        result, _p, _k, _m = await gateway.chat(session, body, on_event=emit)
         msg = ((result.get("choices") or [{}])[0]).get("message", {})
         calls = msg.get("tool_calls") or []
         if not calls:
