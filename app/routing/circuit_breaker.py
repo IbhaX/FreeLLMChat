@@ -64,6 +64,9 @@ class CircuitBreaker:
             b.state = State.OPEN
             b.opened_at = time.monotonic()
 
+    def reset_all(self) -> None:
+        self._breakers.clear()
+
     def status(self) -> dict[str, dict[str, object]]:
         return {
             name: {"state": b.state.value, "failures": b.failures}

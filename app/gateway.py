@@ -208,9 +208,17 @@ class Gateway:
         return rid if rid != "-" else uuid.uuid4().hex[:16]
 
     async def chat(
-        self, session: AsyncSession, payload: dict[str, Any]
+        self, session: AsyncSession, payload: dict[str, Any],
+        on_event: Any | None = None,
     ) -> tuple[dict[str, Any], Provider, ApiKey, str]:
-        """Non-streaming request with key rotation + provider failover."""
+        """Non-streaming request with key rotation + provider failover.
+
+        ``on_event`` (optional sync callable) receives activity dicts so
+        callers can show routing/failover progress like the stream path.
+        After a fully exhausted sweep it resets breakers and retries once
+        — free tiers flake constantly, so the second pass usually lands.
+        """
+        emit = on_event or (lambda ev: None)
         request_id = self._request_id()
         requested = payload["model"]
         t0 = time.monotonic()
@@ -220,9 +228,6 @@ class Gateway:
                             "no_route", None, 0, error="no provider serves model")
             raise GatewayExhausted(f"No provider can serve model '{requested}'", 404)
 
-        last_err: ProviderError | None = None
-        tried: set[int] = set()
-        attempts = 0
         # First candidate per provider, preserving provider order.
         by_provider: list[tuple[Provider, str]] = []
         seen: set[str] = set()
@@ -230,6 +235,47 @@ class Gateway:
             if p.name not in seen:
                 seen.add(p.name)
                 by_provider.append((p, m))
+        emit({"event": "routing",
+              "text": f"Routing '{requested}' across {len(by_provider)} provider(s)"})
+
+        last_err: ProviderError | None = None
+        tried: set[int] = set()
+        attempts = 0
+        for sweep in range(2):
+            if sweep:
+                emit({"event": "retry",
+                      "text": "All providers busy — retrying in 4s"})
+                await asyncio.sleep(4)
+                self.breaker.reset_all()
+                tried.clear()
+            for provider, model in by_provider:
+                if not self.breaker.allow(provider.name):
+                    continue
+                if sweep == 0:
+                    emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
+            inner = await self._chat_sweep(
+                session, request_id, t0, payload, by_provider,
+                emit if sweep == 0 else (lambda ev: None), tried, attempts,
+            )
+            if inner is not None:
+                return inner
+            last_err = getattr(self, "_last_err", last_err)
+            attempts = getattr(self, "_last_attempts", attempts)
+        status = last_err.status_code if last_err else None
+        await self._log(session, request_id, requested, None, None, None,
+                        "exhausted", status, (time.monotonic() - t0) * 1000,
+                        error=last_err.message if last_err else "exhausted")
+        raise GatewayExhausted(
+            last_err.message if last_err else "All providers exhausted", status or 503
+        )
+
+    async def _chat_sweep(
+        self, session, request_id, t0, payload, by_provider, emit, tried, attempts,
+    ):
+        """One pass over providers. Returns (result, provider, key, model)
+        on success or None when the sweep is exhausted. Stashes
+        _last_err/_last_attempts for the caller."""
+        last_err: ProviderError | None = None
         for provider, model in by_provider:
             if not self.breaker.allow(provider.name):
                 continue
@@ -258,31 +304,34 @@ class Gateway:
                 except ProviderError as e:
                     last_err = e
                     await self._record_failure(session, key, provider, e)
+                    emit({"event": "fail",
+                          "text": f"{provider.name} failed: {e.message[:80]}"})
                     if e.status_code == 404 and "model" in e.message.lower():
                         await self._mark_model_dead(session, provider, model)
-                        break  # try next provider — this model is gone
+                        emit({"event": "next",
+                              "text": "Model unavailable — next provider"})
+                        break
                     if not e.retryable:
                         break
+                    emit({"event": "next", "text": "Retrying with next key"})
                     continue
-                except Exception as e:  # network errors etc.
+                except Exception as e:
                     last_err = ProviderError(str(e), retryable=True)
                     await self._record_failure(session, key, provider, last_err)
+                    emit({"event": "fail",
+                          "text": f"{provider.name} error: {str(e)[:80]}"})
                     continue
                 usage = result.get("usage") or {}
                 tin = usage.get("prompt_tokens", 0)
                 tout = usage.get("completion_tokens", 0)
                 await self._record_success(session, key, provider, tin, tout)
-                await self._log(session, request_id, requested, model, provider,
-                                key, "ok", 200,
-                                (time.monotonic() - t0) * 1000, tin, tout)
+                await self._log(
+                    session, request_id, payload["model"], model, provider,
+                    key, "ok", 200, (time.monotonic() - t0) * 1000, tin, tout)
+                self._last_err, self._last_attempts = last_err, attempts
                 return result, provider, key, model
-        status = last_err.status_code if last_err else None
-        await self._log(session, request_id, requested, None, None, None,
-                        "exhausted", status, (time.monotonic() - t0) * 1000,
-                        error=last_err.message if last_err else "exhausted")
-        raise GatewayExhausted(
-            last_err.message if last_err else "All providers exhausted", status or 503
-        )
+        self._last_err, self._last_attempts = last_err, attempts
+        return None
 
     # ---------- streaming ----------
 
@@ -316,62 +365,69 @@ class Gateway:
         last_err: ProviderError | None = None
         tried: set[int] = set()
         attempts = 0
-        for provider, model in by_provider:
-            if not self.breaker.allow(provider.name):
-                continue
-            emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
-            body = dict(payload)
-            body["model"] = model
-            body["stream"] = True
-            body.setdefault("stream_options", {"include_usage": True})
-            while attempts < self.settings.max_retries_per_request:
-                key = await self.rotator.pick(session, provider, exclude_ids=tried)
-                if key is None:
-                    break
-                tried.add(key.id)
-                attempts += 1
-                raw = decrypt_key(key.encrypted_key)
-                adapter = build_adapter(provider)
-                stream = adapter.chat_stream(self.client, raw, body)
-                try:
-                    first = await asyncio.wait_for(
-                        anext(stream),  # wait for first SSE chunk
-                        timeout=self.settings.first_chunk_timeout_s,
-                    )
-                except (asyncio.TimeoutError, TimeoutError):
-                    last_err = ProviderError(
-                        f"no response in {self.settings.first_chunk_timeout_s:.0f}s",
-                        retryable=True,
-                    )
-                    await self._record_failure(session, key, provider, last_err)
-                    emit({"event": "retry", "text": f"{provider.name} · {key.label} — no response, trying next"})
+        for sweep in range(2):
+            if sweep:
+                emit({"event": "retry",
+                      "text": "All providers busy — retrying in 4s"})
+                await asyncio.sleep(4)
+                self.breaker.reset_all()
+                tried.clear()
+            for provider, model in by_provider:
+                if not self.breaker.allow(provider.name):
                     continue
-                except StopAsyncIteration:
-                    last_err = ProviderError("empty stream", retryable=True)
-                    await self._record_failure(session, key, provider, last_err)
-                    emit({"event": "retry", "text": f"{provider.name} · {key.label} — empty stream, next key"})
-                    continue
-                except ProviderError as e:
-                    last_err = e
-                    await self._record_failure(session, key, provider, e)
-                    emit({"event": "retry", "text": f"{provider.name} · {key.label} failed ({e.status_code or 'error'})"})
-                    if not e.retryable:
+                emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
+                body = dict(payload)
+                body["model"] = model
+                body["stream"] = True
+                body.setdefault("stream_options", {"include_usage": True})
+                while attempts < self.settings.max_retries_per_request:
+                    key = await self.rotator.pick(session, provider, exclude_ids=tried)
+                    if key is None:
                         break
-                    continue
-                except Exception as e:
-                    last_err = ProviderError(str(e), retryable=True)
-                    await self._record_failure(session, key, provider, last_err)
-                    emit({"event": "retry", "text": f"{provider.name} · {key.label} — {e}, retrying"})
-                    continue
-                return (
-                    self._wrap_stream(
-                        session, stream, first, request_id, requested, model,
-                        provider, key,
-                    ),
-                    provider,
-                    key,
-                    model,
-                )
+                    tried.add(key.id)
+                    attempts += 1
+                    raw = decrypt_key(key.encrypted_key)
+                    adapter = build_adapter(provider)
+                    stream = adapter.chat_stream(self.client, raw, body)
+                    try:
+                        first = await asyncio.wait_for(
+                            anext(stream),  # wait for first SSE chunk
+                            timeout=self.settings.first_chunk_timeout_s,
+                        )
+                    except (asyncio.TimeoutError, TimeoutError):
+                        last_err = ProviderError(
+                            f"no response in {self.settings.first_chunk_timeout_s:.0f}s",
+                            retryable=True,
+                        )
+                        await self._record_failure(session, key, provider, last_err)
+                        emit({"event": "retry", "text": f"{provider.name} · {key.label} — no response, trying next"})
+                        continue
+                    except StopAsyncIteration:
+                        last_err = ProviderError("empty stream", retryable=True)
+                        await self._record_failure(session, key, provider, last_err)
+                        emit({"event": "retry", "text": f"{provider.name} · {key.label} — empty stream, next key"})
+                        continue
+                    except ProviderError as e:
+                        last_err = e
+                        await self._record_failure(session, key, provider, e)
+                        emit({"event": "retry", "text": f"{provider.name} · {key.label} failed ({e.status_code or 'error'})"})
+                        if not e.retryable:
+                            break
+                        continue
+                    except Exception as e:
+                        last_err = ProviderError(str(e), retryable=True)
+                        await self._record_failure(session, key, provider, last_err)
+                        emit({"event": "retry", "text": f"{provider.name} · {key.label} — {e}, retrying"})
+                        continue
+                    return (
+                        self._wrap_stream(
+                            session, stream, first, request_id, requested, model,
+                            provider, key,
+                        ),
+                        provider,
+                        key,
+                        model,
+                    )
         raise GatewayExhausted(
             last_err.message if last_err else "All providers exhausted",
             last_err.status_code if last_err else 503,
