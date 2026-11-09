@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.models import ApiKey, Provider
 from app.routing.quota import QuotaTracker
 
@@ -48,7 +49,12 @@ class Rotator:
             out.append(k)
         if active_groups:
             out = [k for k in out if k.quota_group not in active_groups]
-        # Pre-flight local quota checks.
+        # Pre-flight local quota checks. Off by default: the configured
+        # limits in providers.yaml are per-account guesses (e.g. OpenRouter
+        # is 50 rpd unfunded but 1000 rpd once credited), so guessing wrong
+        # blocks working keys. Real provider 429s still cool keys properly.
+        if not get_settings().preflight_quota_check:
+            return out
         result: list[ApiKey] = []
         seen_groups: set[str] = set()
         for k in out:
