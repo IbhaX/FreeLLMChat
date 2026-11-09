@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -243,10 +243,7 @@ class Gateway:
         attempts = 0
         for sweep in range(2):
             if sweep:
-                emit({"event": "retry",
-                      "text": "All providers busy — retrying in 4s"})
-                await asyncio.sleep(4)
-                self.breaker.reset_all()
+                await self._second_sweep_reset(session, emit)
                 tried.clear()
             for provider, model in by_provider:
                 if not self.breaker.allow(provider.name):
@@ -269,6 +266,41 @@ class Gateway:
             last_err.message if last_err else "All providers exhausted", status or 503
         )
 
+    async def _second_sweep_reset(self, session: AsyncSession, emit) -> None:
+        """Second-chance sweep prep: brief pause, reopen all breakers and
+        release key cooldowns so cooled keys are retried instead of the
+        request erroring out while free capacity is actually available."""
+        emit({"event": "retry",
+              "text": "All providers busy — retrying in 4s"})
+        await asyncio.sleep(4)
+        self.breaker.reset_all()
+        keys = (await session.execute(
+            select(ApiKey).where(
+                ApiKey.enabled.is_(True), ApiKey.cooldown_until.isnot(None)))
+        ).scalars().all()
+        for k in keys:
+            k.cooldown_until = None
+            k.consecutive_failures = 0
+            k.last_error = None
+        await session.commit()
+
+    async def _emit_skip_reason(self, session, provider, attempts, prov_attempts, emit):
+        """When a provider was skipped without a single attempt, say why so
+        the activity list does not show a bare 'Trying' line."""
+        if attempts != prov_attempts:
+            return
+        if attempts >= self.settings.max_retries_per_request:
+            emit({"event": "skip",
+                  "text": f"{provider.name} — retry budget reached, skipping"})
+            return
+        n = (await session.execute(
+            select(func.count(ApiKey.id)).where(
+                ApiKey.provider_id == provider.id,
+                ApiKey.enabled.is_(True)))).scalar()
+        emit({"event": "skip",
+              "text": (f"{provider.name} — {n} key(s) on cooldown or over quota, skipping"
+                       if n else f"{provider.name} — no key configured, skipping")})
+
     async def _chat_sweep(
         self, session, request_id, t0, payload, by_provider, emit, tried, attempts,
     ):
@@ -282,6 +314,7 @@ class Gateway:
             body = dict(payload)
             body["model"] = model
             body["stream"] = False
+            prov_attempts = attempts
             while attempts < self.settings.max_retries_per_request:
                 key = await self.rotator.pick(session, provider, exclude_ids=tried)
                 if key is None:
@@ -330,6 +363,7 @@ class Gateway:
                     key, "ok", 200, (time.monotonic() - t0) * 1000, tin, tout)
                 self._last_err, self._last_attempts = last_err, attempts
                 return result, provider, key, model
+            await self._emit_skip_reason(session, provider, attempts, prov_attempts, emit)
         self._last_err, self._last_attempts = last_err, attempts
         return None
 
@@ -367,10 +401,7 @@ class Gateway:
         attempts = 0
         for sweep in range(2):
             if sweep:
-                emit({"event": "retry",
-                      "text": "All providers busy — retrying in 4s"})
-                await asyncio.sleep(4)
-                self.breaker.reset_all()
+                await self._second_sweep_reset(session, emit)
                 tried.clear()
             for provider, model in by_provider:
                 if not self.breaker.allow(provider.name):
@@ -380,6 +411,7 @@ class Gateway:
                 body["model"] = model
                 body["stream"] = True
                 body.setdefault("stream_options", {"include_usage": True})
+                prov_attempts = attempts
                 while attempts < self.settings.max_retries_per_request:
                     key = await self.rotator.pick(session, provider, exclude_ids=tried)
                     if key is None:
@@ -428,6 +460,7 @@ class Gateway:
                         key,
                         model,
                     )
+                await self._emit_skip_reason(session, provider, attempts, prov_attempts, emit)
         raise GatewayExhausted(
             last_err.message if last_err else "All providers exhausted",
             last_err.status_code if last_err else 503,
