@@ -309,29 +309,26 @@ async def enforce_components(
         if is_trivial(text):
             return result, metrics
 
-        # ONE repair call: tools disabled, conversation + original answer +
-        # repair instruction.
-        repair_payload = {
-            k: v for k, v in (payload or {}).items()
-            if k not in ("stream", "tools", "tool_choice", "builtin_tools", "nova_structured")
-        }
-        repair_payload["stream"] = False
-        messages = [dict(m) for m in (repair_payload.get("messages") or [])]
-        messages.append({"role": "assistant", "content": text})
-        messages.append({"role": "user", "content": REPAIR_INSTRUCTION})
-        repair_payload["messages"] = messages
-        try:
-            repaired, _p, _k, _m = await gateway.chat(
-                session, repair_payload, attempt_timeout=attempt_timeout
-            )
-            repaired_text = _message_content(repaired or {})
-            if has_renderable_components(repaired_text):
-                _set_message_content(result, repaired_text.strip())
-                metrics["repair_used"] = True
-                metrics["component_used"] = True
-                return result, metrics
-        except Exception as exc:  # repair is best-effort; fall through
-            log.debug("component repair call failed: %s", exc)
+        # ONE renderer-agent call: dedicated component converter on a cheap
+        # model, tools disabled, conversation + original answer + instruction.
+        from app.services.renderer import convert_to_components
+
+        history = [
+            m for m in (payload or {}).get("messages") or []
+            if isinstance(m, dict) and m.get("role") in ("user", "assistant")
+        ]
+        converted = await convert_to_components(
+            gateway,
+            session,
+            text,
+            history=history,
+            attempt_timeout=attempt_timeout,
+        )
+        if converted:
+            _set_message_content(result, converted)
+            metrics["repair_used"] = True
+            metrics["component_used"] = True
+            return result, metrics
 
         # Deterministic markdown -> components fallback.
         fenced = markdown_to_envelope(text)
