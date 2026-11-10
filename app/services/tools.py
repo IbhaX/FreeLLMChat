@@ -279,10 +279,15 @@ async def run_tool_loop(
     messages = body["messages"]
 
     result: dict[str, Any] = {}
-    for _ in range(max_rounds):
+    for _round in range(max_rounds):
+        # Re-routing happens every round; after the first, keep only
+        # failover/retry events so the activity list doesn't repeat
+        # "Routing…/Trying…" for the same provider set.
+        round_emit = emit if _round == 0 else _routing_once(emit)
         try:
             result, _p, _k, _m = await asyncio.wait_for(
-                gateway.chat(session, body, on_event=emit), timeout=call_timeout
+                gateway.chat(session, body, on_event=round_emit),
+                timeout=call_timeout,
             )
         except asyncio.TimeoutError:
             raise TimeoutError(f"agent timed out after {call_timeout}s")
@@ -310,6 +315,12 @@ async def run_tool_loop(
                 "content": out,
             })
     return result
+
+
+def _routing_once(emit: Callable[[dict[str, Any]], None]) -> Callable[[dict[str, Any]], None]:
+    """Drop routing/try/skip spam on repeat calls — keep fail/next/retry."""
+    drop = {"routing", "try", "skip"}
+    return lambda ev: None if ev.get("event") in drop else emit(ev)
 
 
 def _brief_args(args: dict[str, Any]) -> str:
