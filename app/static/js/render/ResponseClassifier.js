@@ -22,9 +22,11 @@
   // ---------- structured envelope detection ----------
   // Matches a fenced block whose language tag is nova-response. Captures the
   // inner JSON. Allows trailing/leading whitespace and other markdown around.
-  const FENCE_RE = /```nova-response\s*\n([\s\S]*?)\n```/;
+  // Accept canonical and line-wrapped tags (```nova\\n-response).
+  const NOVA_TAG = "nova(?:[ \\t]*\\r?\\n[ \\t]*)?-response";
+  const FENCE_RE = new RegExp("```" + NOVA_TAG + "[ \\t]*\\r?\\n([\\s\\S]*?)\\r?\\n```", "i");
   // Unterminated fence: model forgot the closing ``` (or stream was cut).
-  const FENCE_OPEN_RE = /```nova-response\s*\n([\s\S]*)$/;
+  const FENCE_OPEN_RE = new RegExp("```" + NOVA_TAG + "[ \\t]*\\r?\\n([\\s\\S]*)$", "i");
   // Some models wrap the envelope in a plain ```json fence — accept it
   // when the inner JSON is a valid envelope (has response_type).
   const JSON_FENCE_RE = /```json\s*\n([\s\S]*?)\n```/;
@@ -320,7 +322,7 @@
     }
   }
 
-  const STREAM_FENCE_RE = /```(nova-response|json)[ \t]*\r?\n/;
+  const STREAM_FENCE_RE = new RegExp("```(" + NOVA_TAG + "|json)[ \\t]*\\r?\\n", "i");
 
   // Inspect a still-streaming reply. Returns null when it is not (or not yet
   // recognisably) a component envelope; otherwise
