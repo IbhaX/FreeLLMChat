@@ -225,3 +225,28 @@ def test_wants_tools_classifier():
 
     import asyncio
     asyncio.run(main())
+
+
+def test_custom_instructions_roundtrip():
+    with TestClient(app) as c:
+        r = c.get("/admin/settings/custom-instructions", headers=ADMIN)
+        assert r.status_code == 200
+        assert r.json()["custom_instructions"] == ""
+        r = c.put("/admin/settings/custom-instructions", headers=ADMIN,
+                  json={"custom_instructions": "Always be terse."})
+        assert r.status_code == 200
+        assert r.json()["custom_instructions"] == "Always be terse."
+        r = c.get("/admin/settings/custom-instructions", headers=ADMIN)
+        assert r.json()["custom_instructions"] == "Always be terse."
+        # clear
+        c.put("/admin/settings/custom-instructions", headers=ADMIN,
+              json={"custom_instructions": ""})
+        r = c.get("/admin/settings/custom-instructions", headers=ADMIN)
+        assert r.json()["custom_instructions"] == ""
+
+
+def test_custom_instructions_requires_admin():
+    with TestClient(app) as c:
+        assert c.get("/admin/settings/custom-instructions").status_code == 401
+        assert c.put("/admin/settings/custom-instructions",
+                     json={"custom_instructions": "x"}).status_code == 401

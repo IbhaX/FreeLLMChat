@@ -119,6 +119,23 @@ async function loadSys(){
 }
 async function reseed(){const r=await adminApi('/admin/providers/reseed',{method:'POST'});toast(`Reseeded: ${r.upserted} providers`,'ok');loadProviders();}
 
+// custom instructions (server-side system prompt addition)
+async function loadCI(){
+  try{
+    const r=await adminApi('/admin/settings/custom-instructions');
+    $('#ciInput').value=r.custom_instructions||'';
+  }catch(_){/* admin not ready yet */}
+}
+async function saveCI(){
+  const v=$('#ciInput').value;
+  const r=await fetch(API_BASE+'/admin/settings/custom-instructions',{method:'PUT',headers:apiHeaders(true),body:JSON.stringify({custom_instructions:v})});
+  if(r.ok){$('#ciStatus').textContent='Saved';$('#ciStatus').style.color='var(--success)';toast('Custom instructions saved','ok');}
+  else{$('#ciStatus').textContent='Save failed';$('#ciStatus').style.color='var(--error)';toast('Save failed','err');}
+}
+async function clearCI(){
+  $('#ciInput').value='';await saveCI();
+}
+
 // long-term memory
 async function loadMem(){
   try{
@@ -143,5 +160,5 @@ async function delMem(id){
   if(r.ok||r.status===204){loadMem();toast('Memory deleted');}else toast('Delete failed','err');
 }
 
-window.addEventListener('admin-ready',()=>{loadProviders();loadSys();loadMem();});
+window.addEventListener('admin-ready',()=>{loadProviders();loadSys();loadMem();loadCI();});
 if(innerWidth<=820)document.getElementById('menuBtn').style.display='grid';
