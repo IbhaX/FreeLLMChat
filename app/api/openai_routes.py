@@ -113,6 +113,19 @@ async def embeddings(
     )
 
 
+_REPLAY_DELAY_S = 0.012
+_REPLAY_MAX_PIECES = 160
+
+
+def _stream_pieces(text: str) -> list[str]:
+    """Split a finished reply into ~token-sized deltas, capped so a long
+    answer replays in about two seconds."""
+    if not text:
+        return []
+    size = max(8, -(-len(text) // _REPLAY_MAX_PIECES))
+    return [text[i:i + size] for i in range(0, len(text), size)]
+
+
 def _remember(gateway, conv_id: str | None, user_text: str, reply: str) -> None:
     """Fire-and-forget: store the turn in short-term memory and extract facts."""
     if not conv_id:
@@ -282,8 +295,13 @@ async def chat_completions(
                     text += (c.get("message") or {}).get("content") or ""
                 if last_user:
                     _remember(gateway, conv_id, last_user, text)
-                chunk = {"choices": [{"index": 0, "delta": {"content": text},
-                                      "finish_reason": "stop"}]}
+                # The tool loop returns the answer in one piece; replay it in
+                # small deltas so the UI can render progressively.
+                for piece in _stream_pieces(text):
+                    chunk = {"choices": [{"index": 0, "delta": {"content": piece}}]}
+                    yield f"data: {_json.dumps(chunk)}\n\n".encode()
+                    await asyncio.sleep(_REPLAY_DELAY_S)
+                chunk = {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
                 yield f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
                 return
             if not isinstance(res, tuple):

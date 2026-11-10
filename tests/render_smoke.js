@@ -130,5 +130,36 @@ sr2.abort("stopped");
 sr2.update("late"); // should be ignored
 ok("streaming abort ignores late updates", sr2.text === "");
 
+// ---- partial envelope parsing (progressive streaming) ----
+const RC = Nova.ResponseClassifier;
+const streamEnv = {
+  response_type: "comparison",
+  content: 'Lead "quoted" \u00e9',
+  components: [
+    { type: "table", data: { columns: ["A", "B"], rows: [["1", "2.5"], [-3e2, true]] } },
+    { type: "callout", data: { variant: "tip", message: "x\ny" } },
+  ],
+  sources: [{ title: "T", url: "https://x" }],
+};
+const streamText = "Intro\n```nova-response\n" + JSON.stringify(streamEnv, null, 2) + "\n```";
+let prefixOk = true, monotonic = true, prevDone = 0;
+for (let k = 1; k <= streamText.length; k++) {
+  const st = RC.parseStreamingEnvelope(streamText.slice(0, k));
+  if (k > "Intro\n".length && !st) { prefixOk = false; break; }
+  if (st && st.envelope) {
+    const done = (st.envelope.components || []).filter((c) => st.closed.has(c)).length;
+    if (done < prevDone) monotonic = false;
+    prevDone = done;
+    if (st.envelope.content && !streamEnv.content.startsWith(st.envelope.content)) prefixOk = false;
+  }
+}
+ok("streaming envelope parses at every prefix", prefixOk);
+ok("streaming components complete monotonically", monotonic);
+const fullSt = RC.parseStreamingEnvelope(streamText);
+ok("streaming envelope final value exact", JSON.stringify(fullSt.envelope) === JSON.stringify(streamEnv));
+ok("streaming plain markdown is not an envelope", RC.parseStreamingEnvelope("Hello **world**") === null);
+ok("streaming json code is not an envelope", RC.parseStreamingEnvelope('```json\n{"name": "x"}') === null);
+ok("streaming partial fence shows skeleton", RC.parseStreamingEnvelope("``").pending === true);
+
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);
