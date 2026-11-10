@@ -25,6 +25,18 @@ from app.routing.quota import QuotaTracker
 from app.routing.rotator import Rotator
 
 
+def _clean_exhaustion_msg(msg: str) -> str:
+    """Turn a raw upstream error (often a full provider JSON body) into a
+    short line safe to show in the chat bubble."""
+    import re
+
+    cleaned = re.sub(r"[\[{].*", "", msg or "", flags=re.DOTALL).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" :_")
+    if not cleaned:
+        cleaned = "provider error"
+    return f"All providers are unavailable right now (last error: {cleaned[:140]})"
+
+
 class GatewayExhausted(Exception):
     def __init__(self, message: str, last_status: int | None = None) -> None:
         super().__init__(message)
@@ -303,7 +315,8 @@ class Gateway:
                         "exhausted", status, (time.monotonic() - t0) * 1000,
                         error=last_err.message if last_err else "exhausted")
         raise GatewayExhausted(
-            last_err.message if last_err else "All providers exhausted", status or 503
+            _clean_exhaustion_msg(last_err.message) if last_err
+            else "All providers exhausted", status or 503
         )
 
     async def _sticky_first(
@@ -552,7 +565,8 @@ class Gateway:
                     )
                 await self._emit_skip_reason(session, provider, attempts, prov_attempts, emit)
         raise GatewayExhausted(
-            last_err.message if last_err else "All providers exhausted",
+            _clean_exhaustion_msg(last_err.message) if last_err
+            else "All providers exhausted",
             last_err.status_code if last_err else 503,
         )
 
