@@ -375,6 +375,7 @@
         <div class="model-menu ui-menu" id="modelMenu"></div>
       </button>
       <button class="pill-btn" id="agentBtn" title="Agents">🤖<span class="tb-tx"> Agents</span></button>
+      <button class="pill-btn" id="rpBtn" title="Roleplay: create a character and talk with it">🎭<span class="tb-tx"> Roleplay</span></button>
       <button class="pill-btn" id="researchBtn" title="Research mode: multi-step cited answers (click to cycle depth: auto → quick → standard → deep)">🔬<span class="tb-tx"> Research</span> <span style="opacity:.7;font-size:10px">auto</span></button>
       <button class="pill-btn" id="agentNewBtn" title="Create agent">＋</button>
       <button class="pill-btn" id="agentEditBtn" title="Edit agent" style="display:none">✏️</button>
@@ -391,6 +392,15 @@
     <div style="border-top:1px solid var(--border-1);margin-top:4px;padding-top:4px">
       <div class="mi" id="agentGroupBtn" style="color:var(--text-2)">👥 Group chat — pick agents to talk together</div>
       <div class="mi" id="agentNoneBtn" style="color:var(--text-2)">✕ No agent (raw model)</div>
+    </div>
+  </div>
+
+  <div class="ui-menu" id="rpMenu" style="display:none;position:absolute;top:56px;right:16px;z-index:200;min-width:280px">
+    <div class="mi-head">Roleplay characters</div>
+    <div id="rpList" style="max-height:240px;overflow-y:auto"></div>
+    <div style="border-top:1px solid var(--border-1);margin-top:4px;padding-top:4px">
+      <div class="mi" id="rpNewBtn" style="color:var(--text-2)">＋ New character</div>
+      <div class="mi" id="rpNoneBtn" style="color:var(--text-2)">✕ Exit roleplay</div>
     </div>
   </div>
 
@@ -422,6 +432,29 @@
   </div>
   <input type="file" id="fileInput" multiple hidden>
 </main>
+
+<!-- ==================== ROLEPLAY CHARACTER ==================== -->
+<div id="rpModal" class="ui-modal" style="display:none">
+  <div class="ui-modal-card" style="max-width:520px;width:92%">
+    <div style="font-weight:700;font-size:15px;margin-bottom:4px" id="rpModalTitle">New character</div>
+    <div class="t-xs tx-3" style="margin-bottom:12px">The character's persona becomes the system prompt — it stays in character on every reply.</div>
+    <div style="display:grid;gap:8px">
+      <div style="display:flex;gap:8px">
+        <input id="rpEmoji" class="ui-input" placeholder="Avatar emoji" style="max-width:90px" value="🎭">
+        <input id="rpName" class="ui-input" placeholder="Name (e.g. Sherlock Holmes)" style="flex:1">
+      </div>
+      <input id="rpTagline" class="ui-input" placeholder="Tagline (e.g. Consulting detective, 221B Baker Street)">
+      <textarea id="rpDesc" class="ui-input" rows="3" placeholder="Backstory / description"></textarea>
+      <textarea id="rpPersonality" class="ui-input" rows="2" placeholder="Personality traits (e.g. terse, sarcastic, observant)"></textarea>
+      <textarea id="rpStyle" class="ui-input" rows="2" placeholder="Speaking style (optional — e.g. short sentences, British slang, dramatic)"></textarea>
+      <input id="rpGreeting" class="ui-input" placeholder="First message / greeting (optional)">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="ui-btn ui-btn-ghost" id="rpCancel">Cancel</button>
+      <button class="ui-btn ui-btn-primary" id="rpSave">Save character</button>
+    </div>
+  </div>
+</div>
 
 <!-- ==================== AGENT BUILDER WIZARD ==================== -->
 <div id="agentModal" class="ui-modal" style="display:none">
