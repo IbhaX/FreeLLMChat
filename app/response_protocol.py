@@ -25,6 +25,7 @@ Design rules (see global engineering rules):
 
 from __future__ import annotations
 
+import json
 from enum import Enum
 from typing import Any, Optional
 
@@ -462,51 +463,120 @@ def protocol_descriptor() -> dict[str, Any]:
     }
 
 
-def structured_system_prompt() -> str:
-    """Compact system prompt for the structured response envelope.
+# Per-component guidance for the system prompt: when to use it and one
+# minimal valid example. The catalog itself (names + schemas) is generated
+# from component_schemas() so it never drifts; these maps only add the
+# usage hint and example payload.
+_COMPONENT_GUIDE: dict[str, dict[str, Any]] = {
+    "metric_card": {"when": "ONE key number (revenue, users, score)", "example": {"title": "Revenue", "value": "1.2M", "unit": "USD", "delta": "+8%"}},
+    "stat_grid": {"when": "several key metrics at a glance", "example": {"title": "Q3 KPIs", "stats": [{"label": "Users", "value": "48k", "delta": "+12%"}, {"label": "Churn", "value": "2.1%"}]}},
+    "gauge": {"when": "one value against a max (progress, score, capacity)", "example": {"value": 72, "label": "Goal progress", "max": 100}},
+    "sparkline": {"when": "tiny trend over a few datapoints inside prose", "example": {"data": [3, 5, 4, 8, 7, 12], "label": "Weekly signups"}},
+    "chart": {"when": "2+ datapoints over time/categories (bar, line, pie, donut, area, scatter)", "example": {"chart_type": "bar", "title": "Monthly signups", "data": [{"month": "Jan", "count": 10}, {"month": "Feb", "count": 14}]}},
+    "table": {"when": "comparisons or structured records with columns", "example": {"title": "Plan comparison", "columns": ["Feature", "Free", "Pro"], "rows": [["API calls", "100/day", "unlimited"], ["Support", "community", "priority"]]}},
+    "comparison": {"when": "head-to-head comparison with highlighted differences", "example": {"title": "A vs B", "columns": ["Aspect", "A", "B"], "rows": [["Price", "$0", "$20/mo"], ["Speed", "fast", "faster"]]}},
+    "list": {"when": "bullet or numbered items (features, pros/cons, steps as plain list)", "example": {"title": "Pros", "items": ["Fast setup", "Free tier", "Open source"]}},
+    "instructions": {"when": "ordered steps the user should follow", "example": {"title": "Setup", "steps": ["Install the CLI", "Run init", "Add your key"]}},
+    "timeline": {"when": "events in chronological order with dates", "example": {"title": "Roadmap", "events": [{"date": "2026 Q1", "title": "Launch", "description": "Public beta"}]}},
+    "person_card": {"when": "a specific person is discussed", "example": {"name": "Ada Lovelace", "description": "Mathematician", "url": "https://en.wikipedia.org/wiki/Ada_Lovelace"}},
+    "search_result": {"when": "web search hits or source list", "example": {"query": "latest AI news", "results": [{"title": "Article", "url": "https://example.com", "snippet": "..."}]}},
+    "quote": {"when": "a notable quote with attribution", "example": {"text": "Simplicity is the soul of efficiency.", "author": "Austin Freeman"}},
+    "callout": {"when": "warnings, tips, or key takeaways (variant: info|tip|important|warning)", "example": {"variant": "tip", "title": "Note", "message": "Free tiers change often; verify limits."}},
+    "keyvalue": {"when": "spec sheets / property lists", "example": {"pairs": [{"key": "Context", "value": "128K"}, {"key": "License", "value": "Apache 2.0"}]}},
+    "badge": {"when": "status labels (free, beta, deprecated) as pills", "example": {"badges": [{"label": "free tier", "variant": "success"}, {"label": "beta", "variant": "info"}]}},
+    "code": {"when": "any code snippet", "example": {"language": "python", "code": "print('hi')"}},
+    "math": {"when": "a mathematical formula", "example": {"expression": "E = mc^2", "display": True}},
+    "json_viewer": {"when": "raw JSON/API payload the user asked to inspect", "example": {"title": "API response", "data": {"ok": True, "count": 3}}},
+    "image_gallery": {"when": "multiple images to show", "example": {"images": [{"url": "https://example.com/a.png", "caption": "A"}]}},
+    "video": {"when": "a single video to embed", "example": {"url": "https://example.com/v.mp4", "title": "Demo"}},
+    "audio": {"when": "a single audio clip", "example": {"url": "https://example.com/a.mp3", "title": "Podcast"}},
+    "file_preview": {"when": "downloadable files", "example": {"files": [{"name": "report.pdf", "url": "https://example.com/r.pdf", "mime_type": "application/pdf", "size": 1024}]}},
+    "progress": {"when": "a single completion percentage", "example": {"value": 65, "label": "Processing", "status": "running"}},
+    "weather": {"when": "current weather for a location", "example": {"location": "Paris", "temperature": 18, "condition": "Cloudy", "unit": "C"}},
+    "financial_summary": {"when": "stock/portfolio figures with metrics", "example": {"title": "Portfolio", "currency": "USD", "metrics": [{"label": "Total", "value": "$12,400"}]}},
+    "product_card": {"when": "product recommendations", "example": {"products": [{"name": "Widget Pro", "price": "$29", "description": "Fast and small"}]}},
+    "business_card": {"when": "local business recommendations", "example": {"businesses": [{"name": "Cafe Luna", "rating": 4.5, "address": "1 Main St"}]}},
+    "interactive": {"when": "the user must pick options before you can answer", "example": {"title": "Choose a plan", "fields": [{"name": "plan", "type": "radio", "options": ["free", "pro"]}]}},
+    "error": {"when": "something failed; explain + recovery", "example": {"title": "Rate limited", "message": "Too many requests.", "recovery": "Wait 60s and retry."}},
+    "warning": {"when": "a caution the user must notice", "example": {"message": "This deletes all data permanently."}},
+    "success": {"when": "confirming an action completed", "example": {"message": "Settings saved."}},
+    "diff": {"when": "showing before/after text changes", "example": {"title": "Rename", "before": "old_name", "after": "new_name"}},
+    "heatmap": {"when": "intensity across a grid (2D numbers 0-1)", "example": {"title": "Activity", "data": [[0.1, 0.8], [0.4, 0.2]]}},
+    "tagcloud": {"when": "weighted topics/keywords", "example": {"tags": [{"label": "AI", "weight": 5}, {"label": "APIs", "weight": 3}]}},
+    "divider": {"when": "separating sections inside a long answer", "example": {}},
+}
 
-    Slimmed down (~700 tokens vs ~2,950) to cut per-call input cost while
-    keeping the full contract: envelope schema, rules, component names with
-    required fields, and one example. Injected into every chat completion
-    and structured agent run; also exposed via
-    ``/v1/render-protocol/prompt``.
+
+def structured_system_prompt() -> str:
+    """Mandatory structured-response system prompt.
+
+    Every non-trivial reply MUST be a ``nova-response`` envelope with at
+    least one component. The component catalog is generated from
+    :func:`component_schemas` so it can never drift from what the frontend
+    actually renders; per-type usage hints/examples live in
+    ``_COMPONENT_GUIDE``.
     """
     schemas = component_schemas()
-    comp_list = "\n".join(
-        f"- `{n}`: required={s['required']}" for n, s in sorted(schemas.items())
-    )
-    return f"""## Structured Response Protocol (MANDATORY)
+    lines = []
+    for name in sorted(schemas):
+        s = schemas[name]
+        guide = _COMPONENT_GUIDE.get(name, {})
+        when = guide.get("when", s["description"])
+        ex = guide.get("example")
+        ex_json = ", ".join(
+            f'"{k}": {json.dumps(v, ensure_ascii=False)}' for k, v in (ex or {}).items()
+        )
+        lines.append(
+            f"- `{name}` — {when}. required: {', '.join(s['required']) or '(none)'}."
+            + (f" e.g. {{{ex_json}}}" if ex_json else "")
+        )
+    catalog = "\n".join(lines)
+    return f"""## COMPONENT OUTPUT CONTRACT (MANDATORY — overrides any other style instruction)
 
-Always wrap your response in a fenced block whose language tag is literally `{RESPONSE_FENCE_TAG}` (not `json`) containing ONE JSON object — never bare text/markdown:
+RULE 0 — When to use components: EVERY reply containing more than one fact, comparison, list, number, step, or source MUST be a structured component response. Plain prose is allowed ONLY for one-line greetings or single-sentence answers. A multi-fact answer with zero components is a FAILURE.
 
-```json
-{{"response_type": "<general|code|table|list|math|data_visualization|statistics|search_results|product_recommendations|business_recommendations|weather|financial|instructions|comparison|api_response|error|warning|success|file_attachment|image|video|audio|progress|interactive_question|complex>",
- "content": "<1-3 sentence markdown intro — REQUIRED>",
- "components": [{{"type": "<component_type>", "data": {{...}}}}],
- "metadata": {{}}, "sources": [{{"title": "...", "url": "...", "source": "..."}}],
- "actions": [{{"label": "...", "action": "..."}}],
- "suggested_prompts": ["..."], "visualization": null, "attachments": []}}
-```
-
-Rules:
-- `response_type` + `content` required; pick the most specific response_type.
-- Prefer visual components over prose: numbers/KPIs -> `stat_grid`/`metric_card`/`gauge`; 2+ datapoints -> `chart`; steps -> `instructions`; compare -> `comparison`; tables -> `table`; JSON -> `json_viewer`; events -> `timeline`; highlights -> `callout`; quotes -> `quote`; weather -> `weather`; search hits -> `search_result`.
-- 0 components feels empty; add one when real data exists. Never invent data.
-- `suggested_prompts` only when they add value.
-
-Component data schemas:
-
-{comp_list}
-
-Example:
+OUTPUT FORMAT — wrap the WHOLE reply in one fenced block tagged `{RESPONSE_FENCE_TAG}` containing ONE JSON envelope (never bare markdown, never multiple fences):
 
 ```{RESPONSE_FENCE_TAG}
-{{
-  "response_type": "code",
-  "content": "Here is a function that chunks text:",
-  "components": [
-    {{"type": "code", "data": {{"language": "python", "code": "def chunk(t, n=500):\\n    return [t[i:i+n] for i in range(0, len(t), n)]"}}}}
-  ],
-  "suggested_prompts": ["Explain this code", "Add unit tests"]
-}}
-```"""
+{{"response_type": "<most specific type>", "content": "<1 short lead sentence>", "components": [{{"type": "<type>", "data": {{...}}}}], "sources": [{{"title": "...", "url": "..."}}], "suggested_prompts": ["..."]}}
+```
+
+SELECTION GUIDE — pick by content, not habit:
+- key metrics / KPIs -> `stat_grid` or `metric_card` (one number) or `gauge` (vs a max)
+- comparisons or records -> `table` (raw data) or `comparison` (head-to-head)
+- steps to follow -> `instructions`; events over time -> `timeline`
+- pros/cons or features -> `list` (two lists: one "Pros", one "Cons")
+- person/entity -> `person_card`; search hits / citations -> `search_result` + `sources`
+- warnings/caveats -> `callout` (variant warning) or `warning`; key takeaway -> `callout` (tip)
+- code -> `code`; formulas -> `math`; raw JSON -> `json_viewer`
+- status labels -> `badge`; spec sheets -> `keyvalue`; quote -> `quote`
+
+COMPOSITION RULE — a good answer = 1 short lead sentence (`content`) + 2 to 4 DIFFERENT component types + a sources block. Never repeat the same component type back-to-back when another fits. Do not invent data; if a value is unknown, omit the component.
+
+FEW-SHOT EXAMPLES
+
+User: "How do I deploy this app?"
+```{RESPONSE_FENCE_TAG}
+{{"response_type": "instructions", "content": "Three steps:", "components": [{{"type": "instructions", "data": {{"title": "Deploy", "steps": ["Build the image", "Push to registry", "Roll out"]}}}}]}}
+```
+
+User: "Compare free tiers of Groq and Gemini"
+```{RESPONSE_FENCE_TAG}
+{{"response_type": "comparison", "content": "Side by side:", "components": [{{"type": "comparison", "data": {{"title": "Free tiers", "columns": ["Aspect", "Groq", "Gemini"], "rows": [["RPM", "30", "15"], ["Context", "128K", "1M"]]}}}}, {{"type": "callout", "data": {{"variant": "tip", "message": "Gemini's free tier has the larger context."}}}}], "sources": [{{"title": "Groq docs", "url": "https://groq.com"}}, {{"title": "AI Studio", "url": "https://aistudio.google.com"}}]}}
+```
+
+User: "What were today's biggest AI announcements?" (research answer)
+```{RESPONSE_FENCE_TAG}
+{{"response_type": "search_results", "content": "Three stories stood out today:", "components": [{{"type": "search_result", "data": {{"query": "AI news today", "results": [{{"title": "Model X released", "url": "https://example.com/1", "snippet": "..."}}, {{"title": "Startup Y raises $100M", "url": "https://example.com/2", "snippet": "..."}}]}}}}, {{"type": "timeline", "data": {{"title": "Timeline", "events": [{{"date": "09:00", "title": "Model X launch", "description": "Open weights"}}]}}}}], "sources": [{{"title": "TechCrunch", "url": "https://techcrunch.com"}}]}}
+```
+
+COMPONENT CATALOG (type — when to use — required fields — minimal example):
+{catalog}
+
+OUTPUT RULES
+- Never emit raw tool-call markup, XML, or JSON outside this envelope format.
+- `response_type` + `content` are required; choose the most specific response_type.
+- `sources` is REQUIRED whenever the answer uses web/research data; cite every factual claim with [n] matching a sources entry.
+- `suggested_prompts`: 2-3 short follow-ups, only when they add value.
+- If you truly cannot use components (pure one-line answer), reply with plain text — anything longer MUST use the envelope.
+"""
