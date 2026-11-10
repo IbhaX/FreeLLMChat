@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.crypto import decrypt_key
-from app.models import ApiKey, ModelCache, Provider, RequestLog
+from app.models import ApiKey, ModelCache, Provider, RequestLog, StickyRoute, utcnow
 from app.providers.base import ProviderError
 from app.providers.registry import build_adapter
 from app.routing.circuit_breaker import CircuitBreaker
@@ -246,6 +246,7 @@ class Gateway:
                 by_provider.append((p, m))
         emit({"event": "routing",
               "text": f"Routing '{requested}' across {len(by_provider)} provider(s)"})
+        await self._sticky_first(session, requested, by_provider)
 
         last_err: ProviderError | None = None
         tried: set[int] = set()
@@ -264,6 +265,7 @@ class Gateway:
                 emit if sweep == 0 else (lambda ev: None), tried, attempts,
             )
             if inner is not None:
+                await self._sticky_set(session, requested, inner[1], inner[3])
                 return inner
             last_err = getattr(self, "_last_err", last_err)
             attempts = getattr(self, "_last_attempts", attempts)
@@ -274,6 +276,43 @@ class Gateway:
         raise GatewayExhausted(
             last_err.message if last_err else "All providers exhausted", status or 503
         )
+
+    async def _sticky_first(
+        self, session: AsyncSession, requested: str,
+        by_provider: list[tuple[Provider, str]],
+    ) -> None:
+        """Move the last working (provider, model) to the front."""
+        sticky = (
+            await session.execute(
+                select(StickyRoute).where(StickyRoute.requested == requested)
+            )
+        ).scalar_one_or_none()
+        if not sticky:
+            return
+        for i, (p, m) in enumerate(by_provider):
+            if p.name == sticky.provider_name and m == sticky.model:
+                by_provider.insert(0, by_provider.pop(i))
+                return
+
+    async def _sticky_set(
+        self, session: AsyncSession, requested: str,
+        provider: Provider, model: str,
+    ) -> None:
+        row = (
+            await session.execute(
+                select(StickyRoute).where(StickyRoute.requested == requested)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            session.add(StickyRoute(
+                requested=requested, provider_name=provider.name, model=model))
+        elif row.provider_name != provider.name or row.model != model:
+            row.provider_name = provider.name
+            row.model = model
+            row.updated_at = utcnow()
+        else:
+            return
+        await session.commit()
 
     async def _second_sweep_reset(self, session: AsyncSession, emit) -> None:
         """Second-chance sweep prep: brief pause, reopen all breakers and
@@ -408,6 +447,7 @@ class Gateway:
                 seen.add(p.name)
                 by_provider.append((p, m))
         emit({"event": "routing", "text": f"Routing '{requested}' across {len(by_provider)} provider(s)"})
+        await self._sticky_first(session, requested, by_provider)
 
         last_err: ProviderError | None = None
         tried: set[int] = set()
@@ -470,6 +510,7 @@ class Gateway:
                         await self._record_failure(session, key, provider, last_err)
                         emit({"event": "retry", "text": f"{provider.name} · {key.label} — {e}, retrying"})
                         continue
+                    await self._sticky_set(session, requested, provider, model)
                     return (
                         self._wrap_stream(
                             session, stream, first, request_id, requested, model,
