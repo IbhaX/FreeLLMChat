@@ -191,7 +191,7 @@ function md(src){
         window.hljs.getLanguage(l)?window.hljs.highlight(c,{language:l}).value:window.hljs.highlightAuto(c).value});
         marked.__hl=true;}
       const rich=[];
-      let pre=src.replace(/```(\w*)\n?([\s\S]*?)```/g,(m,lang,code)=>{
+      let pre=src.replace(/```([\w-]*)\n?([\s\S]*?)```/g,(m,lang,code)=>{
         const r=richBlock(lang,code);
         if(r){rich.push(r);return ` ${rich.length-1} `;}
         return m;
@@ -203,7 +203,7 @@ function md(src){
   }
   let html=esc(src);
   // fenced blocks: rich renderers first, else code
-  html=html.replace(/```(\w*)\n?([\s\S]*?)```/g,(m,lang,code)=>{
+  html=html.replace(/```([\w-]*)\n?([\s\S]*?)```/g,(m,lang,code)=>{
     const rich=richBlock(lang,code);
     if(rich)return rich;
     return `<div class="codeblock"><div class="codehead"><span>${lang||'code'}</span><button class="copy-code">copy</button></div><pre><code>${code.trimEnd()}</code></pre></div>`;
