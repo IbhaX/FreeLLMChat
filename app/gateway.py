@@ -355,34 +355,36 @@ class Gateway:
                             "no_route", None, 0, error="no provider serves model")
             raise GatewayExhausted(f"No provider can serve model '{requested}'", 404)
 
-        # First candidate per provider, preserving provider order.
+        # Preserve configured priority, but never probe providers that have
+        # no currently usable key. Each candidate is attempted sequentially;
+        # the next provider is contacted only after the current one fails.
         by_provider: list[tuple[Provider, str]] = []
         seen: set[str] = set()
         for p, m in candidates:
-            if p.name not in seen:
-                seen.add(p.name)
-                by_provider.append((p, m))
+            if p.name in seen:
+                continue
+            seen.add(p.name)
+            if not await self.rotator.healthy_keys(session, p):
+                continue
+            by_provider.append((p, m))
+        if not by_provider:
+            raise GatewayExhausted("No providers have an enabled, available API key", 503)
         emit({"event": "routing",
-              "text": f"Routing '{requested}' across {len(by_provider)} provider(s)"})
+              "text": f"Sequential fallback: {len(by_provider)} configured provider(s)"})
         await self._sticky_first(session, requested, by_provider)
 
         last_err: ProviderError | None = None
         tried: set[int] = set()
         attempts = 0
-        for sweep in range(2):
-            if sweep:
-                await self._second_sweep_reset(session, emit)
-                tried.clear()
-            inner = await self._chat_sweep(
-                session, request_id, t0, payload, by_provider,
-                emit if sweep == 0 else (lambda ev: None), tried, attempts,
-                attempt_timeout=attempt_timeout,
-            )
-            if inner is not None:
-                await self._sticky_set(session, requested, inner[1], inner[3])
-                return inner
-            last_err = getattr(self, "_last_err", last_err)
-            attempts = getattr(self, "_last_attempts", attempts)
+        inner = await self._chat_sweep(
+            session, request_id, t0, payload, by_provider,
+            emit, tried, attempts, attempt_timeout=attempt_timeout,
+        )
+        if inner is not None:
+            await self._sticky_set(session, requested, inner[1], inner[3])
+            return inner
+        last_err = getattr(self, "_last_err", last_err)
+        attempts = getattr(self, "_last_attempts", attempts)
         status = last_err.status_code if last_err else None
         await self._log(session, request_id, requested, None, None, None,
                         "exhausted", status, (time.monotonic() - t0) * 1000,
@@ -576,17 +578,22 @@ class Gateway:
             if p.name not in seen:
                 seen.add(p.name)
                 by_provider.append((p, m))
-        emit({"event": "routing", "text": f"Routing '{requested}' across {len(by_provider)} provider(s)"})
+        available: list[tuple[Provider, str]] = []
+        for p, m in by_provider:
+            if await self.rotator.pick(session, p) is not None:
+                available.append((p, m))
+        by_provider = available
+        if not by_provider:
+            raise GatewayExhausted("No providers have an enabled, available API key", 503)
+        emit({"event": "routing", "text": f"Sequential fallback: {len(by_provider)} configured provider(s)"})
         await self._sticky_first(session, requested, by_provider)
 
         last_err: ProviderError | None = None
         tried: set[int] = set()
         attempts = 0
-        for sweep in range(2):
-            if sweep:
-                await self._second_sweep_reset(session, emit)
-                tried.clear()
-            for provider, model in by_provider:
+        # One ordered pass only. A provider is attempted once per eligible
+        # key; the next provider is reached only after a real upstream failure.
+        for provider, model in by_provider:
                 if not self.breaker.allow(provider.name):
                     continue
                 emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
