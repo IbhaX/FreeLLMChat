@@ -364,7 +364,7 @@ class Gateway:
             if p.name in seen:
                 continue
             seen.add(p.name)
-            if await self.rotator.pick(session, p) is None:
+            if not await self.rotator.healthy_keys(session, p):
                 continue
             by_provider.append((p, m))
         if not by_provider:
