@@ -479,8 +479,8 @@ async def run_tool_loop(
     # actual results/errors, then ask again — bounded to 3 attempts.
     messages.append({
         "role": "user",
-        "content": "Tool limit reached. Do NOT call any tools — reply with "
-                   "the final answer now, using only what you already gathered.",
+        "content": "Tool use is finished. Answer now with components using "
+                   "only the gathered data.",
     })
     result: dict[str, Any] = {}
     for _try in range(3):
