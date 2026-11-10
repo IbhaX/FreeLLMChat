@@ -16,6 +16,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pydantic-ai>=1.0",
     "python-dateutil>=2.9",
+    "edge-tts>=7.0",
 ]
 
 [project.scripts]

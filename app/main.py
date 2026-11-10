@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api.admin_routes import router as admin_router
@@ -87,6 +88,22 @@ class RevalidatingStaticFiles(StaticFiles):
 
 
 app.mount("/static", RevalidatingStaticFiles(directory=static_dir), name="static")
+
+
+@app.get("/media/{fname}", include_in_schema=False)
+async def media_file(fname: str):
+    """Generated media (TTS audio etc.) stored under data/media."""
+    from app.config import get_settings
+
+    if "/" in fname or "\\" in fname or fname.startswith("."):
+        return JSONResponse({"error": "bad name"}, status_code=400)
+    media_dir = (
+        Path(get_settings().database_url.split("///")[-1]).parent / "media"
+    )
+    path = media_dir / fname
+    if not path.is_file():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path)
 
 
 @app.get("/", include_in_schema=False)
