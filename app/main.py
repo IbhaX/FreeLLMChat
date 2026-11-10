@@ -45,6 +45,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     async with get_session_factory()() as session:
         await seed_providers(session)
+        from app.services.characters import seed_if_empty
+
+        await seed_if_empty(session)
     app.state.gateway = Gateway()
     yield
     await app.state.gateway.close()
