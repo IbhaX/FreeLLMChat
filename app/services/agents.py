@@ -365,16 +365,36 @@ async def run_agent(
         )
         choice = (result.get("choices") or [{}])[0]
         content = (choice.get("message") or {}).get("content") or ""
-        return _maybe_structured(agent_cfg, content)
+        content = _maybe_structured(agent_cfg, content)
+        if agent_cfg.output_format != "json":
+            from app.services.component_enforce import enforce_components
+            payload = {"model": agent_cfg.model, "messages": messages, "stream": False}
+            async with get_session_factory()() as session:
+                fixed, _metrics = await enforce_components(
+                    gateway, session, payload,
+                    {"choices": [{"message": {"role": "assistant", "content": content}}]},
+                    model=agent_cfg.model,
+                )
+            content = ((fixed.get("choices") or [{}])[0].get("message") or {}).get("content") or content
+        return content
     memory = await get_memory_text(str(message), conversation_id)
     agent = _build_agent(agent_cfg, gateway, custom_instructions + ("\n\n" + memory if memory else ""))
     result = await asyncio.wait_for(
         agent.run(message, message_history=_to_model_history(history)), timeout=timeout_s
     )
     out = result.output
-    if isinstance(out, ResponseEnvelope):
-        return envelope_to_fence(out)
-    return out
+    content = envelope_to_fence(out) if isinstance(out, ResponseEnvelope) else str(out or "")
+    if agent_cfg.output_format != "json":
+        from app.services.component_enforce import enforce_components
+        payload = {"model": agent_cfg.model, "messages": _messages(agent_cfg, message, history, custom_instructions), "stream": False}
+        async with get_session_factory()() as session:
+            fixed, _metrics = await enforce_components(
+                gateway, session, payload,
+                {"choices": [{"message": {"role": "assistant", "content": content}}]},
+                model=agent_cfg.model,
+            )
+        content = ((fixed.get("choices") or [{}])[0].get("message") or {}).get("content") or content
+    return content
 
 
 def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
