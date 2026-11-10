@@ -91,15 +91,11 @@
       (m, lang, code) =>
         `<div class="codeblock"><div class="codehead"><span>${lang || "code"}</span></div><pre><code>${code.replace(/^\n/, "")}</code></pre></div>`
     );
+    // Tables go through TableRenderer (single source of truth for columns,
+    // alignment, CSV/copy) instead of a hand-rolled table here.
     html = html.replace(/((?:^\|[^\n]+\|\s*$\n?){2,})/gm, (block) => {
       const parsed = parseMdTable(block);
-      if (!parsed) return block;
-      const { columns: head, rows: body } = parsed;
-      return `<div class="nova-table-wrap"><div class="nova-table-scroll"><table class="nova-table"><thead><tr>${head
-        .map((h) => `<th>${h}</th>`)
-        .join("")}</tr></thead><tbody>${body
-        .map((r) => `<tr>${head.map((_, i) => `<td>${r[i] || ""}</td>`).join("")}</tr>`)
-        .join("")}</tbody></table></div></div>`;
+      return parsed ? Nova.TableRenderer.render(parsed).outerHTML : block;
     });
     html = html.replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>');
     html = html.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
@@ -303,8 +299,26 @@
     // 2) bare <table> -> interactive TableRenderer (skip already-upgraded)
     root.querySelectorAll("table").forEach((table) => {
       if (table.classList.contains("nova-table") || table.closest(".nova-table-wrap")) return;
-      const columns = [...table.querySelectorAll("thead th")].map((th) => th.textContent.trim());
-      const rows = [...table.querySelectorAll("tbody tr")].map((tr) =>
+      // DOM textContent is already entity-decoded exactly once; TableRenderer
+      // renders with textContent, so passing it straight through never
+      // double-encodes "&amp;" -> "&amp;amp;". (Do NOT round-trip through
+      // parseMdTable here: its entity decoding is for markdown pipe tables.)
+      const headCells = [...table.querySelectorAll("thead th")];
+      const bodyTrs = [...table.querySelectorAll("tbody tr")];
+      let columns = headCells.map((th) => th.textContent.trim());
+      let rowEls = bodyTrs;
+      if (!bodyTrs.length) {
+        // No thead/tbody (hand-written HTML): first row of th (or td) is the header.
+        const allTrs = [...table.querySelectorAll("tr")];
+        const first = allTrs[0];
+        if (first && first.querySelector("th")) {
+          columns = [...first.querySelectorAll("th")].map((th) => th.textContent.trim());
+          rowEls = allTrs.slice(1);
+        } else {
+          rowEls = allTrs;
+        }
+      }
+      const rows = rowEls.map((tr) =>
         [...tr.querySelectorAll("td")].map((td) => td.textContent.trim())
       );
       if (!columns.length && !rows.length) return;

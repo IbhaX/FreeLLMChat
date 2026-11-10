@@ -69,7 +69,7 @@
 .nova-table{width:100%;border-collapse:collapse;font-size:13px}
 @media(max-width:767px){.nova-table{min-width:520px}}
 .nova-table thead th{position:sticky;top:0;background:var(--surface-2);text-align:left;padding:9px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);border-bottom:1px solid var(--border-1);z-index:1}
-.nova-table tbody td{padding:9px 12px;border-bottom:1px solid var(--border-1);vertical-align:middle}
+.nova-table tbody td{padding:9px 12px;border-bottom:1px solid var(--border-1);vertical-align:middle;text-align:left}
 .nova-table tbody tr:hover{background:var(--surface-2)}
 .nova-table tbody tr:last-child td{border-bottom:none}
 .nova-table td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--font-mono);font-size:12.5px}

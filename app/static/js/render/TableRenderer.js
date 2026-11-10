@@ -19,6 +19,13 @@
     return parseMdTable(md);
   }
 
+  // Values arrive already entity-decoded (markdown via parseMdTable, DOM
+  // tables via textContent, JSON via JSON.parse). Rendering with textContent
+  // keeps them exact — do NOT decode entities here or "&amp;" becomes "&amp;amp;".
+  function cellText(v) {
+    return String(v ?? "");
+  }
+
   function isNumeric(v) {
     if (v == null || v === "") return false;
     const n = Number(String(v).replace(/[,$%\s]/g, ""));
@@ -46,6 +53,16 @@
           ? Object.keys(first)
           : [];
     }
+    // Alignment is decided per COLUMN, not per cell: text columns are always
+    // left-aligned, numeric columns right-aligned, so a stray number in a text
+    // column (or text in a numeric one) never flips the whole column.
+    const numericCols = columns.map((_, ci) => {
+      const vals = rows
+        .map((r) => (Array.isArray(r) ? r[ci] : r && typeof r === "object" ? r[columns[ci]] : null))
+        .map((v) => (v && typeof v === "object" ? v.value ?? v.text ?? null : v));
+      const present = vals.filter((v) => v != null && String(v).trim() !== "");
+      return present.length > 0 && present.every((v) => isNumeric(v));
+    });
     // Normalize row cells: object -> array aligned to columns; array -> as-is.
     const normRows = rows.map((r) => {
       if (Array.isArray(r)) return r;
@@ -81,7 +98,7 @@
     const table = el("table", { class: "nova-table" });
     const thead = el("thead");
     const headRow = el("tr");
-    columns.forEach((c) => headRow.append(el("th", {}, String(c))));
+    columns.forEach((c) => headRow.append(el("th", {}, cellText(c))));
     thead.append(headRow);
     table.append(thead);
 
@@ -90,8 +107,8 @@
       const tr = el("tr");
       columns.forEach((c, i) => {
         const v = r[i] ?? "";
-        const numeric = isNumeric(v);
-        const td = el("td", { class: numeric ? "num" : "" }, String(v));
+        const numeric = numericCols[i] && isNumeric(v);
+        const td = el("td", { class: numeric ? "num" : "txt" }, cellText(v));
         tr.append(td);
       });
       tbody.append(tr);
