@@ -398,10 +398,10 @@ async def stream_agent(
     """Run an agent with streaming via the gateway's internal streaming API."""
     history = _bounded_history(history)
     openai_messages = _messages(agent_cfg, message, history, custom_instructions)
-    mem = await get_memory_text(str(message), conversation_id)
-    if mem:
-        openai_messages.insert(1 if openai_messages and openai_messages[0].get("role") == "system" else 0,
-                               {"role": "system", "content": mem})
+    if not _tool_names(agent_cfg):
+        mem = await get_memory_text(str(message), conversation_id)
+        if mem:
+            openai_messages.insert(1, {"role": "system", "content": mem})
     if agent_cfg.output_format == "structured":
         try:
             text = await run_agent(gateway, agent_cfg, message, history,
