@@ -146,7 +146,7 @@ async def group_stream(
     async def solo(a: AgentConfig) -> tuple[AgentConfig, str]:
         prompt = (
             f"Conversation so far:\n{transcript_txt}\n\n"
-            f"Answer the latest user message as {a.name}. Be concise but complete."
+            f"Answer the latest user message as {a.name}. Be thorough and well-structured: answer fully, cover the relevant substance, and use the component format for anything with more than one fact."
         )
         try:
             return a, await run_agent(gw, a, prompt, [])

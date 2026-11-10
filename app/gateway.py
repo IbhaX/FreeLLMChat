@@ -481,6 +481,7 @@ class Gateway:
             body = dict(payload)
             body["model"] = model
             body["stream"] = False
+            body.setdefault("max_tokens", 4096)
             prov_attempts = attempts
             while attempts < self.settings.max_retries_per_request:
                 key = await self.rotator.pick(session, provider, exclude_ids=tried)
@@ -592,6 +593,7 @@ class Gateway:
                 body = dict(payload)
                 body["model"] = model
                 body["stream"] = True
+                body.setdefault("max_tokens", 4096)
                 body.setdefault("stream_options", {"include_usage": True})
                 prov_attempts = attempts
                 while attempts < self.settings.max_retries_per_request:
