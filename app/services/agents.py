@@ -346,6 +346,21 @@ async def _chat_with_tools(
                                    max_rounds=max_rounds, call_timeout=timeout_s)
 
 
+async def _ensure_agent_components(
+    gateway: Gateway, message: str, history: list[dict[str, Any]], content: str,
+) -> str:
+    """Apply the same rich-response repair/fallback used by normal chat."""
+    from app.services.component_enforce import enforce_components
+
+    transcript = _bounded_history(history) + [{"role": "user", "content": message}]
+    result = {"choices": [{"message": {"role": "assistant", "content": content}}]}
+    async with get_session_factory()() as session:
+        result, _metrics = await enforce_components(
+            gateway, session, {"messages": transcript}, result,
+        )
+    return ((result.get("choices") or [{}])[0].get("message") or {}).get("content") or content
+
+
 async def run_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
     *, custom_instructions: str = "", conversation_id: str | None = None,
@@ -361,7 +376,8 @@ async def run_agent(
         )
         choice = (result.get("choices") or [{}])[0]
         content = (choice.get("message") or {}).get("content") or ""
-        return _maybe_structured(agent_cfg, content)
+        content = _maybe_structured(agent_cfg, content)
+        return await _ensure_agent_components(gateway, message, history, content)
     memory = await get_memory_text(str(message), conversation_id)
     agent = _build_agent(agent_cfg, gateway, custom_instructions + ("\n\n" + memory if memory else ""))
     result = await asyncio.wait_for(
@@ -369,8 +385,10 @@ async def run_agent(
     )
     out = result.output
     if isinstance(out, ResponseEnvelope):
-        return envelope_to_fence(out)
-    return out
+        content = envelope_to_fence(out)
+    else:
+        content = str(out or "")
+    return await _ensure_agent_components(gateway, message, history, content)
 
 
 def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
