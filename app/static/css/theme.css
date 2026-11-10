@@ -295,11 +295,13 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.2}
 .ui-seg{
   display:inline-flex;gap:2px;padding:3px;border-radius:var(--r-md);
   background:var(--surface-2);border:1px solid var(--border-1);
+  max-width:100%;overflow-x:auto;scrollbar-width:none;
 }
+.ui-seg::-webkit-scrollbar{display:none}
 .ui-seg button{
   border:none;background:transparent;color:var(--text-2);cursor:pointer;
   padding:5px 12px;border-radius:calc(var(--r-md) - 3px);font:inherit;
-  font-size:var(--t-xs);font-weight:500;transition:.15s;
+  font-size:var(--t-xs);font-weight:500;transition:.15s;white-space:nowrap;flex:none;
 }
 .ui-seg button:hover{color:var(--text-1)}
 .ui-seg button.sel{background:var(--surface-1);color:var(--text-1);box-shadow:var(--shadow-1)}
