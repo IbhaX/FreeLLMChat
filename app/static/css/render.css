@@ -216,6 +216,17 @@
 .nova-file-meta{display:flex;gap:8px;font-size:11px;color:var(--text-3);margin-top:2px}
 .nova-file-link{font-size:11px;font-weight:500;display:inline-block;margin-top:3px}
 
+/* ---------- Person card ---------- */
+.nova-person{display:flex;gap:14px;align-items:flex-start;margin:10px 0;padding:14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.nova-person-avatar{width:64px;height:64px;border-radius:50%;flex:none;overflow:hidden;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:20px;font-weight:700;text-transform:uppercase}
+.nova-person-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.nova-person-body{flex:1;min-width:0}
+.nova-person-name{font-size:15px;font-weight:700;color:var(--text-1)}
+.nova-person-desc{font-size:12px;color:var(--text-3);margin-top:2px}
+.nova-person-extract{font-size:13px;color:var(--text-2);line-height:1.55;margin-top:6px}
+.nova-person-link{display:inline-block;margin-top:8px;font-size:11.5px;font-weight:600;color:var(--accent);text-decoration:none}
+.nova-person-link:hover{text-decoration:underline}
+
 /* ---------- Instructions ---------- */
 .nova-instructions{margin:10px 0}
 .nova-steps{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
