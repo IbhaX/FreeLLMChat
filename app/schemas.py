@@ -126,6 +126,25 @@ class KeyTestResult(BaseModel):
     error: Optional[str] = None
     model_used: Optional[str] = None
 
+class KeyBulkTestItem(BaseModel):
+    key_id: int
+    provider: str
+    label: str = ""
+    key_hint: str = ""
+    enabled: bool = True
+    ok: bool
+    status_code: Optional[int] = None
+    latency_ms: Optional[float] = None
+    error: Optional[str] = None
+    model_used: Optional[str] = None
+
+
+class KeyBulkTestResult(BaseModel):
+    tested: int
+    ok: int
+    failed: int
+    results: list[KeyBulkTestItem]
+
 
 # ---------- Admin: stats ----------
 

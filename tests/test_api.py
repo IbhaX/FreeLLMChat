@@ -104,3 +104,33 @@ def test_tool_policy_appends_to_existing_system():
     assert out[0]["content"].startswith("Persona.")
     assert "Tool use policy" in out[0]["content"]
     assert len(out) == 2
+
+
+def test_keys_test_all(monkeypatch):
+    import app.api.admin_routes as ar
+
+    class FakeAdapter:
+        def __init__(self, provider):
+            self.provider = provider
+
+        async def chat_completion(self, client, api_key, payload):
+            if "bad" in api_key:
+                raise RuntimeError("401 invalid api key")
+            return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setattr(ar, "build_adapter", lambda provider: FakeAdapter(provider))
+    with TestClient(app) as c:
+        c.post("/admin/keys", headers=ADMIN, json={
+            "provider": "groq", "keys": ["gsk_good_key_0001"], "label_prefix": "t"})
+        c.post("/admin/keys", headers=ADMIN, json={
+            "provider": "groq", "keys": ["gsk_bad_key_0002"], "label_prefix": "t"})
+        r = c.post("/admin/keys/test-all", headers=ADMIN)
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["tested"] >= 2 and data["ok"] >= 1 and data["failed"] >= 1
+        by_hint = {k["key_hint"]: k for k in data["results"]}
+        assert by_hint["0001"]["ok"] is True
+        assert by_hint["0001"]["model_used"]
+        assert by_hint["0002"]["ok"] is False
+        assert "401" in by_hint["0002"]["error"]
+        assert "provider" in by_hint["0001"] and "latency_ms" in by_hint["0001"]
