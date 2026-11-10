@@ -429,7 +429,7 @@ async def run_tool_loop(
                 # the UI, then execute it like a real call.
                 msg["content"] = _strip_text_tool_calls(msg["content"])
         if not calls:
-            return result
+            return _sanitize_result(result)
         messages.append({
             "role": "assistant",
             "content": msg.get("content") or "",
@@ -465,7 +465,7 @@ async def run_tool_loop(
         gateway.chat(session, body, on_event=_routing_once(emit)),
         timeout=call_timeout,
     )
-    return result
+    return _sanitize_result(result)
 
 
 def _routing_once(emit: Callable[[dict[str, Any]], None]) -> Callable[[dict[str, Any]], None]:
@@ -515,6 +515,54 @@ def _parse_text_tool_calls(content: str) -> list[dict[str, Any]]:
 
 def _strip_text_tool_calls(content: str) -> str:
     return _text_call_re().sub("", content).strip()
+
+
+_ARG_TAG_RE = re.compile(r"<arg_(?:key|value)>[^<]*</arg_(?:key|value)>")
+_ARG_OPEN_RE = re.compile(r"<arg_(?:key|value)>")
+_TOOL_TAIL_RE = re.compile(r"<tool_call>.*", re.DOTALL)
+
+
+def _sanitize_final_text(text: str) -> str:
+    """Last line of defense: never let raw tool markup reach the user.
+
+    Providers sometimes emit ``<tool_call>`` blobs as plain content (especially
+    in the final answer after tools were removed). Strip paired and unclosed
+    blobs plus stray arg tags, and collapse degenerate repeated-line loops.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+    if "<tool_call>" not in text and "<arg_" not in text and "response_type" not in text:
+        pass  # still collapse repeats below
+    t = _text_call_re().sub("", text)
+    t = _TOOL_TAIL_RE.sub("", t)          # unclosed <tool_call>… tail
+    t = _ARG_TAG_RE.sub("", t)
+    t = _ARG_OPEN_RE.sub("", t)
+    # Collapse runs of 4+ identical lines (degenerate model loops).
+    if "response_type" not in t:
+        lines = t.split("\n")
+        out: list[str] = []
+        i = 0
+        while i < len(lines):
+            j = i
+            while j + 1 < len(lines) and lines[j + 1] == lines[i] and lines[i].strip():
+                j += 1
+            run = j - i + 1
+            out.append(lines[i])
+            if run >= 4:
+                out.append(f"_(repeated {run} times)_")
+            i = j + 1
+        t = "\n".join(out)
+    return t.strip()
+
+
+def _sanitize_result(result: dict[str, Any]) -> dict[str, Any]:
+    try:
+        msg = ((result.get("choices") or [{}])[0]).get("message", {})
+        if isinstance(msg.get("content"), str):
+            msg["content"] = _sanitize_final_text(msg["content"])
+    except Exception:
+        pass
+    return result
 
 
 def _brief_args(args: dict[str, Any]) -> str:
