@@ -90,7 +90,10 @@ function loadState(){
     const s=JSON.parse(raw);
     if(!s.conversations||!s.conversations.length)return false;
     state.conversations=s.conversations;
-    state.current=s.currentId?s.conversations.find(c=>c.id===s.currentId)||s.conversations[0]:s.conversations[0];
+    // Always open a fresh chat on load; history stays in the sidebar.
+    const fresh=mkConv('New conversation');
+    state.conversations.unshift(fresh);
+    state.current=fresh;
     const m=MODELS.find(x=>x.id===s.modelId);
     if(m){state.model=m;$('#modelName').textContent=m.name;$('#modelIcon').style.background=m.color;}
     return true;
