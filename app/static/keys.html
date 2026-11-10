@@ -49,12 +49,16 @@
         <span class="tx-3 t-xs">one per line or comma-separated</span>
       </div>
       <div class="addgrid">
-        <div class="full">
-          <textarea id="keyArea" class="ui-textarea" rows="3" placeholder="sk-...&#10;sk-...&#10;sk-..." style="font-family:var(--font-mono);font-size:12px"></textarea>
+        <div>
+          <label class="label">Provider</label>
+          <select id="keyProvider" class="ui-select"></select>
         </div>
         <div>
           <label class="label">Label prefix</label>
           <input id="keyLabel" class="ui-input" placeholder="work- (→ work-1, work-2…)">
+        </div>
+        <div class="full">
+          <textarea id="keyArea" class="ui-textarea" rows="3" placeholder="sk-...&#10;sk-...&#10;sk-..." style="font-family:var(--font-mono);font-size:12px"></textarea>
         </div>
         <div>
           <label class="label ui-tooltip" data-tip="Keys sharing a group are treated as one quota pool">Quota group ⓘ</label>

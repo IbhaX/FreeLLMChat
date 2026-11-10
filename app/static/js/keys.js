@@ -7,9 +7,17 @@ const GRADS={'groq':'#f55036','gemini':'#4e8ef7','openrouter':'#8b5cf6','mistral
 
 function pgrad(n){return GRADS[n]||'linear-gradient(135deg,var(--accent),var(--accent-2))'}
 
+let ADD_PROV='';
+function renderProviderSelect(){
+  const sel=$('#keyProvider');
+  const cur=ADD_PROV||(SEL!=='*'?SEL:'')||sel.value||'';
+  sel.innerHTML=PROVIDERS.map(p=>`<option value="${esc(p.name)}" ${p.name===cur?'selected':''}>${esc(p.display_name||p.name)} (${esc(p.name)})</option>`).join('');
+  if(!sel.value&&PROVIDERS.length)sel.value=PROVIDERS[0].name;
+  ADD_PROV=sel.value;
+}
 async function refresh(){
   [PROVIDERS,KEYS]=await Promise.all([adminApi('/admin/providers'),adminApi('/admin/keys')]);
-  renderStrip();renderTable();renderProvSettings();
+  renderStrip();renderProviderSelect();renderTable();renderProvSettings();
 }
 
 function renderStrip(){
@@ -22,7 +30,7 @@ function renderStrip(){
       <div class="pk"><span class="${p.healthy_key_count?'':'bad'}" style="${p.healthy_key_count?'':'color:var(--error)'}">${p.healthy_key_count}/${p.key_count} healthy</span></div>
     </div>`).join('');
 }
-function selProv(n){SEL=n;renderStrip();renderTable();renderProvSettings();}
+function selProv(n){SEL=n;ADD_PROV=n==='*'?'':n;renderProviderSelect();renderStrip();renderTable();renderProvSettings();}
 
 function shown(){return SEL==='*'?KEYS:KEYS.filter(k=>k.provider===SEL)}
 
@@ -85,8 +93,8 @@ async function addKeys(){
   const raw=$('#keyArea').value.trim();
   if(!raw){toast('Paste at least one key','err');return;}
   const keys=raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
-  const provider=SEL==='*'?(PROVIDERS[0]&&PROVIDERS[0].name):SEL;
-  if(!provider){toast('No provider selected','err');return;}
+  const provider=$('#keyProvider').value;
+  if(!provider){toast('Select a provider first','err');return;}
   const r=await adminApi('/admin/keys',{method:'POST',body:JSON.stringify({
     provider,keys,label_prefix:$('#keyLabel').value,
     quota_group:$('#keyQuota').value||null,
