@@ -383,6 +383,54 @@ def specs_for(names: list[str] | None) -> list[dict[str, Any]]:
     return [TOOLS[n].openai_spec() for n in names if n in TOOLS]
 
 
+async def _execute_tool_call(tc: dict[str, Any]) -> tuple[str, str, dict[str, Any], str]:
+    """Validate, execute and time one tool call without leaking arguments to logs."""
+    import json as _json
+    import logging
+    import time
+
+    logger = logging.getLogger("freellm.agent.tools")
+    fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+    name = fn.get("name", "") if isinstance(fn, dict) else ""
+    try:
+        args = _json.loads(fn.get("arguments") or "{}")
+    except (TypeError, ValueError):
+        args = None
+    call_id = tc.get("id", "") if isinstance(tc, dict) else ""
+    if name not in TOOLS or not isinstance(args, dict):
+        return call_id, str(name), {}, "tool error: unknown tool or arguments must be an object"
+
+    spec = TOOLS[name].parameters
+    allowed = set(spec.get("properties", {}))
+    required = set(spec.get("required", []))
+    unexpected = set(args) - allowed
+    missing = required - set(args)
+    if unexpected or missing:
+        details = []
+        if missing:
+            details.append("missing: " + ", ".join(sorted(missing)))
+        if unexpected:
+            details.append("unexpected: " + ", ".join(sorted(unexpected)))
+        return call_id, name, args, "tool error: " + "; ".join(details)
+
+    started = time.perf_counter()
+    try:
+        output = await asyncio.wait_for(run_tool(name, args), timeout=30)
+        output = str(output)[:12000]
+        logger.info("tool execution completed", extra={
+            "tool_name": name,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            "success": not output.lower().startswith(("error:", "tool error:", "fetch error:")),
+        })
+    except asyncio.TimeoutError:
+        output = "tool error: execution timed out after 30 seconds"
+        logger.warning("tool execution timed out", extra={"tool_name": name})
+    except Exception as exc:
+        output = f"tool error: {type(exc).__name__}: {exc}"
+        logger.exception("tool execution failed", extra={"tool_name": name})
+    return call_id, name, args, output
+
+
 async def run_tool_loop(
     gateway: Any,
     session: Any,
@@ -465,27 +513,11 @@ async def run_tool_loop(
             "content": msg.get("content") or "",
             "tool_calls": calls,
         })
-        for tc in calls:
-            fn = tc.get("function", {})
-            name = fn.get("name", "")
-            try:
-                args = _json.loads(fn.get("arguments") or "{}")
-            except Exception:
-                args = {}
+        # Tool calls in the same model turn are independent; execute concurrently
+        # while preserving their original order when appending results to history.
+        executed = await asyncio.gather(*(_execute_tool_call(tc) for tc in calls))
+        for call_id, name, args, out in executed:
             emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
-            if name not in TOOLS or not isinstance(args, dict):
-                out = "tool error: unknown tool or arguments must be an object"
-            else:
-                allowed = set(TOOLS[name].parameters.get("properties", {}))
-                if set(args) - allowed:
-                    out = "tool error: unexpected argument(s): " + ", ".join(sorted(set(args) - allowed))
-                else:
-                    try:
-                        out = await asyncio.wait_for(run_tool(name, args), timeout=30)
-                    except asyncio.TimeoutError:
-                        out = "tool error: execution timed out after 30 seconds"
-                    except Exception as exc:
-                        out = f"tool error: {type(exc).__name__}: {exc}"
             if tool_output_hook is not None:
                 try:
                     tool_output_hook(name, out)
@@ -493,7 +525,7 @@ async def run_tool_loop(
                     pass
             messages.append({
                 "role": "tool",
-                "tool_call_id": tc.get("id", ""),
+                "tool_call_id": call_id,
                 "content": out,
             })
     # Rounds exhausted while the model still wanted tools: without a final
