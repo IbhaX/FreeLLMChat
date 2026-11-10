@@ -212,7 +212,7 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
     return "\n\n".join(parts) if parts else "You are a helpful assistant."
 
 
-def _build_agent(agent_cfg: AgentConfig, gateway: Gateway) -> Agent:
+def _build_agent(agent_cfg: AgentConfig, gateway: Gateway, custom: str = "") -> Agent:
     from pydantic_ai import Agent
     from pydantic_ai.output import PromptedOutput
 
@@ -220,6 +220,9 @@ def _build_agent(agent_cfg: AgentConfig, gateway: Gateway) -> Agent:
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":
         system_prompt = structured_system_prompt() + "\n\n" + system_prompt
+    if custom:
+        from app.services.settings_store import custom_instructions_block
+        system_prompt += "\n\n" + custom_instructions_block(custom)
     settings: dict[str, Any] = {}
     if agent_cfg.temperature is not None:
         settings["temperature"] = agent_cfg.temperature
@@ -284,7 +287,7 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
     return "\n\n".join(parts)
 
 
-def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]], custom: str = "") -> list[dict[str, Any]]:
     msgs = [{"role": "user", "content": message}]
     for h in reversed(history):
         role = h.get("role", "user")
@@ -294,6 +297,9 @@ def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":
         system_prompt = structured_system_prompt() + "\n\n" + system_prompt
+    if custom:
+        from app.services.settings_store import custom_instructions_block
+        system_prompt += "\n\n" + custom_instructions_block(custom)
     msgs.insert(0, {"role": "system", "content": system_prompt})
     return msgs
 
@@ -338,7 +344,8 @@ async def _chat_with_tools(
 
 
 async def run_agent(
-    gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]]
+    gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
+    *, custom_instructions: str = "",
 ) -> str:
     """Run an agent non-streaming; uses the tool loop when tools are enabled.
 
@@ -347,12 +354,12 @@ async def run_agent(
     ``nova-response`` fenced block the frontend classifier renders.
     """
     if _tool_names(agent_cfg):
-        messages = _messages(agent_cfg, message, history)
+        messages = _messages(agent_cfg, message, history, custom_instructions)
         result = await _chat_with_tools(gateway, agent_cfg, messages)
         choice = (result.get("choices") or [{}])[0]
         content = (choice.get("message") or {}).get("content") or ""
         return _maybe_structured(agent_cfg, content)
-    agent = _build_agent(agent_cfg, gateway)
+    agent = _build_agent(agent_cfg, gateway, custom_instructions)
     result = await agent.run(message)
     out = result.output
     if isinstance(out, ResponseEnvelope):
@@ -382,13 +389,14 @@ def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
 
 
 async def stream_agent(
-    gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]]
+    gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
+    *, custom_instructions: str = "",
 ) -> AsyncIterator[bytes]:
     """Run an agent with streaming via the gateway's internal streaming API.
 
     Yields SSE bytes compatible with the chat UI's stream parser.
     """
-    openai_messages = _messages(agent_cfg, message, history)
+    openai_messages = _messages(agent_cfg, message, history, custom_instructions)
     mem = await get_memory_text(message)
     if mem:
         openai_messages.insert(
@@ -402,7 +410,8 @@ async def stream_agent(
     # renders it into structured components. Same pattern as the tool loop.
     if agent_cfg.output_format == "structured":
         try:
-            text = await run_agent(gateway, agent_cfg, message, history)
+            text = await run_agent(gateway, agent_cfg, message, history,
+                                   custom_instructions=custom_instructions)
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
             yield f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
         except Exception as e:

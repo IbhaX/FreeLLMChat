@@ -128,7 +128,9 @@ async def group_stream(
     )
 
     from app.services import astra_memory
+    from app.services.settings_store import get_custom_instructions
 
+    custom = await get_custom_instructions(session)
     conv_id = str(body.conversation_id) if body.conversation_id else None
     astra_memory.ensure_collections()
     if conv_id:
@@ -149,7 +151,7 @@ async def group_stream(
             f"Answer the latest user message as {a.name}. Be thorough and well-structured: answer fully, cover the relevant substance, and use the component format for anything with more than one fact."
         )
         try:
-            return a, await run_agent(gw, a, prompt, [])
+            return a, await run_agent(gw, a, prompt, [], custom_instructions=custom)
         except Exception as e:
             return a, f"*(error: {e})*"
 
@@ -198,7 +200,7 @@ async def group_stream(
                 "nova-response envelope defined in your instructions."
             )
             try:
-                final = await run_agent(gw, orc, synth, [])
+                final = await run_agent(gw, orc, synth, [], custom_instructions=custom)
             except Exception as e:
                 final = f"*(orchestrator error: {e})*"
             transcript.append(

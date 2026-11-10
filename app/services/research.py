@@ -662,7 +662,7 @@ async def _verify(
 
 async def _synthesize(
     gateway: Any, session: Any, model: str, question: str,
-    state: ResearchState, emit: Emit,
+    state: ResearchState, emit: Emit, custom_instructions: str = "",
 ) -> str:
     emit({"event": "stage", "text": "Writing the answer…", "stage": "synthesize",
           "agent": "synthesizer"})
@@ -683,7 +683,11 @@ async def _synthesize(
         "conflicts": state.contradictions, "not_found": state.unverified[:15],
     }, ensure_ascii=False)
     msgs = [{"role": "user", "content": f"Research package (JSON):\n{ctx[:30000]}\n\nWrite the final answer now."}]
-    answer = await _call(gateway, session, model, msgs, system=SYNTHESIZER_PROMPT)
+    system = SYNTHESIZER_PROMPT
+    if custom_instructions:
+        from app.services.settings_store import custom_instructions_block
+        system += "\n\n" + custom_instructions_block(custom_instructions)
+    answer = await _call(gateway, session, model, msgs, system=system)
     answer = _clean_answer(answer, state)
     return answer
 
@@ -898,7 +902,10 @@ async def run_research(
             break
         keep.add(s.id)
     state.sources = {k: v for k, v in state.sources.items() if k in keep}
-    state.answer = await _synthesize(gateway, session, synth_model, question, state, emit)
+    from app.services.settings_store import get_custom_instructions
+    custom = await get_custom_instructions(session)
+    state.answer = await _synthesize(gateway, session, synth_model, question, state, emit,
+                                     custom_instructions=custom)
     meta_quality = await _quality_check(state, emit)
 
     meta = {
