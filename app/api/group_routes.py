@@ -37,8 +37,9 @@ containing valid JSON — and nothing else:
  "suggested_prompts": ["<short follow-up>", "..."]}
 ```
 
-Available component types (use only when they genuinely help; an empty
-components list is fine):
+Every final answer MUST include at least one relevant component. Use the
+selected response length and preserve useful narrative prose in content.
+Available component types:
   table {title, columns:[...], rows:[[...]]}
   keyvalue {title, pairs:[{key, value}]}
   callout {variant: info|warn|success|error, title, message}
