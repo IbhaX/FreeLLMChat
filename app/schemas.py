@@ -214,3 +214,35 @@ class AgentChatRequest(BaseModel):
     message: Any  # str or OpenAI-style content parts list (text + image_url)
     history: list[dict[str, Any]] = Field(default_factory=list)
     stream: bool = False
+
+
+# ---------- Roleplay characters ----------
+
+class CharacterIn(BaseModel):
+    id: Optional[int] = None
+    name: str
+    emoji: str = ""
+    tagline: str = ""
+    description: str = ""
+    personality: str = ""
+    style: str = ""
+    greeting: str = ""
+
+
+class CharacterOut(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    name: str
+    emoji: str
+    tagline: str
+    description: str
+    personality: str
+    style: str
+    greeting: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class CharacterSyncIn(BaseModel):
+    characters: list[CharacterIn] = Field(default_factory=list)

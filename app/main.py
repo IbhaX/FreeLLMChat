@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.admin_routes import router as admin_router
 from app.api.agent_routes import admin_router as agent_admin_router
 from app.api.agent_routes import chat_router as agent_chat_router
+from app.api.character_routes import router as character_router
 from app.api.group_routes import public_router as share_public_router
 from app.api.group_routes import router as group_router
 from app.api.openai_routes import router as openai_router
@@ -66,6 +67,7 @@ app.add_middleware(
 
 app.include_router(openai_router)
 app.include_router(admin_router)
+app.include_router(character_router)
 app.include_router(agent_admin_router)
 app.include_router(agent_chat_router)
 app.include_router(group_router)
