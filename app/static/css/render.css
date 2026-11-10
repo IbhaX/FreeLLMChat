@@ -518,3 +518,35 @@
 .nova-skel-chip{height:26px;width:110px;border-radius:999px}
 @keyframes novaShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.nova-skel{animation:none}}
+
+/* ---------- Architecture diagrams and flowcharts ---------- */
+.nova-diagram{margin:12px 0;padding:14px;background:var(--bg-1);border:1px solid var(--border-1);border-radius:14px;min-width:0;overflow:hidden}
+.nova-diagram-head{margin-bottom:12px}
+.nova-diagram-title{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--text-1)}
+.nova-diagram-caption{font-size:12px;color:var(--text-3);margin-top:3px}
+.nova-architecture-stack{display:flex;flex-direction:column;gap:0}
+.nova-architecture-layer{padding:12px;background:var(--surface-1);border:1px solid var(--border-2);border-radius:12px;min-width:0}
+.nova-layer-heading{margin-bottom:9px}
+.nova-layer-title{font-size:14px;font-weight:700;color:var(--text-1)}
+.nova-layer-subtitle{font-size:11.5px;color:var(--text-3);margin-top:2px}
+.nova-architecture-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:9px}
+.nova-architecture-node{display:flex;align-items:flex-start;gap:10px;min-width:0;padding:12px;background:var(--bg-0);border:1px solid var(--border-1);border-radius:10px}
+.nova-architecture-icon{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:9px;background:var(--accent-soft);color:var(--accent);font-size:15px}
+.nova-architecture-copy{min-width:0}
+.nova-architecture-name{font-size:13px;font-weight:650;color:var(--text-1);overflow-wrap:anywhere}
+.nova-architecture-detail{font-size:11.5px;line-height:1.5;color:var(--text-2);margin-top:3px;overflow-wrap:anywhere}
+.nova-diagram-status{display:inline-flex;margin-top:6px;padding:2px 7px;border-radius:99px;background:var(--success-soft);color:var(--success);font-size:10px;font-weight:600}
+.nova-diagram-connector,.nova-flow-connector{display:flex;justify-content:center;align-items:center;height:34px;color:var(--text-3);font-size:22px;line-height:1}
+.nova-diagram-connector span,.nova-flow-connector span{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border-1)}
+.nova-flow-list{display:flex;flex-direction:column;align-items:center;gap:0}
+.nova-flow-item{width:min(100%,440px);display:flex;flex-direction:column;align-items:center;gap:6px}
+.nova-flow-node{width:100%;display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px;padding:12px 16px;background:var(--surface-1);border:1px solid var(--border-2);border-radius:11px}
+.nova-flow-start,.nova-flow-end{width:min(78%,320px);border-color:var(--accent-line);background:var(--accent-soft);border-radius:999px}
+.nova-flow-decision{width:min(76%,310px);min-height:84px;justify-content:center;background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 45%,transparent);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);border-radius:0;padding:22px 32px}
+.nova-flow-label{font-size:13px;font-weight:650;color:var(--text-1);overflow-wrap:anywhere}
+.nova-flow-detail{font-size:11.5px;color:var(--text-2)}
+.nova-flow-icon{font-size:14px}
+.nova-flow-branches{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.nova-flow-branch{padding:3px 8px;border:1px solid var(--border-2);border-radius:99px;color:var(--text-2);font-size:10.5px;background:var(--bg-0)}
+@media(max-width:520px){.nova-diagram{padding:10px}.nova-architecture-grid{grid-template-columns:1fr}.nova-architecture-layer{padding:10px}.nova-flow-node{padding:10px 12px}}
+@media(prefers-reduced-motion:no-preference){.nova-architecture-layer,.nova-flow-node{transition:border-color .18s ease,background .18s ease}.nova-architecture-layer:hover,.nova-flow-node:hover{border-color:var(--accent-line)}}
