@@ -156,49 +156,6 @@
     });
   }
 
-  // Defensive envelope detection: the classifier is a separate script and
-  // may be unavailable during a stale-cache/partial-deploy. Some providers
-  // also return the envelope as bare JSON or strip its fence tag entirely.
-  function fallbackEnvelopePlan(text) {
-    const raw = String(text || "");
-    const patterns = [
-      /```(?:nova-response|nova[ \t]*\r?\n[ \t]*-response|nova|json)[ \t]*\r?\n([\s\S]*?)\r?\n```/i,
-      /```(?:nova-response|json)[ \t]*\r?\n([\s\S]*?)$/i,
-    ];
-    let candidate = raw.trim();
-    for (const pattern of patterns) {
-      const match = raw.match(pattern);
-      if (match) { candidate = match[1].trim(); break; }
-    }
-    candidate = candidate.replace(/^-response\s*/i, "").trim();
-    if (!candidate.startsWith("{") || !candidate.endsWith("}")) return null;
-    try {
-      const env = JSON.parse(candidate);
-      if (!env || Array.isArray(env) || typeof env !== "object" ||
-          typeof env.response_type !== "string") return null;
-      if (env.components != null && !Array.isArray(env.components)) return null;
-      return { kind: "envelope", envelope: env,
-        prose: typeof env.content === "string" ? env.content : "" };
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function classifyMessageText(text) {
-    const fallback = fallbackEnvelopePlan(text);
-    if (fallback) return fallback;
-    const classifier = Nova.ResponseClassifier;
-    if (classifier && typeof classifier.classify === "function") {
-      try { return classifier.classify(String(text || "")); }
-      catch (error) {
-        console.error("[Nova] classifier failed; rendering Markdown fallback", error);
-      }
-    } else {
-      console.error("[Nova] ResponseClassifier module unavailable; rendering Markdown fallback");
-    }
-    return { kind: "markdown", text: String(text || "") };
-  }
-
   // Render a fully-classified message (content + actions). Used by chat.js
   // for completed (non-streaming) messages.
   function renderMessage(message, host, opts) {
@@ -206,7 +163,7 @@
     host.innerHTML = "";
     host.classList.add("nova-response");
     const text = message.text || "";
-    const plan = classifyMessageText(text);
+    const plan = Nova.ResponseClassifier.classify(text);
     render(plan, host, { message });
 
     // Infer suggestions only when none supplied and content warrants them.
