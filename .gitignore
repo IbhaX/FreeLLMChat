@@ -11,3 +11,5 @@ nul
 data/
 __pycache__/
 *.pyc
+*.egg-info/
+freellmchat.db

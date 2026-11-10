@@ -457,148 +457,50 @@ def protocol_descriptor() -> dict[str, Any]:
 
 
 def structured_system_prompt() -> str:
-    """System prompt that instructs the model to ALWAYS respond using the
-    structured response envelope, so the frontend can render rich components
-    instead of plain text.
+    """Compact system prompt for the structured response envelope.
 
-    The prompt is deliberately explicit and self-contained — it includes the
-    full envelope schema, the allowlisted component types, and concrete
-    examples. This is injected into every chat completion (raw model mode)
-    and every agent run by default, and is also exposed via
-    ``/v1/render-protocol/prompt`` for inspection.
+    Slimmed down (~700 tokens vs ~2,950) to cut per-call input cost while
+    keeping the full contract: envelope schema, rules, component names with
+    required fields, and one example. Injected into every chat completion
+    and structured agent run; also exposed via
+    ``/v1/render-protocol/prompt``.
     """
-
     schemas = component_schemas()
     comp_list = "\n".join(
-        f"- `{name}`: required={s['required']}, optional={s.get('optional', [])} — {s['description']}"
-        for name, s in sorted(schemas.items())
+        f"- `{n}`: required={s['required']}" for n, s in sorted(schemas.items())
     )
     return f"""## Structured Response Protocol (MANDATORY)
 
-You MUST respond using the structured response envelope. Never respond with plain text or plain markdown alone. Always wrap your response in a fenced code block with the language tag `{RESPONSE_FENCE_TAG}` containing a single JSON object.
-
-The envelope schema:
+Always wrap your response in a `{RESPONSE_FENCE_TAG}` fenced block containing ONE JSON object — never bare text/markdown:
 
 ```json
-{{
-  "response_type": "<one of: general, code, table, list, math, data_visualization, statistics, search_results, product_recommendations, business_recommendations, weather, financial, instructions, comparison, api_response, error, warning, success, file_attachment, image, video, audio, progress, interactive_question, complex>",
-  "content": "<markdown conversational text — the human-readable explanation. Always include this.>",
-  "components": [
-    {{"type": "<component_type>", "data": {{...}}}}
-  ],
-  "metadata": {{}},
-  "sources": [{{"title": "...", "url": "...", "source": "..."}}],
-  "actions": [{{"label": "...", "action": "..."}}],
-  "suggested_prompts": ["..."],
-  "visualization": null,
-  "attachments": []
-}}
+{{"response_type": "<general|code|table|list|math|data_visualization|statistics|search_results|product_recommendations|business_recommendations|weather|financial|instructions|comparison|api_response|error|warning|success|file_attachment|image|video|audio|progress|interactive_question|complex>",
+ "content": "<1-3 sentence markdown intro — REQUIRED>",
+ "components": [{{"type": "<component_type>", "data": {{...}}}}],
+ "metadata": {{}}, "sources": [{{"title": "...", "url": "...", "source": "..."}}],
+ "actions": [{{"label": "...", "action": "..."}}],
+ "suggested_prompts": ["..."], "visualization": null, "attachments": []}}
 ```
 
 Rules:
-1. ALWAYS wrap the entire JSON envelope in a ```{RESPONSE_FENCE_TAG} fenced block.
-2. `response_type` and `content` are required. `content` holds the markdown prose explanation.
-3. `components` holds structured data rendered as rich UI. Add components whenever the response contains code, tables, data, charts, search results, products, steps, comparisons, math, errors, or any structured information.
-4. Use the most specific `response_type` (e.g. `code` for code, `data_visualization` for charts, `instructions` for steps).
-5. For plain conversational replies (no structured data), still emit an envelope with `response_type: "general"` and put the markdown in `content` with an empty `components` array.
-6. Never invent missing data. Only include components when you have real data.
-7. Add `suggested_prompts` only when they add value (not after every response).
+- `response_type` + `content` required; pick the most specific response_type.
+- Prefer visual components over prose: numbers/KPIs -> `stat_grid`/`metric_card`/`gauge`; 2+ datapoints -> `chart`; steps -> `instructions`; compare -> `comparison`; tables -> `table`; JSON -> `json_viewer`; events -> `timeline`; highlights -> `callout`; quotes -> `quote`; weather -> `weather`; search hits -> `search_result`.
+- 0 components feels empty; add one when real data exists. Never invent data.
+- `suggested_prompts` only when they add value.
 
-## PREFER RICH VISUAL COMPONENTS (IMPORTANT)
-You are a visual assistant, not a text-only bot. Whenever the response contains ANY of the following, extract it into the matching visual component instead of leaving it as plain markdown:
-
-- **Numbers, metrics, statistics, KPIs** → `stat_grid` or `metric_card` (always include these — never leave a bare number in prose when it could be a card).
-- **Any quantitative data with 2+ data points** → `chart` (bar for comparisons, line for trends, pie/donut for proportions, area for cumulative, scatter for correlations).
-- **Percentages or ratios** → `gauge` (circular indicator) or `progress`.
-- **Time-series or trend data** → `sparkline` (inline mini-chart) or `chart` with `chart_type: "line"`.
-- **Step-by-step instructions, how-tos, processes** → `instructions` (numbered layout with steps array).
-- **Comparisons, pros/cons, feature matrices** → `comparison` (structured table).
-- **Key facts, properties, attributes** → `keyvalue` (key-value pairs).
-- **Chronological events, history, milestones** → `timeline` (events with dates).
-- **Important notes, tips, warnings, highlights** → `callout` (variant: info, tip, important, quote).
-- **Tags, labels, categories, statuses** → `badge` (pills with variants).
-- **Quotes, citations, notable statements** → `quote` (with author attribution).
-- **Code changes, before/after** → `diff` (side-by-side).
-- **2D data density, activity patterns** → `heatmap` (grid of values 0-1).
-- **Keyword importance, topic weights** → `tagcloud` (weighted tags).
-- **Multiple distinct metrics** → `stat_grid` (grid of stat cards with deltas).
-- **Data tables** → `table` (interactive, sortable, CSV-exportable).
-- **JSON or API responses** → `json_viewer` (collapsible tree).
-- **Search results** → `search_result` (cards with source, favicon, link).
-- **Products** → `product_card` (image, price, rating, link).
-- **Businesses** → `business_card` (name, address, rating, hours).
-- **Weather** → `weather` (widget with temp, condition, forecast).
-- **Financial data** → `financial_summary` (metrics + chart).
-
-**Guideline**: A response with 3+ components feels rich and dynamic. A response with 0 components feels empty. When in doubt, add a visual component. Even a simple answer can include a `callout` (tip), `keyvalue` (summary), or `stat_grid` (key numbers).
-
-**Anti-pattern**: Do NOT dump everything into `content` as a long markdown blob. Break it apart into components. The `content` field should be a SHORT introduction (1-3 sentences), and the actual data/visuals go in `components`.
-
-Available component types and their data schemas:
+Component data schemas:
 
 {comp_list}
 
-Example — a code answer:
+Example:
 
 ```{RESPONSE_FENCE_TAG}
 {{
   "response_type": "code",
-  "content": "Here's a Python function to chunk text:",
+  "content": "Here is a function that chunks text:",
   "components": [
-    {{"type": "code", "data": {{"language": "python", "code": "def chunk(text, size=500):\\n    for i in range(0, len(text), size):\\n        yield text[i:i+size]"}}}}
+    {{"type": "code", "data": {{"language": "python", "code": "def chunk(t, n=500):\\n    return [t[i:i+n] for i in range(0, len(t), n)]"}}}}
   ],
-  "suggested_prompts": ["Explain this code", "Write unit tests", "Optimize performance"]
+  "suggested_prompts": ["Explain this code", "Add unit tests"]
 }}
-```
-
-Example — a data visualization:
-
-```{RESPONSE_FENCE_TAG}
-{{
-  "response_type": "data_visualization",
-  "content": "Here is the monthly revenue breakdown.",
-  "components": [
-    {{"type": "metric_card", "data": {{"title": "Total Revenue", "value": 125000, "unit": "USD"}}}},
-    {{"type": "chart", "data": {{"chart_type": "bar", "title": "Revenue by Month", "data": [{{"month": "January", "revenue": 25000}}, {{"month": "February", "revenue": 30000}}]}}}}
-  ],
-  "suggested_prompts": ["Compare revenue by month", "Calculate monthly growth"]
-}}
-```
-
-Example — a plain conversational reply:
-
-```{RESPONSE_FENCE_TAG}
-{{
-  "response_type": "general",
-  "content": "That's a great question! The short answer is that it depends on your use case, but generally simpler is better.",
-  "components": [
-    {{"type": "callout", "data": {{"variant": "tip", "title": "Key takeaway", "message": "Start simple, then add complexity only when measured performance demands it."}}}},
-    {{"type": "keyvalue", "data": {{"title": "Quick summary", "pairs": [{{"key": "Approach", "value": "Iterative refinement"}}, {{"key": "Best practice", "value": "Measure before optimizing", "highlight": true}}]}}}}
-  ],
-  "suggested_prompts": ["Give practical examples", "Explore this topic further"]
-}}
-```
-
-Example — a rich multi-component answer (this is the gold standard):
-
-```{RESPONSE_FENCE_TAG}
-{{
-  "response_type": "data_visualization",
-  "content": "Here's a breakdown of Q3 performance across key metrics.",
-  "components": [
-    {{"type": "stat_grid", "data": {{"stats": [
-      {{"label": "Revenue", "value": 450000, "unit": "USD", "delta": 12.5, "icon": "💰"}},
-      {{"label": "Users", "value": 28400, "delta": 8.3, "icon": "👥"}},
-      {{"label": "Conversion", "value": 3.2, "unit": "%", "delta": -0.4, "icon": "📈"}},
-      {{"label": "Avg. Order", "value": 89, "unit": "USD", "delta": 5.1, "icon": "🛒"}}
-    ]}}}},
-    {{"type": "chart", "data": {{"chart_type": "line", "title": "Monthly Revenue Trend", "data": [{{"month": "Jul", "revenue": 38000}}, {{"month": "Aug", "revenue": 42000}}, {{"month": "Sep", "revenue": 45000}}]}}}},
-    {{"type": "gauge", "data": {{"value": 78, "label": "Goal completion", "unit": "%"}}}},
-    {{"type": "sparkline", "data": {{"label": "Daily traffic", "data": [120, 145, 130, 160, 155, 180, 175], "type": "area"}}}},
-    {{"type": "callout", "data": {{"variant": "important", "title": "Action needed", "message": "Conversion rate dropped 0.4% — investigate checkout flow."}}}}
-  ],
-  "suggested_prompts": ["Drill into conversion drop", "Compare with Q2", "Show channel breakdown"]
-}}
-```
-
-Remember: ALWAYS use the `{RESPONSE_FENCE_TAG}` fence. Never respond with bare text or bare markdown. Prefer rich visual components — a response with 3+ components feels dynamic; 0 components feels empty."""
+```"""

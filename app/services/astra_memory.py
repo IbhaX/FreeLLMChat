@@ -178,6 +178,10 @@ async def extract_and_store(gateway, user_text: str, assistant_text: str) -> Non
     """
     if _db() is None or not user_text:
         return
+    # Skip the extra LLM call on trivial turns — greetings/one-liners
+    # almost never carry durable facts worth extracting.
+    if len(user_text.strip()) < 25 or len(assistant_text.strip()) < 50:
+        return
     prompt = (
         "From this exchange, extract 0-5 durable facts worth remembering "
         "about the user long-term (preferences, names, projects, decisions). "

@@ -59,7 +59,6 @@ class GroupChatRequest(BaseModel):
     message: str
     history: list[dict[str, Any]] = Field(default_factory=list)
     agent_ids: list[int]
-    rounds: int = 2  # autonomous back-and-forth rounds after the user speaks
     conversation_id: str | None = None  # scopes short-term vector memory
 
 
@@ -83,8 +82,8 @@ async def group_stream(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    """Run a group chat turn: each member agent replies in order, then the
-    group keeps discussing autonomously for `rounds` extra rounds (capped 5).
+    """Run a group chat turn: each selected agent answers solo in parallel,
+    then the built-in Orchestrator synthesizes one structured reply.
 
     SSE events are `{"freellm": {...}}` meta chunks:
     agent_start / agent_message / group_done — plus a terminal error event.
