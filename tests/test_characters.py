@@ -20,6 +20,7 @@ def _char(name: str, **kw) -> dict:
 
 def test_character_sync_roundtrip():
     with TestClient(app) as c:
+        c.put("/v1/characters", json={"characters": []})  # clear any seeded rows
         assert c.get("/v1/characters").json() == []
 
         r = c.put("/v1/characters", json={"characters": [_char("Gandalf"), _char("Sherlock")]})
@@ -44,3 +45,21 @@ def test_character_sync_roundtrip():
         # Empty sync clears the collection.
         assert c.put("/v1/characters", json={"characters": []}).json() == []
         assert c.get("/v1/characters").json() == []
+
+
+def test_starter_pack():
+    with TestClient(app) as c:
+        # Existing user character with a predefined name must not be overwritten.
+        c.put("/v1/characters", json={"characters": [
+            _char("Sherlock Holmes", description="my own sherlock"),
+        ]})
+        r = c.post("/v1/characters/starter")
+        assert r.status_code == 200, r.text
+        rows = r.json()
+        names = [x["name"] for x in rows]
+        assert len(rows) == 8  # 7 new + the existing Sherlock
+        assert names.count("Sherlock Holmes") == 1
+        sherlock = next(x for x in rows if x["name"] == "Sherlock Holmes")
+        assert sherlock["description"] == "my own sherlock"
+        # Idempotent: second call adds nothing.
+        assert len(c.post("/v1/characters/starter").json()) == 8
