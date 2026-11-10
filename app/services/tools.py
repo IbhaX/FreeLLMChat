@@ -414,6 +414,13 @@ async def run_tool_loop(
         msg = ((result.get("choices") or [{}])[0]).get("message", {})
         calls = msg.get("tool_calls") or []
         if not calls:
+            calls = _parse_text_tool_calls(msg.get("content") or "")
+            if calls:
+                # A provider emitted <tool_call> markup as text instead of
+                # structured tool_calls — strip the blob so it never reaches
+                # the UI, then execute it like a real call.
+                msg["content"] = _strip_text_tool_calls(msg["content"])
+        if not calls:
             return result
         messages.append({
             "role": "assistant",
@@ -452,6 +459,49 @@ def _routing_once(emit: Callable[[dict[str, Any]], None]) -> Callable[[dict[str,
     """Drop routing/try/skip spam on repeat calls — keep fail/next/retry."""
     drop = {"routing", "try", "skip"}
     return lambda ev: None if ev.get("event") in drop else emit(ev)
+
+
+_TEXT_CALL_RE = None
+
+
+def _text_call_re():
+    global _TEXT_CALL_RE
+    if _TEXT_CALL_RE is None:
+        import re
+
+        _TEXT_CALL_RE = re.compile(
+            r"<tool_call>\s*([A-Za-z_]\w*)\s*(.*?)</tool_call>", re.DOTALL
+        )
+    return _TEXT_CALL_RE
+
+
+def _parse_text_tool_calls(content: str) -> list[dict[str, Any]]:
+    """Convert ``<tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value>…``
+    blobs some providers emit inside ``content`` into real tool_calls."""
+    import json as _json
+    import re
+    import uuid as _uuid
+
+    if "<tool_call>" not in content:
+        return []
+    pair_re = re.compile(
+        r"<arg_key>\s*(.*?)\s*</arg_key>\s*<arg_value>\s*(.*?)\s*</arg_value>",
+        re.DOTALL,
+    )
+    calls: list[dict[str, Any]] = []
+    for m in _text_call_re().finditer(content):
+        name, args_blob = m.group(1), m.group(2)
+        args = {k.strip(): v.strip() for k, v in pair_re.findall(args_blob)}
+        calls.append({
+            "id": f"textcall_{_uuid.uuid4().hex[:12]}",
+            "type": "function",
+            "function": {"name": name, "arguments": _json.dumps(args)},
+        })
+    return calls
+
+
+def _strip_text_tool_calls(content: str) -> str:
+    return _text_call_re().sub("", content).strip()
 
 
 def _brief_args(args: dict[str, Any]) -> str:
