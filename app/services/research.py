@@ -193,7 +193,7 @@ Choose what fits the content: short prose for a simple question; a report with S
 ## End
 Finish with: **Confidence**: high/medium/low and why; **Limits**: what was not covered or could not be confirmed; **Follow-ups**: 2-3 specific questions the user is likely to want next.
 
-Output format: return exactly one valid `nova-response` fenced JSON envelope. Include a direct markdown answer in `content`, at least one relevant rich component (for example search_result, table, timeline, chart, callout or stat_grid), and a `sources` array. Never return plain Markdown alone. Preserve every factual citation as [n] in content and map source entries to those references.
+Output format: write the answer as normal text/markdown. Do NOT wrap it in a code fence or JSON — the UI renders markdown directly.
 """
 
 
@@ -683,8 +683,7 @@ async def _synthesize(
         "conflicts": state.contradictions, "not_found": state.unverified[:15],
     }, ensure_ascii=False)
     msgs = [{"role": "user", "content": f"Research package (JSON):\n{ctx[:30000]}\n\nWrite the final answer now."}]
-    from app.response_protocol import structured_system_prompt
-    system = structured_system_prompt() + "\n\n" + SYNTHESIZER_PROMPT
+    system = SYNTHESIZER_PROMPT
     if custom_instructions:
         from app.services.settings_store import custom_instructions_block
         system += "\n\n" + custom_instructions_block(custom_instructions)

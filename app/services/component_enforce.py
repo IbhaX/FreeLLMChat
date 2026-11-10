@@ -244,22 +244,6 @@ def markdown_to_envelope(text: str) -> str | None:
     if not lead and remaining_prose:
         lead = remaining_prose.pop(0).strip()
     if not components:
-        # A substantial prose-only answer still needs a meaningful visual
-        # anchor. Preserve the complete answer and surface its direct lead as
-        # a compact takeaway card; never fabricate facts or discard prose.
-        if len(text.strip()) > _TRIVIAL_MAX_CHARS:
-            lead_text = re.sub(r"\s+", " ", text.strip())
-            lead_text = re.split(r"(?<=[.!?])\s+", lead_text, maxsplit=1)[0][:360]
-            if lead_text:
-                components.append({
-                    "type": "callout",
-                    "data": {
-                        "title": "Key takeaway",
-                        "message": lead_text,
-                        "variant": "info",
-                    },
-                })
-    if not components:
         return None
     # Remaining prose beyond the lead is kept as markdown content after the
     # components so nothing the model said is lost.
