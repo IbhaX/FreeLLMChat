@@ -569,15 +569,9 @@ async def run_tool_loop(
             "content": _strip_text_tool_calls(text),
             "tool_calls": calls,
         })
-        for tc in calls:
-            fn = tc.get("function", {})
-            name = fn.get("name", "")
-            try:
-                args = _json.loads(fn.get("arguments") or "{}")
-            except Exception:
-                args = {}
+        executed = await asyncio.gather(*(_execute_tool_call(tc) for tc in calls))
+        for call_id, name, args, out in executed:
             emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
-            out = await run_tool(name, args)
             if tool_output_hook is not None:
                 try:
                     tool_output_hook(name, out)
@@ -585,13 +579,9 @@ async def run_tool_loop(
                     pass
             messages.append({
                 "role": "tool",
-                "tool_call_id": tc.get("id", ""),
+                "tool_call_id": call_id,
                 "content": out,
             })
-        messages.append({
-            "role": "user",
-            "content": "Now reply with the final answer only — no tool calls.",
-        })
     return _sanitize_result(result)
 
 
