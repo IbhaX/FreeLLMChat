@@ -269,7 +269,23 @@ function renderChat(){
   const c=state.current;
   $('#chatName').textContent=c.name;
   if(!c.msgs.length){inner.appendChild(heroEl());return;}
-  for(const m of c.msgs)inner.appendChild(msgEl(m));
+  for(const m of c.msgs){
+    try{
+      inner.appendChild(msgEl(m));
+    }catch(renderError){
+      // Keep the transcript usable even if one message has invalid metadata
+      // or a renderer throws while constructing its DOM.
+      console.error('[Nova] message row failed to render',renderError,m);
+      const row=document.createElement('div');
+      row.className='msg-row row-ai';
+      const col=document.createElement('div');
+      col.className='msg-col';
+      const bubble=document.createElement('div');
+      bubble.className='bubble';
+      bubble.textContent=String(m.text||'Unable to render this message.');
+      col.append(bubble);row.append(col);inner.append(row);
+    }
+  }
   scrollBottom(false);
 }
 function heroEl(){
@@ -346,7 +362,18 @@ function msgEl(m){
   const bubble=row.querySelector('.bubble');
   // Use the Nova Render Engine when available; fall back to legacy md().
   if(window.NovaRender&&NovaRender.ResponseRenderer){
-    NovaRender.ResponseRenderer.renderMessage(m,bubble,{showActions:true});
+    try{
+      NovaRender.ResponseRenderer.renderMessage(m,bubble,{showActions:true});
+    }catch(renderError){
+      // A component renderer must never prevent the conversation itself
+      // from appearing. Fall back to safe legacy Markdown for this message.
+      console.error('[Nova] structured renderer failed; using Markdown fallback',renderError);
+      bubble.innerHTML=md(m.text||'');
+      const fallback=document.createElement('div');
+      fallback.className='render-fallback-note';
+      fallback.textContent='Rich rendering unavailable for this response.';
+      bubble.append(fallback);
+    }
     if(m.person)appendPersonCard(bubble,m.person);
     // Wire Nova action events to existing chat handlers.
     bubble.addEventListener('nova:action',e=>{
