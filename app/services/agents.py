@@ -136,6 +136,40 @@ def _to_model_history(history: list[dict[str, Any]]) -> list[ModelMessage]:
     return messages
 
 
+def _bounded_history(history: list[dict[str, Any]], *, max_messages: int = 40, max_chars: int = 48000) -> list[dict[str, Any]]:
+    """Keep the newest valid turns within a conservative character budget."""
+    valid: list[dict[str, Any]] = []
+    for item in history or []:
+        if not isinstance(item, dict) or item.get("role") not in ("user", "assistant"):
+            continue
+        content = item.get("content") or item.get("text", "")
+        if not isinstance(content, str) or not content.strip():
+            continue
+        valid.append({"role": item["role"], "content": content.strip()})
+    selected: list[dict[str, Any]] = []
+    used = 0
+    for item in reversed(valid[-max_messages:]):
+        content = item["content"]
+        remaining = max_chars - used
+        if remaining <= 0:
+            break
+        if len(content) > remaining:
+            content = content[-remaining:]
+        selected.append({"role": item["role"], "content": content})
+        used += len(content)
+    return list(reversed(selected))
+
+
+def _memory_relevance(content: str, query: str) -> int:
+    """Small dependency-free lexical relevance score for SQL memory snippets."""
+    import re
+    terms = {t for t in re.findall(r"[a-z0-9_]{3,}", query.lower())}
+    if not terms:
+        return 0
+    words = set(re.findall(r"[a-z0-9_]{3,}", content.lower()))
+    return len(terms & words)
+
+
 def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
     """Compile a rich system prompt from the structured config + raw prompt."""
     cfg = agent_cfg.config or {}
@@ -275,12 +309,7 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
 
 
 def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]], custom: str = "") -> list[dict[str, Any]]:
-    msgs = [{"role": "user", "content": message}]
-    for h in reversed(history):
-        role = h.get("role", "user")
-        content = h.get("content") or h.get("text", "")
-        if role in ("user", "assistant") and content:
-            msgs.insert(0, {"role": role, "content": content})
+    msgs = _bounded_history(history) + [{"role": "user", "content": message}]
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":
         system_prompt = structured_system_prompt() + "\n\n" + system_prompt
@@ -292,14 +321,15 @@ def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]
 
 
 async def _chat_with_tools(
-    gateway: Gateway, agent_cfg: AgentConfig, messages: list[dict[str, Any]]
+    gateway: Gateway, agent_cfg: AgentConfig, messages: list[dict[str, Any]],
+    conversation_id: str | None = None,
 ) -> dict[str, Any]:
     from app.db import get_session_factory
     from app.services.tools import run_tool_loop
     tool_names = _tool_names(agent_cfg)
     query = next((m.get("content", "") for m in reversed(messages)
                   if m.get("role") == "user" and isinstance(m.get("content"), str)), "")
-    mem = await get_memory_text(query)
+    mem = await get_memory_text(query, conversation_id)
     if mem:
         messages.insert(1 if messages and messages[0].get("role") == "system" else 0,
                         {"role": "system", "content": mem})
@@ -320,17 +350,25 @@ async def _chat_with_tools(
 
 async def run_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
-    *, custom_instructions: str = "",
+    *, custom_instructions: str = "", conversation_id: str | None = None,
 ) -> str:
-    """Run an agent non-streaming, preserving history on every execution path."""
+    """Run an agent with bounded context, relevant memory and execution limits."""
+    history = _bounded_history(history)
+    execution = (agent_cfg.config or {}).get("execution", {})
+    timeout_s = max(1.0, min(float(execution.get("timeout", 120)), 600.0))
     if _tool_names(agent_cfg):
         messages = _messages(agent_cfg, message, history, custom_instructions)
-        result = await _chat_with_tools(gateway, agent_cfg, messages)
+        result = await asyncio.wait_for(
+            _chat_with_tools(gateway, agent_cfg, messages, conversation_id), timeout=timeout_s
+        )
         choice = (result.get("choices") or [{}])[0]
         content = (choice.get("message") or {}).get("content") or ""
         return _maybe_structured(agent_cfg, content)
-    agent = _build_agent(agent_cfg, gateway, custom_instructions)
-    result = await agent.run(message, message_history=_to_model_history(history))
+    memory = await get_memory_text(str(message), conversation_id)
+    agent = _build_agent(agent_cfg, gateway, custom_instructions + ("\\n\\n" + memory if memory else ""))
+    result = await asyncio.wait_for(
+        agent.run(message, message_history=_to_model_history(history)), timeout=timeout_s
+    )
     out = result.output
     if isinstance(out, ResponseEnvelope):
         return envelope_to_fence(out)
@@ -355,18 +393,19 @@ def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
 
 async def stream_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
-    *, custom_instructions: str = "",
+    *, custom_instructions: str = "", conversation_id: str | None = None,
 ) -> AsyncIterator[bytes]:
     """Run an agent with streaming via the gateway's internal streaming API."""
+    history = _bounded_history(history)
     openai_messages = _messages(agent_cfg, message, history, custom_instructions)
-    mem = await get_memory_text(message)
+    mem = await get_memory_text(str(message), conversation_id)
     if mem:
         openai_messages.insert(1 if openai_messages and openai_messages[0].get("role") == "system" else 0,
                                {"role": "system", "content": mem})
     if agent_cfg.output_format == "structured":
         try:
             text = await run_agent(gateway, agent_cfg, message, history,
-                                   custom_instructions=custom_instructions)
+                                   custom_instructions=custom_instructions, conversation_id=conversation_id)
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
             yield f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
         except Exception as e:
@@ -375,7 +414,7 @@ async def stream_agent(
         return
     if _tool_names(agent_cfg):
         try:
-            result = await _chat_with_tools(gateway, agent_cfg, openai_messages)
+            result = await _chat_with_tools(gateway, agent_cfg, openai_messages, conversation_id)
             choice = (result.get("choices") or [{}])[0]
             text = (choice.get("message") or {}).get("content") or ""
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
