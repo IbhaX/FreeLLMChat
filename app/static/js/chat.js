@@ -33,9 +33,27 @@ async function loadModels(silent){
 }
 
 // --- State ----------------------------------------------------------------
-const state={model:MODELS[0],conversations:[],current:null,streaming:false,abort:null,agent:null,group:null,groupMode:false,researchMode:false,researchDepth:'auto'};
+const state={model:MODELS[0],conversations:[],current:null,streaming:false,abort:null,agent:null,group:null,groupMode:false,researchMode:false,researchDepth:'auto',responseLength:localStorage.getItem('nova_response_length')||'medium'};
 try{state.rpChar=JSON.parse(localStorage.getItem('nova_rp_char')||'null')||null;}catch(_){state.rpChar=null;}
 window.__chatState=state; // wizard.js reads agent
+const RESPONSE_LENGTHS={
+  short:'SHORT: Be concise and focused, normally 1–3 sentences. Keep only the essential answer.',
+  medium:'MEDIUM: Give a normal, complete answer of about 2 paragraphs. Include useful context without overexplaining.',
+  large:'LARGE: Give a detailed answer of 5–8 substantive paragraphs. Explain the important context, reasoning, examples and caveats without repetition.'
+};
+function responseLengthInstruction(){
+  return 'RESPONSE LENGTH: '+RESPONSE_LENGTHS[state.responseLength||'medium']+
+    '\nRICH RESPONSE: Return one valid nova-response fenced JSON envelope with a direct answer in content and at least one relevant component from the supported component catalog. Never return plain text/Markdown alone. Preserve the requested voice, role and task.';
+}
+function initResponseLength(){
+  const el=$('#responseLength');if(!el)return;
+  if(!RESPONSE_LENGTHS[state.responseLength])state.responseLength='medium';
+  el.value=state.responseLength;
+  el.addEventListener('change',()=>{
+    state.responseLength=RESPONSE_LENGTHS[el.value]?el.value:'medium';
+    localStorage.setItem('nova_response_length',state.responseLength);
+  });
+}
 const STORE_KEY='nova_chat_state_v1';
 function saveState(){
   try{
@@ -480,9 +498,10 @@ async function streamAPIReply(c){
   if(state.rpChar&&!isAgent)messages.unshift({role:'system',content:rpPersona(state.rpChar)});
   const url=isAgent?API_BASE+'/v1/agents/'+state.agent.id+'/chat':API_BASE+'/v1/chat/completions';
   const lastContent=messages[messages.length-1].content;
+  const lengthInstruction=responseLengthInstruction();
   const payload=isAgent
-    ?{message:lastContent,history:messages.slice(0,-1),stream:true}
-    :{model:state.model.id,messages,stream:true,builtin_tools:['*'],conversation_id:c.id};
+    ?{message:lastContent+'\n\n'+lengthInstruction,history:messages.slice(0,-1),stream:true}
+    :{model:state.model.id,messages:[{role:'system',content:lengthInstruction},...messages],stream:true,builtin_tools:['*'],conversation_id:c.id};
   const doFetch=()=>fetch(url,{method:'POST',headers:apiHeaders(),signal:ctrl.signal,body:JSON.stringify(payload)});
   try{
     let resp=await doFetch();
@@ -719,7 +738,7 @@ async function streamGroupReply(c){
     .filter(m=>m.role==='user'||m.role==='assistant')
     .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||'Nova'),content:m.text}));
   const last=messages[messages.length-1];
-  const payload={message:last.content,history:messages.slice(0,-1),
+  const payload={message:last.content+'\n\n'+responseLengthInstruction(),history:messages.slice(0,-1),
     agent_ids:state.group.agents.map(a=>a.id),conversation_id:c.id};
   const ctrl=new AbortController();
   state.abort={get stop(){return ctrl.signal.aborted},set stop(v){if(v)ctrl.abort()}};
@@ -833,7 +852,7 @@ async function streamResearchReply(c){
     .filter(m=>m.role==='user'||m.role==='assistant')
     .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||'Nova'),content:m.text}));
   const last=messages[messages.length-1];
-  const payload={message:last.content,history:messages.slice(0,-1),model:state.model.id,
+  const payload={message:last.content+'\n\n'+responseLengthInstruction(),history:messages.slice(0,-1),model:state.model.id,
     depth:state.researchDepth==='auto'?null:state.researchDepth,conversation_id:c.id,save:true};
   const ctrl=new AbortController();
   state.abort={get stop(){return ctrl.signal.aborted},set stop(v){if(v)ctrl.abort()}};
@@ -1055,6 +1074,7 @@ $('#rpSave').onclick=()=>{
   toast((i>=0)?'Character updated':'Character saved — pick it from 🎭 Roleplay');
 };
 paintRpBtn();
+initResponseLength();
 rpServerSync();
 $('#researchBtn').onclick=()=>{toggleResearchMode();};
 $('#researchBtn').ondblclick=e=>{e.preventDefault();cycleResearchDepth();};

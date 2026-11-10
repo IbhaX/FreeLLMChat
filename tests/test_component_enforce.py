@@ -58,6 +58,17 @@ def test_trivial():
     assert not is_trivial(MD)
 
 
+def test_prose_only_fallback_still_has_a_meaningful_component():
+    prose = ("A well-designed service separates the API layer from background workers. "
+             "This improves reliability by isolating slow tasks and gives operators "
+             "independent scaling controls.")
+    fence = markdown_to_envelope(prose)
+    env = extract_envelope(fence)
+    assert env["content"] == prose
+    assert env["components"][0]["type"] == "callout"
+    assert env["components"][0]["data"]["title"] == "Key takeaway"
+
+
 def test_markdown_fallback_maps_structures():
     fence = markdown_to_envelope(MD)
     env = extract_envelope(fence)
@@ -68,7 +79,8 @@ def test_markdown_fallback_maps_structures():
     assert table["rows"][1] == ["Context", "128K", "1M"]
     assert env["components"][1]["data"]["title"] == "Pros"
     assert env["content"].startswith("Groq vs Gemini")
-    assert markdown_to_envelope("just prose, no structure here at all") is None
+    plain = markdown_to_envelope("A complete prose answer that is deliberately longer than the trivial-response threshold and needs a visual anchor. It should retain all of its original explanatory text while adding a concise takeaway component so the frontend can render a useful rich response without fabricating additional facts.")
+    assert extract_envelope(plain)["components"][0]["type"] == "callout"
 
 
 def test_enforce_passthrough_and_trivial():

@@ -178,6 +178,8 @@ def test_structured_system_prompt_is_nonempty_and_selfcontained():
     assert "response_type" in p
     assert "components" in p
     assert "MANDATORY" in p
+    assert "CONTENT QUALITY STANDARD" in p
+    assert "Never fabricate" in p
 
 
 def test_render_protocol_endpoint_requires_gateway_key_when_set(monkeypatch):
