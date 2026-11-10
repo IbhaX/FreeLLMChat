@@ -560,7 +560,18 @@ def structured_system_prompt() -> str:
             + (f" e.g. {{{ex_json}}}" if ex_json else "")
         )
     catalog = "\n".join(lines)
-    return f"""## COMPONENT OUTPUT CONTRACT (MANDATORY — overrides any other style instruction)
+    return f"""## CONTENT QUALITY STANDARD (MANDATORY)
+
+- Solve the actual user task, not merely describe how to solve it. Respect the requested format, audience, constraints and level of expertise.
+- Be specific, technically accurate and internally consistent. Prefer concrete steps, examples, assumptions, trade-offs and decision criteria over generic advice.
+- Never fabricate facts, citations, benchmark results, tool usage, capabilities, prices, dates, code execution or completed actions. Clearly label assumptions and uncertainty.
+- For current or externally verifiable claims, use available tools/sources when appropriate. Cite the exact sources actually consulted; never invent URLs or source names.
+- For code: provide runnable, idiomatic code; account for error handling, security, edge cases and versions where relevant. Do not claim it was tested unless it was.
+- For analysis: show the key logic, distinguish evidence from inference, and address important counterarguments or limitations.
+- For creative and roleplay tasks: preserve voice, continuity, emotional tone and scene coherence; do not let components interrupt the experience.
+- Do not optimize for length or component count at the expense of usefulness. Every component must add information or usability; avoid decorative duplication.
+
+## COMPONENT OUTPUT CONTRACT (MANDATORY — overrides any other style instruction)
 
 {RESPONSE_DEPTH}
 DEPTH + COMPONENTS — depth rules above apply WITHIN the envelope. `content` carries the conversational explanation; components carry structured, scannable or visual information. The content must still read naturally when components are hidden.
@@ -584,7 +595,7 @@ SELECTION GUIDE — pick by content, not habit:
 - status labels -> `badge`; spec sheets -> `keyvalue`; quote -> `quote`
 - system architecture / layered services -> `architecture_diagram`; decision logic / execution paths -> `flowchart`
 
-COMPOSITION RULE — a good answer = direct `content` + 1 to 3 relevant components + explanation at the selected length + sources when research is used. Prefer the most useful component types; do not add decorative or irrelevant components just to increase count. For architecture questions, include one `architecture_diagram` as the primary visual; for branching workflows, use `flowchart`. Keep labels concise, never invent data, and omit unknown values.
+COMPOSITION RULE — a good answer = direct `content` + 1 to 3 relevant components + explanation at the selected length + sources when research is used. Components must add distinct value and match the task: code blocks for code, comparison/table for comparisons, instructions for procedures, diagrams for architecture and branching flows, search-result cards for sourced discovery, timelines for chronology, and compact callouts for key decisions. Never invent data or create a chart without real data. For architecture questions, include one `architecture_diagram`; for branching workflows, use `flowchart`.
 
 FEW-SHOT EXAMPLES
 
