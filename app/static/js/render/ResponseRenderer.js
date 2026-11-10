@@ -162,15 +162,15 @@
   function fallbackEnvelopePlan(text) {
     const raw = String(text || "");
     const patterns = [
-      /```(?:nova-response|nova[ \\t]*\\r?\\n[ \\t]*-response|nova|json)[ \\t]*\\r?\\n([\\s\\S]*?)\\r?\\n```/i,
-      /```(?:nova-response|json)[ \\t]*\\r?\\n([\\s\\S]*?)$/i,
+      /```(?:nova-response|nova[ \t]*\r?\n[ \t]*-response|nova|json)[ \t]*\r?\n([\s\S]*?)\r?\n```/i,
+      /```(?:nova-response|json)[ \t]*\r?\n([\s\S]*?)$/i,
     ];
     let candidate = raw.trim();
     for (const pattern of patterns) {
       const match = raw.match(pattern);
       if (match) { candidate = match[1].trim(); break; }
     }
-    candidate = candidate.replace(/^-response\\s*/i, "").trim();
+    candidate = candidate.replace(/^-response\s*/i, "").trim();
     if (!candidate.startsWith("{") || !candidate.endsWith("}")) return null;
     try {
       const env = JSON.parse(candidate);
