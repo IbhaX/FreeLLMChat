@@ -15,7 +15,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_gateway_key
-from app.db import get_session
+from app.db import get_session, get_session_factory
 from app.models import ResearchRun
 from app.services.research import run_research
 
@@ -110,6 +110,15 @@ async def research(
             content={"error": {"message": str(e)[:300], "type": "research_failed"}},
         )
     answer = state.answer if state is not None else ""
+    if answer:
+        from app.services.component_enforce import enforce_components
+        fixed, _metrics = await enforce_components(
+            gw, session, {"messages": _messages(body), "model": body.model},
+            {"choices": [{"message": {"role": "assistant", "content": answer}}]},
+            model=body.model,
+        )
+        answer = ((fixed.get("choices") or [{}])[0].get("message") or {}).get("content") or answer
+        state.answer = answer
     done = next((e for e in reversed(events) if e.get("event") == "research_done"), {})
     meta = {k: v for k, v in done.items() if k not in ("event", "text")}
     rid = await _persist(session, body, state, answer)
@@ -132,6 +141,16 @@ async def research_stream(
                 gw, session, _messages(body), model=body.model, depth=body.depth,
                 conversation_id=body.conversation_id, on_event=queue.put_nowait,
             )
+            if state.answer:
+                from app.services.component_enforce import enforce_components
+                async with get_session_factory()() as component_session:
+                    fixed, _metrics = await enforce_components(
+                        gw, component_session,
+                        {"messages": _messages(body), "model": body.model},
+                        {"choices": [{"message": {"role": "assistant", "content": state.answer}}]},
+                        model=body.model,
+                    )
+                state.answer = ((fixed.get("choices") or [{}])[0].get("message") or {}).get("content") or state.answer
             state_box["state"] = state
             rid = await _persist(session, body, state, state.answer)
             queue.put_nowait({"event": "research_answer", "answer": state.answer,
