@@ -230,15 +230,22 @@ async def chat_completions(
         # `builtin_tools` (extra field): run the server-side tool-call loop
         # over the gateway's built-in tools instead of plain streaming.
         builtin = payload.pop("builtin_tools", None)
+        # Orchestrator: one routing step decides direct / tool-loop /
+        # deep-research. Greetings skip tools; deep multi-source questions
+        # fan out to the research pipeline.
+        route = "direct"
         if builtin:
-            # Model-based gate: greetings/small talk get a direct answer
-            # without burning tool rounds on spurious calls.
             try:
-                from app.services.tools import wants_tools
-                if not await wants_tools(gateway, session, payload):
-                    builtin = None
+                from app.services.orchestrator import route_message
+
+                route = await route_message(
+                    gateway, session,
+                    {**payload, "builtin_tools": True},
+                    last_user=last_user,
+                    history=payload.get("messages") or [],
+                )
             except Exception:
-                pass
+                route = "tools"
 
         async def _open():
             try:
@@ -259,7 +266,25 @@ async def chat_completions(
             except Exception as e:
                 return e
 
-        task = asyncio.create_task(_tool_run() if builtin else _open())
+        async def _research_run():
+            from app.services.research import run_research
+
+            try:
+                return await run_research(
+                    gateway, session, payload.get("messages") or [],
+                    model=str(payload.get("model") or "auto"),
+                    conversation_id=conv_id,
+                    on_event=events.put_nowait,
+                )
+            except Exception as e:
+                return e
+
+        if route == "research":
+            task = asyncio.create_task(_research_run())
+        elif route == "tools":
+            task = asyncio.create_task(_tool_run())
+        else:
+            task = asyncio.create_task(_open())
 
         def _meta(ev: dict) -> bytes:
             chunk = {
@@ -278,7 +303,35 @@ async def chat_completions(
                     continue
                 yield _meta(ev)
             res = task.result()
-            if builtin:
+            if route == "research":
+                if isinstance(res, Exception) or res is None:
+                    err = {"error": {"message": str(res), "type": "research_failed", "code": 503}}
+                    yield f"data: {_json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
+                    return
+                answer = getattr(res, "answer", None) or ""
+                if payload.get("nova_structured", True) and answer:
+                    from app.services.component_enforce import enforce_components
+                    from app.services.tools import _sanitize_final_text
+
+                    clean = _sanitize_final_text(answer) or answer
+                    fake = {"choices": [{"message": {"role": "assistant", "content": clean}}]}
+                    fake, _m = await enforce_components(
+                        gateway, session, payload, fake,
+                        model=str(getattr(res, "model", "") or ""),
+                    )
+                    answer = fake["choices"][0]["message"]["content"]
+                if last_user:
+                    _remember(gateway, conv_id, last_user, answer)
+                yield _meta({"event": "research_done",
+                             "text": f"Research complete ({getattr(res, 'depth', '?')})"})
+                for piece in _stream_pieces(answer):
+                    chunk = {"choices": [{"index": 0, "delta": {"content": piece}}]}
+                    yield f"data: {_json.dumps(chunk)}\n\n".encode()
+                    await asyncio.sleep(_REPLAY_DELAY_S)
+                chunk = {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+                yield f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
+                return
+            if route == "tools":
                 if isinstance(res, Exception) or not isinstance(res, dict):
                     err = {"error": {"message": str(res), "type": "gateway_exhausted", "code": 503}}
                     yield f"data: {_json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
