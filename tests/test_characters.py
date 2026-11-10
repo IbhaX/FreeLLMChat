@@ -63,3 +63,22 @@ def test_starter_pack():
         assert sherlock["description"] == "my own sherlock"
         # Idempotent: second call adds nothing.
         assert len(c.post("/v1/characters/starter").json()) == 8
+
+
+def test_person_lookup(monkeypatch):
+    async def fake(name: str):
+        if name.lower() == "satya nadella":
+            return {"name": "Satya Nadella", "description": "CEO of Microsoft",
+                    "extract": "Satya Narayana Nadella is an Indian-American business executive.",
+                    "thumbnail": "https://upload.wikimedia.org/x.jpg",
+                    "url": "https://en.wikipedia.org/wiki/Satya_Nadella",
+                    "source": "wikipedia"}
+        return None
+
+    monkeypatch.setattr("app.api.person_routes.lookup_person", fake)
+    with TestClient(app) as c:
+        r = c.get("/v1/person/lookup?name=Satya%20Nadella")
+        assert r.json()["found"] is True
+        assert r.json()["person"]["name"] == "Satya Nadella"
+        r = c.get("/v1/person/lookup?name=zzzznotaperson")
+        assert r.json() == {"found": False, "person": None}

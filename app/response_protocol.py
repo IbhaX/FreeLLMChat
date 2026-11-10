@@ -116,6 +116,7 @@ class ComponentType(str, Enum):
     DIFF = "diff"
     HEATMAP = "heatmap"
     TAGCLOUD = "tagcloud"
+    PERSON_CARD = "person_card"
 
 
 class Component(BaseModel):
@@ -429,6 +430,11 @@ def component_schemas() -> dict[str, dict[str, Any]]:
             "required": [],
             "optional": ["label"],
             "description": "A subtle horizontal section divider with optional label.",
+        },
+        ComponentType.PERSON_CARD.value: {
+            "required": ["name"],
+            "optional": ["description", "extract", "thumbnail", "url", "source"],
+            "description": "A person profile card with photo, bio and source link.",
         },
     }
 
