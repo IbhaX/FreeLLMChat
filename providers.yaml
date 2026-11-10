@@ -14,9 +14,10 @@ providers:
     auth_style: bearer
     default_env_key: GEMINI_API_KEY
     default_models:
-      - gemini-2.5-flash
-      - gemini-2.5-flash-lite
-      - gemini-2.0-flash
+      - gemini-3.6-flash
+      - gemini-3.5-flash
+      - gemini-flash-lite-latest
+      - gemini-3.8-flash
     limits: {est_tpd: 1500000}
     daily_reset_tz: America/Los_Angeles
     requires_card: false
@@ -25,7 +26,7 @@ providers:
     auto_route_tags: [fast, general, coding]
     docs_url: https://ai.google.dev/gemini-api/docs/models
     notes: Free tier via AI Studio; models auto-discovered via /models.
-    verified_on: "2026-11-09"
+    verified_on: "2026-11-10"
 
   - name: groq
     display_name: GroqCloud
