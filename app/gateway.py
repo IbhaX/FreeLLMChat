@@ -37,6 +37,48 @@ def _clean_exhaustion_msg(msg: str) -> str:
     return f"All providers are unavailable right now (last error: {cleaned[:140]})"
 
 
+def _payload_input(payload: dict[str, Any]) -> str | None:
+    """Last user message text — the visible 'request input' for a log row."""
+    for m in reversed(payload.get("messages") or []):
+        if m.get("role") != "user":
+            continue
+        c = m.get("content")
+        if isinstance(c, str):
+            return c[:8000] or None
+        if isinstance(c, list):
+            text = " ".join(
+                p.get("text", "") for p in c
+                if isinstance(p, dict) and p.get("type") == "text")
+            return text[:8000] or None
+    return None
+
+
+def _result_text(result: dict[str, Any]) -> str | None:
+    try:
+        text = (result.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+    except Exception:
+        return None
+    return text[:8000] or None
+
+
+def _stream_delta_text(chunk: bytes) -> str:
+    """Concatenated delta.content from an SSE chunk (best-effort)."""
+    out = []
+    for line in chunk.decode("utf-8", "replace").splitlines():
+        line = line.strip()
+        if not line.startswith("data:") or line == "data: [DONE]":
+            continue
+        try:
+            data = json.loads(line[5:])
+            for c in data.get("choices") or []:
+                delta = (c.get("delta") or {}).get("content")
+                if delta:
+                    out.append(delta)
+        except Exception:
+            continue
+    return "".join(out)
+
+
 class GatewayExhausted(Exception):
     def __init__(self, message: str, last_status: int | None = None) -> None:
         super().__init__(message)
@@ -229,6 +271,8 @@ class Gateway:
         tokens_in: int = 0,
         tokens_out: int = 0,
         error: str | None = None,
+        request_input: str | None = None,
+        response_text: str | None = None,
     ) -> None:
         session.add(
             RequestLog(
@@ -243,6 +287,8 @@ class Gateway:
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
                 error=error[:500] if error else None,
+                request_input=request_input,
+                response_text=response_text,
             )
         )
         await session.commit()
@@ -313,7 +359,8 @@ class Gateway:
         status = last_err.status_code if last_err else None
         await self._log(session, request_id, requested, None, None, None,
                         "exhausted", status, (time.monotonic() - t0) * 1000,
-                        error=last_err.message if last_err else "exhausted")
+                        error=last_err.message if last_err else "exhausted",
+                        request_input=_payload_input(payload))
         raise GatewayExhausted(
             _clean_exhaustion_msg(last_err.message) if last_err
             else "All providers exhausted", status or 503
@@ -455,7 +502,9 @@ class Gateway:
                 await self._record_success(session, key, provider, tin, tout)
                 await self._log(
                     session, request_id, payload["model"], model, provider,
-                    key, "ok", 200, (time.monotonic() - t0) * 1000, tin, tout)
+                    key, "ok", 200, (time.monotonic() - t0) * 1000, tin, tout,
+                    request_input=_payload_input(payload),
+                    response_text=_result_text(result))
                 self._last_err, self._last_attempts = last_err, attempts
                 return result, provider, key, model
             await self._emit_skip_reason(session, provider, attempts, prov_attempts, emit)
@@ -557,7 +606,7 @@ class Gateway:
                     return (
                         self._wrap_stream(
                             session, stream, first, request_id, requested, model,
-                            provider, key,
+                            provider, key, payload,
                         ),
                         provider,
                         key,
@@ -580,9 +629,11 @@ class Gateway:
         model: str,
         provider: Provider,
         key: ApiKey,
+        payload: dict[str, Any],
     ) -> AsyncIterator[bytes]:
         t0 = time.monotonic()
         tin = tout = 0
+        resp_parts: list[str] = []
         idle_s = self.settings.stream_idle_timeout_s
         yield first
         try:
@@ -593,6 +644,8 @@ class Gateway:
                     break
                 tin_, tout_ = _extract_usage(chunk)
                 tin, tout = tin or tin_, tout or tout_
+                if sum(len(p) for p in resp_parts) < 8000:
+                    resp_parts.append(_stream_delta_text(chunk))
                 yield chunk
         except Exception as e:
             err = {"error": {"message": f"upstream stream failed: {e}",
@@ -605,7 +658,9 @@ class Gateway:
             return
         await self._record_success(session, key, provider, tin, tout)
         await self._log(session, request_id, requested, model, provider, key,
-                        "ok", 200, (time.monotonic() - t0) * 1000, tin, tout)
+                        "ok", 200, (time.monotonic() - t0) * 1000, tin, tout,
+                        request_input=_payload_input(payload),
+                        response_text="".join(resp_parts)[:8000] or None)
 
     @staticmethod
     def _aware(dt: datetime) -> datetime:
