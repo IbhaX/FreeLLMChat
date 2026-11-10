@@ -177,7 +177,10 @@ providers:
     base_url: https://api.deepseek.com/v1
     auth_style: bearer
     default_env_key: DEEPSEEK_API_KEY
-    default_models: []
+    default_models:
+      - deepseek-flash
+      - deepseek-v4-flash
+      - deepseek-v4-pro
     limits: {}
     requires_card: false
     commercial_ok: true
@@ -185,7 +188,7 @@ providers:
     auto_route_tags: [coding, general]
     docs_url: https://api-docs.deepseek.com
     notes: 5M free tokens on signup.
-    verified_on: "2026-11-09"
+    verified_on: "2026-11-10"
 
   - name: huggingface
     display_name: HuggingFace Inference Providers
