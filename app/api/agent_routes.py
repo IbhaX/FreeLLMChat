@@ -110,14 +110,18 @@ async def agent_chat(
     if not a.enabled:
         raise HTTPException(403, "agent is disabled")
     gw = _gateway(request)
+    from app.services.settings_store import get_custom_instructions
+    custom = await get_custom_instructions(session)
     if body.stream:
         return StreamingResponse(
-            stream_agent(gw, a, body.message, body.history),
+            stream_agent(gw, a, body.message, body.history,
+                         custom_instructions=custom),
             media_type="text/event-stream",
             headers={"X-Agent-Name": a.name, "Cache-Control": "no-cache"},
         )
     try:
-        result = await run_agent(gw, a, body.message, body.history)
+        result = await run_agent(gw, a, body.message, body.history,
+                                 custom_instructions=custom)
     except Exception as e:
         return JSONResponse(
             status_code=502,
