@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
+
+import httpx
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -697,6 +700,54 @@ def _clean_answer(answer: str, state: ResearchState) -> str:
     return text
 
 
+def _stage_model(stage: str, default: str) -> str:
+    """Per-stage model override, e.g. RESEARCH_RESEARCHER_MODEL=auto:coding."""
+    return os.environ.get(f"RESEARCH_{stage.upper()}_MODEL") or default
+
+
+_CITE_RE = re.compile(r"\[(\d{1,3})\]")
+
+
+async def _quality_check(state: ResearchState, emit: Emit) -> dict[str, Any]:
+    """§9-lite checks: citations resolve, source URLs alive, freshness."""
+    n_sources = len(state.sources)
+    cites = [int(m) for m in _CITE_RE.findall(state.answer or "")]
+    bad_cites = sorted({c for c in cites if c < 1 or c > n_sources})
+    # Spot-check up to 5 source URLs (HEAD, then GET fallback).
+    urls = [s.url for s in sorted(state.sources.values(), key=lambda x: -x.score)
+            if s.url][:5]
+    dead: list[str] = []
+
+    async def probe(u: str) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
+                r = await client.head(u)
+                if r.status_code in (405, 403):
+                    r = await client.get(u)
+                return r.status_code < 400
+        except Exception:
+            return False
+
+    if urls:
+        results = await asyncio.gather(*(probe(u) for u in urls))
+        dead = [u for u, ok in zip(urls, results) if not ok]
+    year_now = int(TODAY[:4])
+    fresh = sum(1 for s in state.sources.values()
+                if s.date and any(str(year_now - k) in s.date for k in (0, 1)))
+    quality = {
+        "citations": len(cites),
+        "bad_citations": bad_cites[:10],
+        "urls_checked": len(urls),
+        "dead_urls": dead[:5],
+        "fresh_sources": fresh,
+    }
+    if bad_cites or dead:
+        emit({"event": "note",
+              "text": f"quality: {len(bad_cites)} bad citation(s), "
+                      f"{len(dead)} dead URL(s) of {len(urls)} checked"})
+    return quality
+
+
 def _sources_block(state: ResearchState) -> str:
     src_list = sorted(state.sources.values(), key=lambda s: -s.score)
     lines = ["", "", "---", "", "**Sources**"]
@@ -761,13 +812,18 @@ async def run_research(
             for f in prior if f.get("claim")
         )
         emit({"event": "note", "text": f"reusing {len(prior)} prior findings"})
-    state.plan = await _plan(gateway, session, model, question, state.depth,
+    planner_model = _stage_model("planner", model)
+    researcher_model = _stage_model("researcher", model)
+    checker_model = _stage_model("checker", model)
+    verifier_model = _stage_model("verifier", model)
+    synth_model = _stage_model("synth", model)
+    state.plan = await _plan(gateway, session, planner_model, question, state.depth,
                              messages[:-1], emit, prior=prior)
     _cache_put(conv, "plan", question, state.plan)
 
     async def research_round(sqs: list[dict[str, Any]]) -> None:
         await asyncio.gather(*(
-            _research_one(gateway, session, model, sq, state.depth, state, emit)
+            _research_one(gateway, session, researcher_model, sq, state.depth, state, emit)
             for sq in sqs
         ))
 
@@ -777,7 +833,7 @@ async def run_research(
 
     # Gap check + at most 2 follow-up rounds (deep only).
     for _ in range(2):
-        gaps = await _gap_check(gateway, session, model, state, emit)
+        gaps = await _gap_check(gateway, session, checker_model, state, emit)
         if not gaps:
             break
         state.rounds += 1
@@ -788,9 +844,10 @@ async def run_research(
         state.gaps = gaps
 
     _backfill_sources(state)
-    await _verify(gateway, session, model, state, emit)
+    await _verify(gateway, session, verifier_model, state, emit)
     _score_sources(state)
-    state.answer = await _synthesize(gateway, session, model, question, state, emit)
+    state.answer = await _synthesize(gateway, session, synth_model, question, state, emit)
+    meta_quality = await _quality_check(state, emit)
 
     meta = {
         "depth": state.depth,
@@ -800,6 +857,7 @@ async def run_research(
                         ("unsupported", "contradicted", "")),
         "rounds": state.rounds,
         "seconds": round(time.monotonic() - t0, 1),
+        "quality": meta_quality,
     }
     emit({"event": "research_done", "text": f"Research complete: {meta['findings']} findings, "
           f"{meta['sources']} sources in {meta['seconds']}s", **meta})

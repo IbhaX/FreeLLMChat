@@ -69,3 +69,15 @@ def test_backfill_sources_and_clean_answer():
     assert "@context" not in out
     out2 = R._clean_answer("", st3)
     assert "HTTP/3 uses QUIC" in out2
+
+
+def test_quality_check_citations():
+    from app.services.research import ResearchState, Source, _quality_check
+    st = ResearchState(question="q")
+    st.sources["s1"] = Source(id="s1", title="t", url="", publisher="", date="2026-01-01")
+    st.answer = "Claim one [1] and claim two [2] and [9]."
+    import asyncio
+    q = asyncio.run(_quality_check(st, lambda ev: None))
+    assert q["bad_citations"] == [2, 9]
+    assert q["citations"] == 3
+    assert q["urls_checked"] == 0
