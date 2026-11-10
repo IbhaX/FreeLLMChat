@@ -289,11 +289,6 @@ class Gateway:
             if sweep:
                 await self._second_sweep_reset(session, emit)
                 tried.clear()
-            for provider, model in by_provider:
-                if not self.breaker.allow(provider.name):
-                    continue
-                if sweep == 0:
-                    emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
             inner = await self._chat_sweep(
                 session, request_id, t0, payload, by_provider,
                 emit if sweep == 0 else (lambda ev: None), tried, attempts,
@@ -393,6 +388,7 @@ class Gateway:
         for provider, model in by_provider:
             if not self.breaker.allow(provider.name):
                 continue
+            emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
             body = dict(payload)
             body["model"] = model
             body["stream"] = False
