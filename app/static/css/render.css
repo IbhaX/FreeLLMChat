@@ -225,6 +225,13 @@
 .nova-step-title{font-size:13px;font-weight:600;margin-bottom:3px}
 .nova-step-text{font-size:13px;color:var(--text-2);line-height:1.55}
 
+/* ---------- List ---------- */
+.nova-list{margin:10px 0}
+.nova-list-items{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text-2);line-height:1.55}
+.nova-list-items li::marker{color:var(--accent)}
+.nova-list-item{padding-left:2px}
+.nova-list-item code{font-size:12px}
+
 /* ---------- Interactive form ---------- */
 .nova-interactive{margin:10px 0}
 .nova-interactive-form{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}

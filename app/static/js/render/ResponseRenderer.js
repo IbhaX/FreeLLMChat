@@ -21,9 +21,24 @@
     if (!fn) {
       // Unknown component type: never lose the content — render it as a
       // readable generic card instead of an error note.
+      const data = comp.data;
+      // Models invent list-like types ("bullet_list", "steps", ...) with an
+      // `items` array — render those as a real list instead of raw JSON.
+      if (data && typeof data === "object" && Array.isArray(data.items)) {
+        const listFn = Nova.ComponentRegistry.getComponent("list");
+        if (listFn) {
+          try {
+            const node = listFn({ items: data.items, ordered: data.ordered, title: data.title });
+            if (node) {
+              slot.append(node);
+              host.append(slot);
+              return;
+            }
+          } catch (_) { /* fall through to generic card */ }
+        }
+      }
       const card = el("div", { class: "nova-comp-card", style: "padding:10px 12px;border:1px solid var(--border-1);border-radius:10px;background:var(--bg-1)" });
       card.append(el("div", { class: "t-xs tx-3", style: "margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em" }, `✦ ${esc(comp.type || "component")}`));
-      const data = comp.data;
       const text = typeof data === "string" ? data
         : data && typeof data === "object" && typeof data.text === "string" ? data.text
         : JSON.stringify(data ?? {}, null, 2);
