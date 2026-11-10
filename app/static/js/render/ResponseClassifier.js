@@ -25,6 +25,10 @@
   const FENCE_RE = /```nova-response\s*\n([\s\S]*?)\n```/;
   // Unterminated fence: model forgot the closing ``` (or stream was cut).
   const FENCE_OPEN_RE = /```nova-response\s*\n([\s\S]*)$/;
+  // Some models wrap the envelope in a plain ```json fence — accept it
+  // when the inner JSON is a valid envelope (has response_type).
+  const JSON_FENCE_RE = /```json\s*\n([\s\S]*?)\n```/;
+  const JSON_FENCE_OPEN_RE = /```json\s*\n([\s\S]*)$/;
 
   function parseEnvelopeJson(inner, match) {
     try {
@@ -38,9 +42,9 @@
 
   function tryParseEnvelope(text) {
     if (typeof text !== "string") return null;
-    const m = text.match(FENCE_RE);
+    const m = text.match(FENCE_RE) || text.match(JSON_FENCE_RE);
     if (m) return parseEnvelopeJson(m[1], m);
-    const m2 = text.match(FENCE_OPEN_RE);
+    const m2 = text.match(FENCE_OPEN_RE) || text.match(JSON_FENCE_OPEN_RE);
     if (!m2) return null;
     const inner = m2[1];
     // try whole inner, then progressively trimmed to the last '}' so
