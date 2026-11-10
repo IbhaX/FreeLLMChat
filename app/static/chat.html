@@ -116,8 +116,18 @@
   }
   .pill-btn:hover{border-color:var(--border-3);background:var(--surface-2)}
   .pill-btn.on{border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent)}
-  .model-menu{top:calc(100% + 6px);right:0;display:none}
+  .model-menu{top:calc(100% + 6px);right:0;display:none;
+    max-height:min(62vh,460px);overflow-y:auto;overscroll-behavior:contain}
   .model-menu.open{display:block}
+  .model-menu .mi-search{width:100%;box-sizing:border-box;margin-bottom:4px;
+    padding:7px 10px;border-radius:var(--r-sm);border:1px solid var(--border-2);
+    background:var(--bg-0);color:var(--text-1);font:inherit;font-size:12.5px;outline:none}
+  .model-menu .mi-search:focus{border-color:var(--accent-line)}
+  .model-menu .mi-empty{padding:10px;font-size:12px;color:var(--text-3);text-align:center}
+  @media (max-width:640px){
+    .model-menu{position:fixed;left:12px;right:12px;top:64px;bottom:auto;
+      max-height:calc(100dvh - 90px);z-index:80}
+  }
   /* ---------- Chat ---------- */
   .chat-scroll{flex:1;overflow-y:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
   .chat-inner{max-width:780px;margin:0 auto;padding:16px 12px 20px}
