@@ -434,6 +434,13 @@
           <button class="ui-btn ui-btn-ghost ui-btn-icon" id="micBtn" title="Voice input">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg>
           </button>
+          <label for="responseLength" class="t-xs tx-3" style="white-space:nowrap">Length</label>
+          <select id="responseLength" aria-label="Response length" title="Response length"
+            style="max-width:112px;padding:6px 8px;border:1px solid var(--border-1);border-radius:8px;background:var(--bg-0);color:var(--text-1);font:inherit;font-size:12px">
+            <option value="short">Short</option>
+            <option value="medium" selected>Medium</option>
+            <option value="large">Large</option>
+          </select>
           <span class="comp-hint"><kbd>Enter</kbd> send · <kbd>Shift+Enter</kbd> newline · <kbd>/</kbd> commands</span>
           <button class="send-btn" id="sendBtn" title="Send">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
