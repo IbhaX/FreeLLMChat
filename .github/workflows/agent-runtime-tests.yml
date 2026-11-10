@@ -1,0 +1,30 @@
+name: Agent Runtime Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, "feature/agent-runtime-upgrade"]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        run: pytest -q
+      - name: Lint changed runtime modules
+        run: ruff check app/services/agents.py app/services/tools.py app/api/agent_routes.py app/schemas.py tests
