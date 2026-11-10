@@ -50,7 +50,9 @@ _SAFE_OPS = {
 
 
 def _eval(node: ast.AST) -> float:
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+        if abs(node.value) > 10**12:
+            raise ValueError("numeric literal too large")
         return node.value
     if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_OPS:
         return _SAFE_OPS[type(node.op)](_eval(node.left), _eval(node.right))
@@ -78,8 +80,12 @@ async def _calculator(expression: str) -> str:
             return "calculation error: expression too long"
         tree = ast.parse(expression, mode="eval")
         _check_pow(tree)
+        if sum(1 for _ in ast.walk(tree)) > 64:
+            return "calculation error: expression too complex"
         result = _eval(tree.body)
-        if isinstance(result, float) and abs(result) > 1e308:
+        if not isinstance(result, (int, float)) or not __import__("math").isfinite(result):
+            return "calculation error: non-finite result"
+        if abs(result) > 1e100:
             return "calculation error: result overflow"
         return f"{expression} = {result}"
     except Exception as e:
@@ -103,12 +109,24 @@ def _ssrf_blocked(url: str) -> bool:
         host = (urlparse(url).hostname or "").lower()
     except Exception:
         return True
-    if not host or _BLOCKED_HOST_RE.match(host):
+    if not host or _BLOCKED_HOST_RE.match(host) or "%" in host:
         return True
     try:
-        return ipaddress.ip_address(host).is_private
+        address = ipaddress.ip_address(host)
+        return not address.is_global
     except ValueError:
-        return False
+        pass
+    # Reject hostnames resolving to any non-public address before connecting.
+    # Redirects are revalidated at every hop; DNS pinning is still best handled
+    # by an outbound proxy/firewall in production to prevent rebinding races.
+    try:
+        import socket
+        for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM):
+            if not ipaddress.ip_address(info[4][0].split("%", 1)[0]).is_global:
+                return True
+    except (OSError, ValueError):
+        return True
+    return False
 
 
 async def _http_get(url: str, max_chars: int = 4000) -> str:
@@ -455,7 +473,19 @@ async def run_tool_loop(
             except Exception:
                 args = {}
             emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
-            out = await run_tool(name, args)
+            if name not in TOOLS or not isinstance(args, dict):
+                out = "tool error: unknown tool or arguments must be an object"
+            else:
+                allowed = set(TOOLS[name].parameters.get("properties", {}))
+                if set(args) - allowed:
+                    out = "tool error: unexpected argument(s): " + ", ".join(sorted(set(args) - allowed))
+                else:
+                    try:
+                        out = await asyncio.wait_for(run_tool(name, args), timeout=30)
+                    except asyncio.TimeoutError:
+                        out = "tool error: execution timed out after 30 seconds"
+                    except Exception as exc:
+                        out = f"tool error: {type(exc).__name__}: {exc}"
             if tool_output_hook is not None:
                 try:
                     tool_output_hook(name, out)
