@@ -86,3 +86,21 @@ def test_undecryptable_key_flagged():
         keys = c.get("/admin/keys?provider=groq", headers=ADMIN).json()
         assert keys[0]["decryptable"] is False
         assert keys[0]["healthy"] is False
+
+
+def test_tool_policy_prepends_system_message():
+    from app.services.tools import _with_tool_policy
+    out = _with_tool_policy([{"role": "user", "content": "hi"}])
+    assert out[0]["role"] == "system"
+    assert "Tool use policy" in out[0]["content"]
+    assert out[1]["content"] == "hi"
+
+
+def test_tool_policy_appends_to_existing_system():
+    from app.services.tools import _with_tool_policy
+    out = _with_tool_policy(
+        [{"role": "system", "content": "Persona."}, {"role": "user", "content": "hi"}]
+    )
+    assert out[0]["content"].startswith("Persona.")
+    assert "Tool use policy" in out[0]["content"]
+    assert len(out) == 2

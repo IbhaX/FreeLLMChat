@@ -374,6 +374,7 @@ async def run_tool_loop(
     max_rounds: int = 5,
     call_timeout: float | None = None,
     tool_output_hook: Callable[[str, str], None] | None = None,
+    tool_policy: bool = False,
 ) -> dict[str, Any]:
     """Server-side tool-call loop over the built-in tools.
 
@@ -381,7 +382,10 @@ async def run_tool_loop(
     built-in tool specs; executes any tool_calls locally and re-calls until the
     model answers directly (or rounds are exhausted). ``emit`` gets activity
     dicts for each executed call. ``call_timeout`` bounds each provider call.
-    Returns the final completion dict.
+    Returns the final completion dict. ``tool_policy`` prepends a usage policy
+    to the system prompt so the model answers directly when it can instead of
+    calling tools speculatively (used for plain chat; researchers/agents keep
+    their own prompts).
     """
     import json as _json
 
@@ -397,7 +401,10 @@ async def run_tool_loop(
     body["stream"] = False
     body["tools"] = specs
     body["tool_choice"] = "auto"
-    messages = body["messages"]
+    messages = [dict(m) for m in (body.get("messages") or [])]
+    if tool_policy:
+        messages = _with_tool_policy(messages)
+    body["messages"] = messages
 
     result: dict[str, Any] = {}
     # Tool-loop rounds (researchers, agents) need longer per-attempt patience
@@ -621,6 +628,27 @@ def _sanitize_result(result: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         pass
     return result
+
+
+_TOOL_POLICY = (
+    "Tool use policy: answer directly, without calling any tool, whenever you "
+    "can — greetings, small talk, opinions, or anything answerable from this "
+    "conversation or your own knowledge. Call a tool only when the user needs "
+    "information you don't have (current facts, sources), an exact calculation, "
+    "or media generation they asked for. Never call tools speculatively."
+)
+
+
+def _with_tool_policy(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Append the tool-usage policy to the first system message (or insert one)."""
+    for i, m in enumerate(messages):
+        if m.get("role") == "system":
+            out = [dict(x) for x in messages]
+            content = out[i].get("content")
+            text = content if isinstance(content, str) else ""
+            out[i] = {**out[i], "content": f"{text}\n\n{_TOOL_POLICY}" if text else _TOOL_POLICY}
+            return out
+    return [{"role": "system", "content": _TOOL_POLICY}, *messages]
 
 
 def _brief_args(args: dict[str, Any]) -> str:

@@ -202,6 +202,15 @@ async def chat_completions(
         # `builtin_tools` (extra field): run the server-side tool-call loop
         # over the gateway's built-in tools instead of plain streaming.
         builtin = payload.pop("builtin_tools", None)
+        if builtin:
+            # Model-based gate: greetings/small talk get a direct answer
+            # without burning tool rounds on spurious calls.
+            try:
+                from app.services.tools import wants_tools
+                if not await wants_tools(gateway, session, payload):
+                    builtin = None
+            except Exception:
+                pass
 
         async def _open():
             try:
@@ -217,7 +226,7 @@ async def chat_completions(
             try:
                 return await run_tool_loop(
                     gateway, session, payload, builtin,
-                    emit=events.put_nowait,
+                    emit=events.put_nowait, tool_policy=True,
                 )
             except Exception as e:
                 return e
