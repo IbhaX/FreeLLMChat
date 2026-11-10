@@ -71,11 +71,18 @@ async def _persist(
     plan, findings, sources = _state_payload(state)
     meta = {k: v for k, v in (getattr(state, "meta", None) or {}).items()}
     run = ResearchRun(
-        question=body.message[:8000], depth=meta.get("depth", body.depth or "standard"),
+        question=body.message[:8000],
+        conversation_id=(str(body.conversation_id)[:64] if body.conversation_id else None),
+        depth=meta.get("depth", body.depth or "standard"),
         answer=answer[:50000], plan=plan, findings=findings, sources=sources, meta=meta,
     )
     session.add(run)
-    await session.commit()
+    try:
+        await session.commit()
+    except Exception:
+        # Persistence is best-effort: never fail a finished research run.
+        await session.rollback()
+        return None
     return run.id
 
 

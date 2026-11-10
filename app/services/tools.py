@@ -373,6 +373,7 @@ async def run_tool_loop(
     emit: Callable[[dict[str, Any]], None] | None = None,
     max_rounds: int = 5,
     call_timeout: float | None = None,
+    tool_output_hook: Callable[[str, str], None] | None = None,
 ) -> dict[str, Any]:
     """Server-side tool-call loop over the built-in tools.
 
@@ -443,6 +444,11 @@ async def run_tool_loop(
                 args = {}
             emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
             out = await run_tool(name, args)
+            if tool_output_hook is not None:
+                try:
+                    tool_output_hook(name, out)
+                except Exception:
+                    pass
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.get("id", ""),

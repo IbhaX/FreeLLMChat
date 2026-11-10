@@ -326,6 +326,7 @@ class ResearchState:
     plan: dict[str, Any] = field(default_factory=dict)
     findings: list[Finding] = field(default_factory=list)
     sources: dict[str, Source] = field(default_factory=dict)
+    harvested: dict[str, list[str]] = field(default_factory=dict)  # sub_question -> urls
     gaps: list[dict[str, Any]] = field(default_factory=list)
     contradictions: list[str] = field(default_factory=list)
     verdicts: list[dict[str, Any]] = field(default_factory=list)
@@ -370,16 +371,42 @@ def _norm_queries(queries: Any) -> list[str]:
     return []
 
 
+async def _prior_run(session: Any, conversation_id: str | None):
+    """Most recent saved run in this conversation (§8 follow-up reuse)."""
+    if not conversation_id:
+        return None
+    try:
+        from sqlalchemy import desc, select
+        from app.models import ResearchRun
+        return (await session.execute(
+            select(ResearchRun).where(ResearchRun.conversation_id == str(conversation_id))
+            .order_by(desc(ResearchRun.created_at)).limit(1)
+        )).scalar_one_or_none()
+    except Exception:
+        return None
+
+
 async def _plan(
     gateway: Any, session: Any, model: str, question: str, depth: str,
     history: list[dict[str, Any]], emit: Emit,
+    prior: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     n = {"quick": 1, "standard": 3, "deep": 6}[depth]
     hist = "\n".join(
         f"{m.get('role')}: {str(m.get('content'))[:500]}" for m in (history or [])[-6:]
     )
+    prior_txt = ""
+    if prior:
+        prior_txt = (
+            "\nPrior verified findings from this conversation (reuse them; "
+            "plan ONLY sub-questions they do not already answer):\n"
+            + json.dumps([{"claim": f.get("claim"), "source_id": f.get("source_id"),
+                           "verdict": f.get("verdict")} for f in prior[:30]],
+                         ensure_ascii=False)[:6000]
+            + "\n"
+        )
     msgs = [{"role": "user", "content":
-             f"Conversation history (for resolving follow-ups):\n{hist}\n\n"
+             f"Conversation history (for resolving follow-ups):\n{hist}\n{prior_txt}\n"
              f"Question: {question}\n\nPlan for depth='{depth}' with at most {n} sub-questions."}]
     emit({"event": "stage", "text": "Planning research…", "stage": "plan"})
     text = await _call(gateway, session, model, msgs, system=PLANNER_PROMPT,
@@ -405,7 +432,7 @@ async def _research_one(
     question = str(sq.get("question") or "")
     queries = _norm_queries(sq.get("search_queries")) or [question]
     calls = {"quick": 3, "standard": 6, "deep": 8}[depth]
-    system = RESEARCHER_SYSTEM.format(max_calls=calls)
+    system = RESEARCHER_SYSTEM.replace("{max_calls}", str(calls))
     user = (
         f"Sub-question ({qid}): {question}\n"
         f"Why it matters: {sq.get('why', '')}\n"
@@ -414,6 +441,18 @@ async def _research_one(
     )
     emit({"event": "stage", "text": f"Researching {qid}: {question[:80]}",
           "stage": "research", "sub": qid})
+    seen_urls: list[str] = []
+
+    def harvest(name: str, output: str) -> None:
+        # Tool results carry the fetched pages/search hits — harvest URLs so
+        # findings without an explicit source_id can still be cited.
+        for u in _URL_RE.findall(output or ""):
+            u = u.rstrip(".,;:)")
+            if u not in seen_urls:
+                seen_urls.append(u)
+
+    def collect_emit(ev: dict) -> None:
+        emit(ev)
     # Researcher only gets search/fetch: no calculator/datetime/media.
     payload = {
         "model": model,
@@ -422,11 +461,28 @@ async def _research_one(
         "stream": False,
         "temperature": 0.2,
     }
+    # Researchers run in parallel: each gets its OWN DB session — sharing the
+    # request's AsyncSession across coroutines raises "concurrent operations
+    # are not permitted" on the rotator/quota lookups.
+    from app.db import get_session_factory
     try:
-        result = await run_tool_loop(
-            gateway, session, payload, ["web_search", "http_get"],
-            emit=emit, max_rounds=6, call_timeout=120,
-        )
+        factory = get_session_factory()
+    except Exception:
+        factory = None
+    try:
+        if factory is not None:
+            async with factory() as own:
+                result = await run_tool_loop(
+                    gateway, own, payload, ["web_search", "http_get"],
+                    emit=collect_emit, max_rounds=5, call_timeout=240,
+                    tool_output_hook=harvest,
+                )
+        else:
+            result = await run_tool_loop(
+                gateway, session, payload, ["web_search", "http_get"],
+                emit=collect_emit, max_rounds=5, call_timeout=240,
+                tool_output_hook=harvest,
+            )
     except Exception as e:
         emit({"event": "note", "text": f"{qid} failed: {str(e)[:120]}"})
         return
@@ -440,6 +496,7 @@ async def _research_one(
                 "sources": []}
         state.unverified.append(f"{qid}: researcher returned non-JSON output")
     _merge_findings(state, data or {}, qid)
+    state.harvested[qid] = seen_urls
 
 
 def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> None:
@@ -473,6 +530,33 @@ def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> Non
     for n in data.get("not_found") or []:
         if isinstance(n, str):
             state.unverified.append(n)
+
+
+_URL_RE = re.compile(r"https?://[^\s\)\]\"'<>]+")
+
+
+def _backfill_sources(state: ResearchState) -> None:
+    """Give every finding a source: keep explicit ids, else attach the first
+    URL the researcher actually fetched/searched for that sub-question."""
+    # Ensure harvested URLs exist as sources even when the model omitted them.
+    n = len(state.sources)
+    for urls in state.harvested.values():
+        for u in urls[:12]:
+            n += 1
+            sid = f"h{n}"
+            if sid not in state.sources and u not in {s2.url for s2 in state.sources.values()}:
+                state.sources[sid] = Source(id=sid, url=u, title=u, type="web")
+    url_to_id = {s2.url: s2.id for s2 in state.sources.values() if s2.url}
+    for f in state.findings:
+        if f.source_id and f.source_id in state.sources:
+            continue
+        urls = state.harvested.get(f.sub_question) or []
+        pick = next((u for u in urls if u in url_to_id), urls[0] if urls else "")
+        if pick:
+            f.source_id = url_to_id.get(pick) or next(
+                (s2.id for s2 in state.sources.values() if s2.url == pick), "")
+        if not f.source_id and state.sources:
+            f.source_id = next(iter(state.sources))
 
 
 def _score_sources(state: ResearchState) -> None:
@@ -574,14 +658,43 @@ async def _synthesize(
         "conflicts": state.contradictions, "not_found": state.unverified[:15],
     }, ensure_ascii=False)
     msgs = [{"role": "user", "content": f"Research package (JSON):\n{ctx[:30000]}\n\nWrite the final answer now."}]
-    answer = await _call(gateway, session, model, msgs, system=SYNTHESIZER_PROMPT,
-                         json_mode=True)
-    # The synthesizer is told not to emit JSON, but weak models sometimes do;
-    # unwrap a {"answer": ...} shape if present.
-    data = _extract_json(answer)
-    if isinstance(data, dict) and isinstance(data.get("answer"), str):
-        answer = data["answer"]
-    return answer.strip()
+    answer = await _call(gateway, session, model, msgs, system=SYNTHESIZER_PROMPT)
+    answer = _clean_answer(answer, state)
+    return answer
+
+
+def _clean_answer(answer: str, state: ResearchState) -> str:
+    """Guard against weak models emitting JSON-LD/schema.org or raw JSON as
+    the 'answer'. Unwrap {"answer": ...}; otherwise rebuild prose from the
+    verified findings so the user never sees a JSON blob."""
+    text = (answer or "").strip()
+    low = text[:200].lower()
+    is_jsonish = low.startswith("{") or '"@context"' in low or '"@type"' in low
+    data = _extract_json(text) if is_jsonish else None
+    if isinstance(data, dict):
+        for key in ("answer", "content", "text", "response"):
+            v = data.get(key)
+            if isinstance(v, str) and len(v) > 40:
+                return v.strip()
+        # JSON-LD FAQPage etc. — pull the accepted answer text if present.
+        try:
+            entities = data.get("mainEntity") or []
+            if isinstance(entities, list) and entities:
+                t = ((entities[0].get("acceptedAnswer") or {}).get("text") or "")
+                if t:
+                    return t.strip()
+        except Exception:
+            pass
+    if is_jsonish or not text:
+        # Fallback: assemble a plain answer from the findings.
+        parts = []
+        for f in state.findings[:12]:
+            cite = f" [{state.sources[f.source_id].id}]" if f.source_id in state.sources else ""
+            parts.append(f"- {f.claim}{cite}")
+        if parts:
+            return "Based on the sources found:\n\n" + "\n".join(parts)
+        return "_(research completed but no usable answer was produced)_"
+    return text
 
 
 def _sources_block(state: ResearchState) -> str:
@@ -627,8 +740,29 @@ async def run_research(
 
     # Follow-up reuse (§8): if prior findings already answer it, the planner
     # still runs but researchers are skipped when the planner marks it covered.
+    prior_row = await _prior_run(session, conversation_id)
+    prior = (prior_row.findings or []) if prior_row else []
+    if prior_row:
+        # Carry over the prior run's sources so citations still resolve.
+        for sdata in (prior_row.sources or []):
+            if isinstance(sdata, dict) and sdata.get("id") and sdata["id"] not in state.sources:
+                state.sources[sdata["id"]] = Source(
+                    id=str(sdata["id"]), title=str(sdata.get("title") or ""),
+                    url=str(sdata.get("url") or ""), publisher=str(sdata.get("publisher") or ""),
+                    date=str(sdata.get("date") or ""), type=str(sdata.get("type") or ""),
+                    quality=str(sdata.get("quality") or ""), score=float(sdata.get("score") or 2),
+                )
+    if prior:
+        state.findings.extend(
+            Finding(claim=str(f.get("claim") or ""), evidence=str(f.get("evidence") or ""),
+                    source_id=str(f.get("source_id") or ""),
+                    confidence=str(f.get("confidence") or ""),
+                    sub_question="prior", verdict=str(f.get("verdict") or ""))
+            for f in prior if f.get("claim")
+        )
+        emit({"event": "note", "text": f"reusing {len(prior)} prior findings"})
     state.plan = await _plan(gateway, session, model, question, state.depth,
-                             messages[:-1], emit)
+                             messages[:-1], emit, prior=prior)
     _cache_put(conv, "plan", question, state.plan)
 
     async def research_round(sqs: list[dict[str, Any]]) -> None:
@@ -653,6 +787,7 @@ async def run_research(
         await research_round(follow)
         state.gaps = gaps
 
+    _backfill_sources(state)
     await _verify(gateway, session, model, state, emit)
     _score_sources(state)
     state.answer = await _synthesize(gateway, session, model, question, state, emit)

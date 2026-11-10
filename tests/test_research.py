@@ -42,3 +42,30 @@ def test_cache_roundtrip(monkeypatch):
     assert R._cache_get("c1", "plan", "q?") == {"sub_questions": []}
     assert R._cache_get("c1", "plan", "other") is None
     assert R._cache_get("", "plan", "q?") is None
+
+
+def test_backfill_sources_and_clean_answer():
+    st = R.ResearchState()
+    st.harvested["q1"] = ["https://example.com/a", "https://example.com/b"]
+    R._merge_findings(st, {"findings": [{"claim": "c1", "source_id": "", "confidence": "low"}],
+                           "sources": []}, "q1")
+    R._backfill_sources(st)
+    assert st.findings[0].source_id in st.sources
+    assert st.sources[st.findings[0].source_id].url == "https://example.com/a"
+
+    # explicit source ids are kept
+    st2 = R.ResearchState()
+    R._merge_findings(st2, {"findings": [{"claim": "c", "source_id": "s1"}],
+                            "sources": [{"id": "s1", "url": "https://x"}]}, "q1")
+    st2.harvested["q1"] = ["https://y"]
+    R._backfill_sources(st2)
+    assert st2.findings[0].source_id == "s1"
+
+    # JSON-LD answer is unwrapped/rejected
+    st3 = R.ResearchState()
+    st3.findings.append(R.Finding(claim="HTTP/3 uses QUIC", evidence="", source_id=""))
+    out = R._clean_answer('{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"acceptedAnswer":{"text":"QUIC is UDP-based."}}]}', st3)
+    assert "QUIC is UDP-based" in out
+    assert "@context" not in out
+    out2 = R._clean_answer("", st3)
+    assert "HTTP/3 uses QUIC" in out2

@@ -131,6 +131,7 @@ class ResearchRun(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     question: Mapped[str] = mapped_column(Text)
+    conversation_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     depth: Mapped[str] = mapped_column(String(16), default="standard")
     answer: Mapped[str] = mapped_column(Text, default="")
     plan: Mapped[Optional[list]] = mapped_column(JSON, default=list)
