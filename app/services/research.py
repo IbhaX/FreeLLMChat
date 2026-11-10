@@ -683,7 +683,8 @@ async def _synthesize(
         "conflicts": state.contradictions, "not_found": state.unverified[:15],
     }, ensure_ascii=False)
     msgs = [{"role": "user", "content": f"Research package (JSON):\n{ctx[:30000]}\n\nWrite the final answer now."}]
-    system = SYNTHESIZER_PROMPT
+    from app.response_protocol import structured_system_prompt
+    system = structured_system_prompt() + "\n\n" + SYNTHESIZER_PROMPT
     if custom_instructions:
         from app.services.settings_store import custom_instructions_block
         system += "\n\n" + custom_instructions_block(custom_instructions)
