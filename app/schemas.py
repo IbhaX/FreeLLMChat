@@ -110,6 +110,7 @@ class KeyOut(BaseModel):
     created_at: datetime
     notes: Optional[str]
     healthy: bool = True
+    decryptable: bool = True
 
 
 class KeyImportResult(BaseModel):

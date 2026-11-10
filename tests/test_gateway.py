@@ -177,3 +177,20 @@ async def test_auto_failover_to_next_provider(session, monkeypatch):
 
     assert provider.name == "p2"
     assert key.id == k2.id
+
+
+async def test_undecryptable_key_skipped_without_cooldown(session):
+    from app.gateway import KeyUndecryptable
+    p = await _provider(session, "pbad", "https://pbad.example/v1", ["m1"])
+    k = await make_key(session, p, "sk-bad-0000", label="bad")
+    k.encrypted_key = "gAAAAAB" + "x" * 100  # undecryptable under test key
+    await session.commit()
+
+    gw = Gateway()
+    with pytest.raises(KeyUndecryptable):
+        gw._decrypt_key(k)
+    assert k.id in gw._undecryptable
+    # Second call fails fast from the in-memory cache.
+    with pytest.raises(KeyUndecryptable):
+        gw._decrypt_key(k)
+    await gw.close()

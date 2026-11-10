@@ -54,6 +54,11 @@ def _key_out(k: ApiKey) -> KeyOut:
     now = datetime.now(timezone.utc)
     cd = k.cooldown_until
     cooling = cd is not None and (cd.tzinfo and cd or cd.replace(tzinfo=timezone.utc)) > now
+    try:
+        decrypt_key(k.encrypted_key)
+        decryptable = True
+    except ValueError:
+        decryptable = False
     return KeyOut(
         id=k.id, provider=k.provider.name if k.provider else "",
         label=k.label, key_hint=k.key_hint, quota_group=k.quota_group,
@@ -63,7 +68,8 @@ def _key_out(k: ApiKey) -> KeyOut:
         last_used_at=k.last_used_at, cooldown_until=k.cooldown_until,
         consecutive_failures=k.consecutive_failures, last_error=k.last_error,
         created_at=k.created_at, notes=k.notes,
-        healthy=k.enabled and not cooling,
+        healthy=k.enabled and not cooling and decryptable,
+        decryptable=decryptable,
     )
 
 

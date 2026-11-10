@@ -64,3 +64,25 @@ def test_gateway_key_guard(monkeypatch):
     finally:
         monkeypatch.delenv("GATEWAY_API_KEY", raising=False)
         get_settings.cache_clear()
+
+
+def test_undecryptable_key_flagged():
+    with TestClient(app) as c:
+        c.post("/admin/keys", headers=ADMIN,
+               json={"provider": "groq", "keys": ["gsk_ok_1234"]})
+        # Corrupt the stored ciphertext to simulate an ENCRYPTION_KEY change.
+        from sqlalchemy import select
+        from app.db import get_session_factory
+        from app.models import ApiKey
+        import asyncio
+
+        async def corrupt():
+            async with get_session_factory()() as s:
+                k = (await s.execute(select(ApiKey))).scalars().first()
+                k.encrypted_key = "gAAAAAB" + "x" * 100
+                await s.commit()
+
+        asyncio.get_event_loop().run_until_complete(corrupt())
+        keys = c.get("/admin/keys?provider=groq", headers=ADMIN).json()
+        assert keys[0]["decryptable"] is False
+        assert keys[0]["healthy"] is False
