@@ -79,7 +79,8 @@ def test_markdown_fallback_maps_structures():
     assert table["rows"][1] == ["Context", "128K", "1M"]
     assert env["components"][1]["data"]["title"] == "Pros"
     assert env["content"].startswith("Groq vs Gemini")
-    assert markdown_to_envelope("just prose, no structure here at all") is None
+    plain = markdown_to_envelope("A complete prose answer that is longer than the trivial-response threshold and needs a visual anchor.")
+    assert extract_envelope(plain)["components"][0]["type"] == "callout"
 
 
 def test_enforce_passthrough_and_trivial():
