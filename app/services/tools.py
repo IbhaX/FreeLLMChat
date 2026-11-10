@@ -412,6 +412,13 @@ async def run_tool_loop(
         except asyncio.TimeoutError:
             raise TimeoutError(f"agent timed out after {call_timeout}s")
         msg = ((result.get("choices") or [{}])[0]).get("message", {})
+        if not isinstance(msg.get("content"), str):
+            # Some providers return content as a list of parts (text chunks);
+            # flatten before it is sent back as the assistant message.
+            parts = msg.get("content")
+            msg["content"] = "".join(
+                str(p.get("text") or "") for p in parts if isinstance(p, dict)
+            ) if isinstance(parts, list) else (parts or "")
         calls = msg.get("tool_calls") or []
         if not calls:
             calls = _parse_text_tool_calls(msg.get("content") or "")

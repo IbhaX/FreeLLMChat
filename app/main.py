@@ -17,6 +17,7 @@ from app.api.agent_routes import chat_router as agent_chat_router
 from app.api.group_routes import public_router as share_public_router
 from app.api.group_routes import router as group_router
 from app.api.openai_routes import router as openai_router
+from app.api.research_routes import router as research_router
 from app.config import BASE_DIR, get_settings
 from app.db import close_db, get_session_factory, init_db
 from app.gateway import Gateway
@@ -68,6 +69,7 @@ app.include_router(admin_router)
 app.include_router(agent_admin_router)
 app.include_router(agent_chat_router)
 app.include_router(group_router)
+app.include_router(research_router)
 app.include_router(share_public_router)
 
 static_dir = BASE_DIR / "app" / "static"
