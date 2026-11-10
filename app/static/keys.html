@@ -82,6 +82,16 @@
       </div>
     </div>
 
+    <div class="ui-card ui-card-pad" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <h3 style="font-size:var(--t-md);margin:0">Key health</h3>
+        <span class="tx-3 t-xs">ping every stored key against its provider</span>
+        <button class="ui-btn ui-btn-primary ui-btn-sm" id="testKeysBtn" onclick="testAllKeys()" style="margin-left:auto">Test all keys</button>
+        <span id="keysTestStatus" class="t-xs tx-3"></span>
+      </div>
+      <div id="keysTestResults" style="margin-top:12px"></div>
+    </div>
+
     <div class="sec-title">Keys <span id="keyCount" class="tx-3" style="text-transform:none;letter-spacing:0"></span></div>
     <div class="ui-table-scroll"><table class="ui-table" id="keyTable"><thead><tr>
       <th>Provider</th><th>Label</th><th>Hint</th><th>Group</th><th>Pri</th><th>Wt</th>
