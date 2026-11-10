@@ -172,6 +172,87 @@ async def _web_search(query: str, max_results: int = 5) -> str:
         return f"search error: {e}"
 
 
+# ---------- media generation ----------
+
+_MEDIA_DIR = None
+
+
+def _media_dir() -> Any:
+    """``data/media`` under the project root — created lazily."""
+    global _MEDIA_DIR
+    if _MEDIA_DIR is None:
+        from pathlib import Path
+
+        from app.config import get_settings
+
+        p = Path(get_settings().database_url.split("///")[-1]).parent / "media"
+        p.mkdir(parents=True, exist_ok=True)
+        _MEDIA_DIR = p
+    return _MEDIA_DIR
+
+
+async def _generate_image(prompt: str, width: int = 1024, height: int = 1024) -> str:
+    """Free image generation via pollinations.ai — no API key needed.
+
+    The URL generates on first fetch and is CDN-cached afterwards, so we
+    return the URL directly instead of downloading the bytes."""
+    if not prompt.strip():
+        return "error: empty prompt"
+    w = max(64, min(int(width or 1024), 1792))
+    h = max(64, min(int(height or 1024), 1792))
+    from urllib.parse import quote
+
+    url = (
+        "https://image.pollinations.ai/prompt/"
+        f"{quote(prompt.strip(), safe='')}"
+        f"?width={w}&height={h}&model=sana&nologo=true&seed=-1"
+    )
+    return (
+        f"Generated image URL: {url}\n"
+        f"Show it to the user with an image_gallery component: "
+        f'{{"type": "image_gallery", "data": {{"images": [{{"url": "{url}", "caption": "{prompt[:80]}"}}]}}}}'
+    )
+
+
+_TTS_VOICES = {
+    "aria": "en-US-AriaNeural",
+    "guy": "en-US-GuyNeural",
+    "jenny": "en-US-JennyNeural",
+    "sonia": "en-GB-SoniaNeural",
+    "prabhat": "en-IN-PrabhatNeural",
+    "neerja": "en-IN-NeerjaNeural",
+}
+
+
+async def _generate_audio(text: str, voice: str = "aria") -> str:
+    """Free text-to-speech via edge-tts (Microsoft Edge voices, no key).
+
+    Writes an mp3 under data/media served at /media/<file>."""
+    text = (text or "").strip()
+    if not text:
+        return "error: empty text"
+    if len(text) > 4000:
+        text = text[:4000]
+    voice_id = _TTS_VOICES.get((voice or "").lower(), _TTS_VOICES["aria"])
+    try:
+        import uuid as _uuid
+
+        import edge_tts
+
+        fname = f"{_uuid.uuid4().hex}.mp3"
+        out = _media_dir() / fname
+        await edge_tts.Communicate(text, voice_id).save(str(out))
+        url = f"/media/{fname}"
+        return (
+            f"Generated audio URL: {url} (voice {voice_id})\n"
+            f'Play it with an audio component: {{"type": "audio", "data": {{"url": "{url}", "title": "{text[:60]}"}}}}'
+        )
+    except ImportError:
+        return "error: edge-tts not installed (pip install edge-tts)"
+    except Exception as e:
+        return f"audio generation error: {e}"
+
+
 # ---------- registry ----------
 
 TOOLS: dict[str, Tool] = {
@@ -224,6 +305,45 @@ TOOLS: dict[str, Tool] = {
                 "required": ["url"],
             },
             execute=_http_get,
+        ),
+        Tool(
+            name="generate_image",
+            icon="🎨",
+            description=(
+                "Generate an image from a text prompt (free, no key needed). "
+                "Returns a URL — show it with an image_gallery component."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "detailed image description"},
+                    "width": {"type": "integer", "default": 1024},
+                    "height": {"type": "integer", "default": 1024},
+                },
+                "required": ["prompt"],
+            },
+            execute=_generate_image,
+        ),
+        Tool(
+            name="generate_audio",
+            icon="🔊",
+            description=(
+                "Turn text into spoken audio (free TTS). Returns an audio "
+                "file URL — play it with an audio component."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "text to speak (max ~4000 chars)"},
+                    "voice": {
+                        "type": "string",
+                        "description": "one of: aria, guy, jenny, sonia, prabhat, neerja",
+                        "default": "aria",
+                    },
+                },
+                "required": ["text"],
+            },
+            execute=_generate_audio,
         ),
     ]
 }
