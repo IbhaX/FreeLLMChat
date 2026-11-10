@@ -22,12 +22,9 @@
   // ---------- structured envelope detection ----------
   // Matches a fenced block whose language tag is nova-response. Captures the
   // inner JSON. Allows trailing/leading whitespace and other markdown around.
-  // Accept canonical and line-wrapped tags (```nova\\n-response).
-  // Fence parsing uses explicit patterns below.
-  // Accept canonical, line-broken, and malformed split tags. In the
-  // malformed form "-response" may be the first line inside the code fence.
-  const FENCE_RE = /```(?:nova-response|nova[ \t]*\r?\n[ \t]*-response|nova)[ \t]*\r?\n([\s\S]*?)\r?\n```/i;
-  const FENCE_OPEN_RE = /```(?:nova-response|nova[ \t]*\r?\n[ \t]*-response|nova)[ \t]*\r?\n([\s\S]*)$/i;
+  const FENCE_RE = /```nova-response\s*\n([\s\S]*?)\n```/;
+  // Unterminated fence: model forgot the closing ``` (or stream was cut).
+  const FENCE_OPEN_RE = /```nova-response\s*\n([\s\S]*)$/;
   // Some models wrap the envelope in a plain ```json fence — accept it
   // when the inner JSON is a valid envelope (has response_type).
   const JSON_FENCE_RE = /```json\s*\n([\s\S]*?)\n```/;
@@ -35,8 +32,7 @@
 
   function parseEnvelopeJson(inner, match) {
     try {
-      const cleaned = inner.trim().replace(/^-response\s*/i, "");
-      const obj = JSON.parse(cleaned);
+      const obj = JSON.parse(inner.trim());
       if (!obj || typeof obj !== "object" || !obj.response_type) return null;
       return { envelope: obj, match };
     } catch (_) {
@@ -46,14 +42,6 @@
 
   function tryParseEnvelope(text) {
     if (typeof text !== "string") return null;
-    // Some providers or middleware strip Markdown fences. Treat a complete
-    // JSON object as a Nova envelope only when it declares response_type.
-    const trimmed = text.trim();
-    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-      const offset = text.indexOf(trimmed);
-      const bare = parseEnvelopeJson(trimmed, { index: offset, 0: trimmed });
-      if (bare) return bare;
-    }
     const m = text.match(FENCE_RE) || text.match(JSON_FENCE_RE);
     if (m) return parseEnvelopeJson(m[1], m);
     const m2 = text.match(FENCE_OPEN_RE) || text.match(JSON_FENCE_OPEN_RE);
@@ -332,7 +320,7 @@
     }
   }
 
-  const STREAM_FENCE_RE = /```(nova-response|nova[ \t]*\r?\n[ \t]*-response|nova|json)[ \t]*\r?\n/i;
+  const STREAM_FENCE_RE = /```(nova-response|json)[ \t]*\r?\n/;
 
   // Inspect a still-streaming reply. Returns null when it is not (or not yet
   // recognisably) a component envelope; otherwise
@@ -360,7 +348,6 @@
     const end = inner.search(/\n```/);
     if (end >= 0) inner = inner.slice(0, end);
     else inner = inner.replace(/\n`{1,2}$/, "");
-    inner = inner.replace(/^\s*-response\s*/i, "");
     const parsed = parsePartialJson(inner);
     const isJsonFence = m[1] === "json";
     if (!parsed || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
