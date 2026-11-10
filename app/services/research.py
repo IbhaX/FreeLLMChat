@@ -544,7 +544,9 @@ def _backfill_sources(state: ResearchState) -> None:
     # Ensure harvested URLs exist as sources even when the model omitted them.
     n = len(state.sources)
     for urls in state.harvested.values():
-        for u in urls[:12]:
+        for u in urls[:6]:
+            if n >= 40:
+                break
             n += 1
             sid = f"h{n}"
             if sid not in state.sources and u not in {s2.url for s2 in state.sources.values()}:
@@ -666,7 +668,18 @@ async def _synthesize(
     return answer
 
 
+_TOOL_BLOB_RE = re.compile(r"<tool_call>.*?</tool_call>", re.DOTALL)
+_TOOL_OPEN_RE = re.compile(r"<tool_call>.*", re.DOTALL)
+
+
+def _strip_tool_blobs(text: str) -> str:
+    text = _TOOL_BLOB_RE.sub("", text)
+    text = _TOOL_OPEN_RE.sub("", text)
+    return re.sub(r"<arg_(?:key|value)>[^<]*</arg_(?:key|value)>", "", text)
+
+
 def _clean_answer(answer: str, state: ResearchState) -> str:
+    answer = _strip_tool_blobs(answer)
     """Guard against weak models emitting JSON-LD/schema.org or raw JSON as
     the 'answer'. Unwrap {"answer": ...}; otherwise rebuild prose from the
     verified findings so the user never sees a JSON blob."""
@@ -846,6 +859,16 @@ async def run_research(
     _backfill_sources(state)
     await _verify(gateway, session, verifier_model, state, emit)
     _score_sources(state)
+    # Keep the source list bounded: everything a finding cites, plus the
+    # top-scored remainder (cap 30) so prompts and the Sources block stay sane.
+    referenced = {f.source_id for f in state.findings if f.source_id}
+    ranked = sorted(state.sources.values(), key=lambda x: -x.score)
+    keep = {s.id for s in ranked if s.id in referenced}
+    for s in ranked:
+        if len(keep) >= 30:
+            break
+        keep.add(s.id)
+    state.sources = {k: v for k, v in state.sources.items() if k in keep}
     state.answer = await _synthesize(gateway, session, synth_model, question, state, emit)
     meta_quality = await _quality_check(state, emit)
 
