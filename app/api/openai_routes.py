@@ -137,6 +137,14 @@ async def chat_completions(
     new_request_id()
     gateway = _gateway(request)
     payload = body.model_dump(exclude_none=True)
+    # Cap conversation history: keep all system messages plus the most
+    # recent turns — unbounded histories grow input tokens every call.
+    msgs = payload.get("messages")
+    if isinstance(msgs, list):
+        system_msgs = [m for m in msgs if m.get("role") == "system"]
+        turns = [m for m in msgs if m.get("role") != "system"]
+        if len(turns) > 20:
+            payload["messages"] = system_msgs + turns[-20:]
     # Inject the structured-output system prompt so responses are always
     # structured envelopes (unless the caller explicitly opts out via the
     # `nova_structured: false` extra field).

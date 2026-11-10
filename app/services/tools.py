@@ -8,6 +8,7 @@ and an async execute(**args) -> str. Register new tools in TOOLS below.
 from __future__ import annotations
 
 import ast
+import asyncio
 import ipaddress
 import operator
 import re
@@ -251,13 +252,15 @@ async def run_tool_loop(
     names: Any,
     emit: Callable[[dict[str, Any]], None] | None = None,
     max_rounds: int = 5,
+    call_timeout: float | None = None,
 ) -> dict[str, Any]:
     """Server-side tool-call loop over the built-in tools.
 
     Sends ``payload`` (non-streaming) through the gateway with the requested
     built-in tool specs; executes any tool_calls locally and re-calls until the
     model answers directly (or rounds are exhausted). ``emit`` gets activity
-    dicts for each executed call. Returns the final completion dict.
+    dicts for each executed call. ``call_timeout`` bounds each provider call.
+    Returns the final completion dict.
     """
     import json as _json
 
@@ -277,7 +280,12 @@ async def run_tool_loop(
 
     result: dict[str, Any] = {}
     for _ in range(max_rounds):
-        result, _p, _k, _m = await gateway.chat(session, body, on_event=emit)
+        try:
+            result, _p, _k, _m = await asyncio.wait_for(
+                gateway.chat(session, body, on_event=emit), timeout=call_timeout
+            )
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"agent timed out after {call_timeout}s")
         msg = ((result.get("choices") or [{}])[0]).get("message", {})
         calls = msg.get("tool_calls") or []
         if not calls:

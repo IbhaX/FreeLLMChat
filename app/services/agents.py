@@ -301,12 +301,15 @@ def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]
 async def _chat_with_tools(
     gateway: Gateway, agent_cfg: AgentConfig, messages: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Non-streaming chat with a tool-call execution loop (max 5 rounds)."""
+    """Non-streaming chat with a tool-call execution loop.
+
+    Delegates the loop itself to ``tools.run_tool_loop`` (same loop the
+    OpenAI route uses) after injecting memory and agent payload options.
+    """
     from app.db import get_session_factory
-    from app.services.tools import run_tool, specs_for
+    from app.services.tools import run_tool_loop
 
     tool_names = _tool_names(agent_cfg)
-    specs = specs_for(tool_names)
     query = next(
         (m.get("content", "") for m in reversed(messages)
          if m.get("role") == "user" and isinstance(m.get("content"), str)),
@@ -326,36 +329,12 @@ async def _chat_with_tools(
     execution = (agent_cfg.config or {}).get("execution", {})
     timeout_s = execution.get("timeout")
     max_rounds = min(int(execution.get("max_retries") or 5), 10)
-    if specs:
-        payload["tools"] = specs
-        payload["tool_choice"] = "auto"
 
     async with get_session_factory()() as session:
-        for _round in range(max_rounds):
-            try:
-                result, _p, _k, _m = await asyncio.wait_for(
-                    gateway.chat(session, payload), timeout=timeout_s or None
-                )
-            except asyncio.TimeoutError:
-                raise TimeoutError(f"agent timed out after {timeout_s}s")
-            choice = (result.get("choices") or [{}])[0]
-            msg = choice.get("message", {})
-            calls = msg.get("tool_calls") or []
-            if not specs or not calls:
-                return result
-            # append assistant tool-call message + each tool result, then re-call
-            messages.append({"role": "assistant", "content": msg.get("content") or "", "tool_calls": calls})
-            for tc in calls:
-                fn = tc.get("function", {})
-                import json as _json
-                try:
-                    args = _json.loads(fn.get("arguments") or "{}")
-                except Exception:
-                    args = {}
-                out = await run_tool(fn.get("name", ""), args)
-                messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": out})
-            payload["tools"] = specs  # keep tools offered so model can chain
-        return result
+        return await run_tool_loop(
+            gateway, session, payload, tool_names,
+            max_rounds=max_rounds, call_timeout=timeout_s,
+        )
 
 
 async def run_agent(
