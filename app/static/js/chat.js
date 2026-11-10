@@ -136,24 +136,6 @@ function richBlock(lang,code){
   const txt=code.trim();
   try{
     const j=JSON.parse(txt);
-    if(lang==='nova-response'&&j&&typeof j==='object'&&j.response_type){
-      // Prefer the full Nova component registry; never show a valid envelope
-      // as a raw code block when this legacy Markdown path is used.
-      if(window.NovaRender&&NovaRender.ResponseRenderer){
-        const host=document.createElement('div');
-        NovaRender.ResponseRenderer.renderEnvelope({envelope:j,prose:j.content||''},host,{});
-        return host.innerHTML;
-      }
-      // Safe minimal fallback for deployments where the component engine
-      // failed to load: preserve readable content and component summaries.
-      const body=esc(j.content||'');
-      const cards=(j.components||[]).map(comp=>{
-        const d=comp.data||{};
-        const message=esc(d.message||d.text||d.title||JSON.stringify(d));
-        return '<div class="ui-card ui-card-pad" style="margin:10px 0"><b>'+esc(comp.type||'Component')+'</b><div>'+message+'</div></div>';
-      }).join('');
-      return (body?'<p>'+body+'</p>':'')+cards;
-    }
     const items=Array.isArray(j)?j:(j.items||j.cards||null);
     if(lang==='carousel'&&items){
       const cards=items.map((it,i)=>`
@@ -182,8 +164,6 @@ function richBlock(lang,code){
   return null;
 }
 function md(src){
-  // Normalize line-wrapped protocol tags before either Markdown parser sees them.
-  src=String(src||'').replace(/```nova[ \t]*\r?\n[ \t]*-response\b/gi,'```nova-response');
   // Rich path: marked + DOMPurify when CDN loaded; custom fallback otherwise.
   if(window.marked&&window.DOMPurify){
     try{
@@ -191,7 +171,7 @@ function md(src){
         window.hljs.getLanguage(l)?window.hljs.highlight(c,{language:l}).value:window.hljs.highlightAuto(c).value});
         marked.__hl=true;}
       const rich=[];
-      let pre=src.replace(/```([\w-]*)\n?([\s\S]*?)```/g,(m,lang,code)=>{
+      let pre=src.replace(/```(\w*)\n?([\s\S]*?)```/g,(m,lang,code)=>{
         const r=richBlock(lang,code);
         if(r){rich.push(r);return ` ${rich.length-1} `;}
         return m;
@@ -203,7 +183,7 @@ function md(src){
   }
   let html=esc(src);
   // fenced blocks: rich renderers first, else code
-  html=html.replace(/```([\w-]*)\n?([\s\S]*?)```/g,(m,lang,code)=>{
+  html=html.replace(/```(\w*)\n?([\s\S]*?)```/g,(m,lang,code)=>{
     const rich=richBlock(lang,code);
     if(rich)return rich;
     return `<div class="codeblock"><div class="codehead"><span>${lang||'code'}</span><button class="copy-code">copy</button></div><pre><code>${code.trimEnd()}</code></pre></div>`;
@@ -269,23 +249,7 @@ function renderChat(){
   const c=state.current;
   $('#chatName').textContent=c.name;
   if(!c.msgs.length){inner.appendChild(heroEl());return;}
-  for(const m of c.msgs){
-    try{
-      inner.appendChild(msgEl(m));
-    }catch(renderError){
-      // Keep the transcript usable even if one message has invalid metadata
-      // or a renderer throws while constructing its DOM.
-      console.error('[Nova] message row failed to render',renderError,m);
-      const row=document.createElement('div');
-      row.className='msg-row row-ai';
-      const col=document.createElement('div');
-      col.className='msg-col';
-      const bubble=document.createElement('div');
-      bubble.className='bubble';
-      bubble.textContent=String(m.text||'Unable to render this message.');
-      col.append(bubble);row.append(col);inner.append(row);
-    }
-  }
+  for(const m of c.msgs)inner.appendChild(msgEl(m));
   scrollBottom(false);
 }
 function heroEl(){
@@ -362,18 +326,7 @@ function msgEl(m){
   const bubble=row.querySelector('.bubble');
   // Use the Nova Render Engine when available; fall back to legacy md().
   if(window.NovaRender&&NovaRender.ResponseRenderer){
-    try{
-      NovaRender.ResponseRenderer.renderMessage(m,bubble,{showActions:true});
-    }catch(renderError){
-      // A component renderer must never prevent the conversation itself
-      // from appearing. Fall back to safe legacy Markdown for this message.
-      console.error('[Nova] structured renderer failed; using Markdown fallback',renderError);
-      bubble.innerHTML=md(m.text||'');
-      const fallback=document.createElement('div');
-      fallback.className='render-fallback-note';
-      fallback.textContent='Rich rendering unavailable for this response.';
-      bubble.append(fallback);
-    }
+    NovaRender.ResponseRenderer.renderMessage(m,bubble,{showActions:true});
     if(m.person)appendPersonCard(bubble,m.person);
     // Wire Nova action events to existing chat handlers.
     bubble.addEventListener('nova:action',e=>{
