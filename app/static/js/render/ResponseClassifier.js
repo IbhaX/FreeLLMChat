@@ -35,7 +35,8 @@
 
   function parseEnvelopeJson(inner, match) {
     try {
-      const cleaned = inner.trim().replace(/^-response\\s*/i, "");\n      const obj = JSON.parse(cleaned);
+      const cleaned = inner.trim().replace(/^-response\s*/i, "");
+      const obj = JSON.parse(cleaned);
       if (!obj || typeof obj !== "object" || !obj.response_type) return null;
       return { envelope: obj, match };
     } catch (_) {
