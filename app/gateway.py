@@ -89,11 +89,45 @@ class Gateway:
                     select(ModelCache).where(ModelCache.provider_id == p.id)
                 )
             ).scalar_one_or_none()
-            if cache and now - self._aware(cache.fetched_at) < ttl and cache.models:
-                out[p.name] = (p, list(cache.models))
-            else:
-                out[p.name] = (p, list(p.default_models or []))
+            if cache and now - self._aware(cache.fetched_at) < ttl:
+                out[p.name] = (p, list(cache.models or p.default_models or []))
+                continue
+            models = await self._discover_models(session, p)
+            out[p.name] = (p, models or list(p.default_models or []))
         return out
+
+    _NON_CHAT_SUBSTRINGS = (
+        "embed", "whisper", "tts", "moderation", "image", "audio",
+        "dall", "stable-diffusion", "rerank", "transcribe", "vision-",
+    )
+
+    async def _discover_models(
+        self, session: AsyncSession, provider: Provider
+    ) -> list[str] | None:
+        """Fetch the provider's live model list via /models using any enabled key.
+
+        Returns None when no key is configured (caller falls back to seed
+        default_models) or discovery fails."""
+        key = (
+            await session.execute(
+                select(ApiKey).where(
+                    ApiKey.provider_id == provider.id, ApiKey.enabled.is_(True)
+                )
+            )
+        ).scalars().first()
+        if key is None:
+            return None
+        try:
+            raw = decrypt_key(key.encrypted_key)
+        except Exception:
+            return None
+        models = await self.refresh_models(session, provider, raw)
+        if not models:
+            return None
+        return [
+            m for m in models
+            if not any(s in m.lower() for s in self._NON_CHAT_SUBSTRINGS)
+        ]
 
     async def refresh_models(
         self, session: AsyncSession, provider: Provider, api_key: str

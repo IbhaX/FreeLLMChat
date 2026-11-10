@@ -14,8 +14,9 @@ providers:
     auth_style: bearer
     default_env_key: GEMINI_API_KEY
     default_models:
-      - gemini-3.8-flash
-      - gemini-3.5-flash-lite
+      - gemini-2.5-flash
+      - gemini-2.5-flash-lite
+      - gemini-2.0-flash
     limits: {}
     daily_reset_tz: America/Los_Angeles
     requires_card: false
@@ -23,11 +24,8 @@ providers:
     rotation_strategy: least_used
     auto_route_tags: [fast, general, coding]
     docs_url: https://ai.google.dev/gemini-api/docs/models
-    notes: >
-      Use current stable model IDs. Free-tier quotas are model- and project-specific;
-      verify the AI Studio quota page. Gemini 2.5 models are legacy for new projects
-      and Google recommends newer model families.
-    verified_on: "2026-11-08"
+    notes: Free tier via AI Studio; models auto-discovered via /models.
+    verified_on: "2026-11-09"
 
   - name: groq
     display_name: GroqCloud
@@ -38,22 +36,16 @@ providers:
     default_models:
       - openai/gpt-oss-120b
       - openai/gpt-oss-20b
-      - qwen/qwen3.8-27b
-    limits:
-      rpm: 30
-      rpd: 1000
-      tpm: 8000
-      tpd: 200000
+      - llama-3.3-70b-versatile
+      - qwen/qwen3-32b
+    limits: {}
     requires_card: false
     commercial_ok: false
     rotation_strategy: least_used
     auto_route_tags: [fast, coding, general]
     docs_url: https://console.groq.com/docs/rate-limits
-    notes: >
-      Base free-plan limits shown for GPT-OSS models; actual limits are model- and
-      organization-specific. Read rate-limit headers and do not apply these figures
-      blindly to every model. Confirm commercial terms before production use.
-    verified_on: "2026-11-08"
+    notes: Free plan; per-model caps. Models auto-discovered.
+    verified_on: "2026-11-09"
 
   - name: openrouter
     display_name: OpenRouter (dynamic free-model routing)
@@ -66,20 +58,14 @@ providers:
       X-Title: FreeLLM Gateway
     default_models:
       - openrouter/free
-    limits:
-      rpm: 20
-      rpd: 50
+    limits: {}
     requires_card: false
     commercial_ok: false
     rotation_strategy: round_robin
     auto_route_tags: [general, coding, fast]
     docs_url: https://openrouter.ai/docs/api-reference/limits
-    notes: >
-      Prefer openrouter/free instead of pinning model IDs because the free catalog
-      changes frequently. Free model variants are generally limited to 20 RPM and
-      50 requests/day; the daily limit increases to 1,000 after at least $10 in
-      purchased credits. Provider/model terms still apply; verify commercial rights.
-    verified_on: "2026-11-08"
+    notes: openrouter/free is a meta-router across the changing free catalog.
+    verified_on: "2026-11-09"
 
   - name: cloudflare
     display_name: Cloudflare Workers AI
@@ -89,24 +75,18 @@ providers:
     default_env_key: CLOUDFLARE_API_TOKEN
     account_id_env: CLOUDFLARE_ACCOUNT_ID
     default_models:
-      - "@cf/deepseek-ai/deepseek-v4.1-flash-1017"
-      - "@cf/zai-org/glm-5.3"
-      - "@cf/google/gemma-4-26b-a4b-it"
-      - "@cf/qwen/qwen3.8-27b"
-    limits:
-      daily_neurons: 10000
+      - "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+      - "@cf/qwen/qwen2.5-coder-32b-instruct"
+      - "@cf/google/gemma-3-12b-it"
+    limits: {}
     daily_reset_tz: UTC
     requires_card: false
     commercial_ok: true
     rotation_strategy: least_used
     auto_route_tags: [fast, coding, general]
     docs_url: https://developers.cloudflare.com/workers-ai/models/
-    notes: >
-      Free Workers allocation is 10,000 Neurons/day, resetting at 00:00 UTC.
-      Cloudflare announced removals for several older models effective November
-      20, 2026; these defaults use the announced replacement families. Check the
-      live catalog and per-model billing requirements before use.
-    verified_on: "2026-11-08"
+    notes: Free 10K Neurons/day. Models auto-discovered.
+    verified_on: "2026-11-09"
 
   - name: cohere
     display_name: Cohere (trial/evaluation)
@@ -117,17 +97,416 @@ providers:
     default_models:
       - command-a-03-2025
       - command-r7b-12-2024
-      - north-mini-code
-    limits:
-      rpm: 20
-      monthly_calls: 1000
+    limits: {}
     requires_card: false
     commercial_ok: false
     rotation_strategy: least_used
     auto_route_tags: [coding, general]
     docs_url: https://docs.cohere.com/v2/docs/rate-limits
+    notes: Free trial 1,000 calls/month. Models auto-discovered.
+    verified_on: "2026-11-09"
+
+  - name: mistral
+    display_name: Mistral AI (La Plateforme)
+    adapter: openai_compat
+    base_url: https://api.mistral.ai/v1
+    auth_style: bearer
+    default_env_key: MISTRAL_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: false
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding, fast]
+    docs_url: https://docs.mistral.ai
+    notes: Free Experiment tier — rate-limited access to all models.
+    verified_on: "2026-11-09"
+
+  - name: nvidia
+    display_name: NVIDIA NIM
+    adapter: openai_compat
+    base_url: https://integrate.api.nvidia.com/v1
+    auth_style: bearer
+    default_env_key: NVIDIA_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding, fast]
+    docs_url: https://build.nvidia.com
+    notes: Free dev access ~40 RPM, 70+ models.
+    verified_on: "2026-11-09"
+
+  - name: cerebras
+    display_name: Cerebras Inference
+    adapter: openai_compat
+    base_url: https://api.cerebras.ai/v1
+    auth_style: bearer
+    default_env_key: CEREBRAS_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: true
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [fast, coding]
+    docs_url: https://inference-docs.cerebras.ai
+    notes: Free tier with generous rate limits (card on file).
+    verified_on: "2026-11-09"
+
+  - name: sambanova
+    display_name: SambaNova Cloud
+    adapter: openai_compat
+    base_url: https://api.sambanova.ai/v1
+    auth_style: bearer
+    default_env_key: SAMBANOVA_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: false
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding]
+    docs_url: https://docs.sambanova.ai
+    notes: $5 free credits on signup.
+    verified_on: "2026-11-09"
+
+  - name: deepseek
+    display_name: DeepSeek
+    adapter: openai_compat
+    base_url: https://api.deepseek.com/v1
+    auth_style: bearer
+    default_env_key: DEEPSEEK_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [coding, general]
+    docs_url: https://api-docs.deepseek.com
+    notes: 5M free tokens on signup.
+    verified_on: "2026-11-09"
+
+  - name: huggingface
+    display_name: HuggingFace Inference Providers
+    adapter: openai_compat
+    base_url: https://router.huggingface.co/v1
+    auth_style: bearer
+    default_env_key: HF_TOKEN
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: false
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://huggingface.co/docs/api-inference
+    notes: Free inference tier via HF router (per-model provider routing).
+    verified_on: "2026-11-09"
+
+  - name: siliconflow
+    display_name: SiliconFlow
+    adapter: openai_compat
+    base_url: https://api.siliconflow.cn/v1
+    auth_style: bearer
+    default_env_key: SILICONFLOW_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding]
+    docs_url: https://docs.siliconflow.cn
+    notes: Free $0 models + signup credits.
+    verified_on: "2026-11-09"
+
+  - name: modelscope
+    display_name: ModelScope (Alibaba)
+    adapter: openai_compat
+    base_url: https://api-inference.modelscope.cn/v1
+    auth_style: bearer
+    default_env_key: MODELSCOPE_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: false
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding]
+    docs_url: https://modelscope.cn/docs
+    notes: Free API-inference tier.
+    verified_on: "2026-11-09"
+
+  - name: novita
+    display_name: Novita AI
+    adapter: openai_compat
+    base_url: https://api.novita.ai/v3/openai
+    auth_style: bearer
+    default_env_key: NOVITA_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://novita.ai/docs
+    notes: Trial credits on signup.
+    verified_on: "2026-11-09"
+
+  - name: nebius
+    display_name: Nebius AI Studio
+    adapter: openai_compat
+    base_url: https://api.studio.nebius.com/v1
+    auth_style: bearer
+    default_env_key: NEBIUS_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding]
+    docs_url: https://studio.nebius.com
+    notes: Trial credits on signup.
+    verified_on: "2026-11-09"
+
+  - name: deepinfra
+    display_name: DeepInfra
+    adapter: openai_compat
+    base_url: https://api.deepinfra.com/v1/openai
+    auth_style: bearer
+    default_env_key: DEEPINFRA_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding]
+    docs_url: https://deepinfra.com/docs
+    notes: Free signup credits.
+    verified_on: "2026-11-09"
+
+  - name: hyperbolic
+    display_name: Hyperbolic
+    adapter: openai_compat
+    base_url: https://api.hyperbolic.xyz/v1
+    auth_style: bearer
+    default_env_key: HYPERBOLIC_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://docs.hyperbolic.xyz
+    notes: Trial credits on signup.
+    verified_on: "2026-11-09"
+
+  - name: fireworks
+    display_name: Fireworks AI
+    adapter: openai_compat
+    base_url: https://api.fireworks.ai/inference/v1
+    auth_style: bearer
+    default_env_key: FIREWORKS_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [fast, coding]
+    docs_url: https://docs.fireworks.ai
+    notes: Free starter credits.
+    verified_on: "2026-11-09"
+
+  - name: requesty
+    display_name: Requesty Router
+    adapter: openai_compat
+    base_url: https://router.requesty.ai/v1
+    auth_style: bearer
+    default_env_key: REQUESTY_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: false
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding]
+    docs_url: https://docs.requesty.ai
+    notes: Free tier ~200 requests/day across 300+ models.
+    verified_on: "2026-11-09"
+
+  - name: inception
+    display_name: Inception Labs (Mercury)
+    adapter: openai_compat
+    base_url: https://api.inceptionlabs.ai/v1
+    auth_style: bearer
+    default_env_key: INCEPTION_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [fast, coding]
+    docs_url: https://docs.inceptionlabs.ai
+    notes: 10M free tokens on signup; diffusion-LLM speed.
+    verified_on: "2026-11-09"
+
+  - name: nous-research
+    display_name: Nous Research
+    adapter: openai_compat
+    base_url: https://inference-api.nousresearch.com/v1
+    auth_style: bearer
+    default_env_key: NOUS_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: false
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://portal.nousresearch.com
+    notes: Free tier 50 RPM / 500K TPM.
+    verified_on: "2026-11-09"
+
+  - name: typhoon
+    display_name: Typhoon (SCB 10X)
+    adapter: openai_compat
+    base_url: https://api.opentyphoon.ai/v1
+    auth_style: bearer
+    default_env_key: TYPHOON_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://opentyphoon.ai
+    notes: Free API key, 5 req/s.
+    verified_on: "2026-11-09"
+
+  - name: zhipu
+    display_name: Zhipu / Z.AI (GLM)
+    adapter: openai_compat
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    auth_style: bearer
+    default_env_key: ZHIPU_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding]
+    docs_url: https://docs.z.ai
+    notes: Free GLM-Flash models.
+    verified_on: "2026-11-09"
+
+  - name: stepfun
+    display_name: StepFun
+    adapter: openai_compat
+    base_url: https://api.stepfun.com/v1
+    auth_style: bearer
+    default_env_key: STEPFUN_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://platform.stepfun.com
+    notes: Free Step models.
+    verified_on: "2026-11-09"
+
+  - name: baichuan
+    display_name: Baichuan AI
+    adapter: openai_compat
+    base_url: https://api.baichuan-ai.com/v1
+    auth_style: bearer
+    default_env_key: BAICHUAN_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://platform.baichuan-ai.com
+    notes: Free Baichuan models.
+    verified_on: "2026-11-09"
+
+  - name: hunyuan
+    display_name: Tencent Hunyuan
+    adapter: openai_compat
+    base_url: https://api.hunyuan.cloud.tencent.com/v1
+    auth_style: bearer
+    default_env_key: HUNYUAN_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://cloud.tencent.com/product/hunyuan
+    notes: Free Hunyuan Lite models.
+    verified_on: "2026-11-09"
+
+  - name: doubao
+    display_name: Doubao / Volcengine Ark
+    adapter: openai_compat
+    base_url: https://ark.cn-beijing.volces.com/api/v3
+    auth_style: bearer
+    default_env_key: ARK_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://www.volcengine.com/docs/82379
+    notes: Free Doubao models; uses Ark endpoint IDs via /models.
+    verified_on: "2026-11-09"
+
+  - name: friendliai
+    display_name: FriendliAI Serverless
+    adapter: openai_compat
+    base_url: https://api.friendli.ai/serverless/v1
+    auth_style: bearer
+    default_env_key: FRIENDLI_TOKEN
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://docs.friendli.ai
+    notes: Free serverless tier.
+    verified_on: "2026-11-09"
+
+  - name: sealion
+    display_name: SEA-LION (AI Singapore)
+    adapter: openai_compat
+    base_url: https://api.sea-lion.ai/v1
+    auth_style: bearer
+    default_env_key: SEALION_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general]
+    docs_url: https://sea-lion.ai
+    notes: Permanently free at 10 RPM.
+    verified_on: "2026-11-09"
+
+  - name: ollama-cloud
+    display_name: Ollama Cloud
+    adapter: openai_compat
+    base_url: https://ollama.com/v1
+    auth_style: bearer
+    default_env_key: OLLAMA_API_KEY
+    default_models: []
+    limits: {}
+    requires_card: false
+    commercial_ok: true
+    rotation_strategy: least_used
+    auto_route_tags: [general, coding]
+    docs_url: https://docs.ollama.com/cloud
+    notes: Free cloud-hosted open models.
+    verified_on: "2026-11-09"
 
 fallback:
-  auto: [groq, gemini, openrouter, cloudflare, cohere]
-  "auto:coding": [groq, gemini, openrouter, cloudflare, cohere]
-  "auto:fast": [groq, cloudflare, gemini, openrouter, cohere]
+  auto: [groq, mistral, nvidia, gemini, cerebras, sambanova, openrouter, deepseek, huggingface, siliconflow, requesty, modelscope, zhipu, inception, nous-research, deepinfra, hyperbolic, fireworks, nebius, cloudflare, typhoon, stepfun, baichuan, hunyuan, doubao, novita, friendliai, sealion, ollama-cloud, cohere]
+  "auto:coding": [groq, mistral, nvidia, cerebras, deepseek, gemini, sambanova, siliconflow, openrouter, zhipu, inception, requesty, cloudflare, cohere]
+  "auto:fast": [groq, nvidia, cerebras, inception, gemini, cloudflare, mistral, fireworks, openrouter, cohere]
