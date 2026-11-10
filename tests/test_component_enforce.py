@@ -58,6 +58,17 @@ def test_trivial():
     assert not is_trivial(MD)
 
 
+def test_prose_only_fallback_still_has_a_meaningful_component():
+    prose = ("A well-designed service separates the API layer from background workers. "
+             "This improves reliability by isolating slow tasks and gives operators "
+             "independent scaling controls.")
+    fence = markdown_to_envelope(prose)
+    env = extract_envelope(fence)
+    assert env["content"] == prose
+    assert env["components"][0]["type"] == "callout"
+    assert env["components"][0]["data"]["title"] == "Key takeaway"
+
+
 def test_markdown_fallback_maps_structures():
     fence = markdown_to_envelope(MD)
     env = extract_envelope(fence)
