@@ -224,12 +224,35 @@
     return out.join("\n");
   }
 
+  // Decode the handful of entities `esc()` produces, for text that came from
+  // already-escaped markdown (fallback renderer). Never applied to DOM text.
+  function decodeEntities(s) {
+    return String(s == null ? "" : s)
+      .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ");
+  }
+
+  // HTML tables arrive as markup; flatten to text. Cell boundaries become " | ".
+  // Remove HTML tags only; entity decoding is done ONCE by the caller
+  // (parseMdTable) so "&amp;" never becomes "&amp;amp;".
+  function stripTags(s) {
+    return String(s == null ? "" : s)
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<\/(td|th)>/gi, " | ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   // Parse normalized markdown-table text into {columns, rows} (rows = arrays).
   function parseMdTable(md) {
     const lines = normalizeTableRows(md).trim().split("\n").filter((l) => l.trim());
     if (lines.length < 2 || !isSepLine(lines[1])) return null;
+    // Split on unescaped pipes; \| inside a cell is a literal pipe.
     const parse = (l) =>
-      l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      l.trim().replace(/^\||\|$/g, "").split(/(?<!\\)\|/).map((c) =>
+        decodeEntities(stripTags(c.replace(/\\\|/g, "\u0001")).replace(/\u0001/g, "|").trim())
+      );
     const head = parse(lines[0]);
     const body = lines
       .slice(2)
@@ -249,6 +272,8 @@
   }
 
   Object.assign(Nova, {
+    stripTags,
+    decodeEntities,
     el,
     esc,
     sanitize,
