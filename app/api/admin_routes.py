@@ -569,6 +569,7 @@ async def recent_requests(
             "status": r.status, "http_status": r.http_status,
             "latency_ms": r.latency_ms, "tokens_in": r.tokens_in,
             "tokens_out": r.tokens_out, "error": r.error,
+            "request_input": r.request_input, "response_text": r.response_text,
         }
         for r in rows
     ]

@@ -77,7 +77,9 @@ async function refresh(){
     ['Tokens in',r.tokens_in??'—'],['Tokens out',r.tokens_out??'—'],
     ['Total tokens',(r.tokens_in||0)+(r.tokens_out||0)||'—'],
     ['Error',r.error||'—'],
-  ].map(([k,v])=>`<div class="rq-item"><span class="rq-k">${k}</span><span class="rq-v">${esc(String(v??'—'))}</span></div>`).join('');
+  ].map(([k,v])=>`<div class="rq-item"><span class="rq-k">${k}</span><span class="rq-v">${esc(String(v??'—'))}</span></div>`).join('')
+    + (r.request_input?`<div class="rq-item"><span class="rq-k">Input</span><span class="rq-v"><pre style="white-space:pre-wrap;margin:0;font-size:12px;max-height:200px;overflow:auto">${esc(r.request_input)}</pre></span></div>`:'')
+    + (r.response_text?`<div class="rq-item"><span class="rq-k">Response</span><span class="rq-v"><pre style="white-space:pre-wrap;margin:0;font-size:12px;max-height:300px;overflow:auto">${esc(r.response_text)}</pre></span></div>`:'');
   document.querySelector('#reqs tbody').innerHTML=reqs.map((r,i)=>`<tr class="rq-row" data-i="${i}">
     <td class="tx-3">${fmt.time(r.ts)}</td><td class="mono t-xs">${esc(r.model_requested)}</td>
     <td>${esc(r.model_served||'—')}</td><td>${esc(r.provider||'—')}</td>

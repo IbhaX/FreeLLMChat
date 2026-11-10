@@ -61,6 +61,17 @@ async def init_db() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Lightweight column migration for existing DBs (create_all won't
+        # alter existing tables).
+        cols = {
+            r[1]
+            for r in (await conn.exec_driver_sql(
+                "PRAGMA table_info(request_logs)")).fetchall()
+        }
+        for col in ("request_input", "response_text"):
+            if col not in cols:
+                await conn.exec_driver_sql(
+                    f"ALTER TABLE request_logs ADD COLUMN {col} TEXT")
 
 
 async def close_db() -> None:
