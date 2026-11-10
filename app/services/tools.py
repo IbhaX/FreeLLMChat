@@ -434,6 +434,17 @@ async def run_tool_loop(
                 "tool_call_id": tc.get("id", ""),
                 "content": out,
             })
+    # Rounds exhausted while the model still wanted tools: without a final
+    # answer the last completion has no text and the UI shows "(empty
+    # response)". Give it one closing call with tools removed so it must
+    # answer with whatever it gathered.
+    body.pop("tools", None)
+    body.pop("tool_choice", None)
+    emit({"event": "note", "text": "research limit reached — answering with what's gathered"})
+    result, _p, _k, _m = await asyncio.wait_for(
+        gateway.chat(session, body, on_event=_routing_once(emit)),
+        timeout=call_timeout,
+    )
     return result
 
 
