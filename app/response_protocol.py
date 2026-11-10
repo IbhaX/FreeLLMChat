@@ -507,6 +507,22 @@ _COMPONENT_GUIDE: dict[str, dict[str, Any]] = {
 }
 
 
+# Response-depth rules: how thorough answers should be by default. Kept as a
+# named constant so the wording can be tweaked in one place. The component
+# contract below references these rules; both are injected into the system
+# prompt of every structured chat call.
+RESPONSE_DEPTH = """## RESPONSE DEPTH (apply to every answer)
+
+1. Default to comprehensive answers. Open with a 1-2 sentence direct answer, then expand with the substance.
+2. Cover, where relevant: definitions, how/why it works, key differences, concrete examples with numbers, real-world applications, common misconceptions, edge cases, and a short summary or next steps.
+3. Tables are a supplement, not the whole answer. When comparing entities, give every compared entity its own column (e.g. Aspect | Tesla | Gauss) and follow the table with prose explaining the takeaways.
+4. For technical or design questions (e.g. "Design a rate limiter"), give the reasoning, trade-offs, alternatives considered, a code example, and failure modes.
+5. Match depth to the question: short factual questions get a focused but complete answer (3-6 paragraphs or equivalent); complex ones get a structured long-form answer with headings.
+6. Never pad with filler or repeat yourself. Detail means more useful information, not more words.
+7. If the user explicitly asks for brevity, follow that instead.
+"""
+
+
 def structured_system_prompt() -> str:
     """Mandatory structured-response system prompt.
 
@@ -533,12 +549,15 @@ def structured_system_prompt() -> str:
     catalog = "\n".join(lines)
     return f"""## COMPONENT OUTPUT CONTRACT (MANDATORY — overrides any other style instruction)
 
+{RESPONSE_DEPTH}
+DEPTH + COMPONENTS — depth rules above apply WITHIN the envelope: `content` is markdown and carries the direct answer plus the explanatory substance (headings and paragraphs allowed for long-form answers); components carry the structured data (tables, stats, timelines) that supports it. Tables must be followed by prose takeaways in `content` or as a closing component, never stand alone as the whole answer.
+
 RULE 0 — When to use components: EVERY reply containing more than one fact, comparison, list, number, step, or source MUST be a structured component response. Plain prose is allowed ONLY for one-line greetings or single-sentence answers. A multi-fact answer with zero components is a FAILURE.
 
 OUTPUT FORMAT — wrap the WHOLE reply in one fenced block tagged `{RESPONSE_FENCE_TAG}` containing ONE JSON envelope (never bare markdown, never multiple fences):
 
 ```{RESPONSE_FENCE_TAG}
-{{"response_type": "<most specific type>", "content": "<1 short lead sentence>", "components": [{{"type": "<type>", "data": {{...}}}}], "sources": [{{"title": "...", "url": "..."}}], "suggested_prompts": ["..."]}}
+{{"response_type": "<most specific type>", "content": "<direct-answer lead: 1-2 sentences, longer overview allowed for complex questions>", "components": [{{"type": "<type>", "data": {{...}}}}], "sources": [{{"title": "...", "url": "..."}}], "suggested_prompts": ["..."]}}
 ```
 
 SELECTION GUIDE — pick by content, not habit:
@@ -551,7 +570,7 @@ SELECTION GUIDE — pick by content, not habit:
 - code -> `code`; formulas -> `math`; raw JSON -> `json_viewer`
 - status labels -> `badge`; spec sheets -> `keyvalue`; quote -> `quote`
 
-COMPOSITION RULE — a good answer = 1 short lead sentence (`content`) + 2 to 4 DIFFERENT component types + a sources block. Never repeat the same component type back-to-back when another fits. Do not invent data; if a value is unknown, omit the component.
+COMPOSITION RULE — a good answer = the `content` lead (direct answer first, then substance as needed) + 2 to 4 DIFFERENT component types + prose explanation where the depth rules call for it + a sources block. Never repeat the same component type back-to-back when another fits. Do not invent data; if a value is unknown, omit the component.
 
 FEW-SHOT EXAMPLES
 
