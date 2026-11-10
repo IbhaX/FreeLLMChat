@@ -115,13 +115,13 @@ async def agent_chat(
     if body.stream:
         return StreamingResponse(
             stream_agent(gw, a, body.message, body.history,
-                         custom_instructions=custom),
+                         custom_instructions=custom, conversation_id=body.conversation_id),
             media_type="text/event-stream",
             headers={"X-Agent-Name": a.name, "Cache-Control": "no-cache"},
         )
     try:
         result = await run_agent(gw, a, body.message, body.history,
-                                 custom_instructions=custom)
+                                 custom_instructions=custom, conversation_id=body.conversation_id)
     except Exception as e:
         return JSONResponse(
             status_code=502,
