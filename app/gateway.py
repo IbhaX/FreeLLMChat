@@ -85,6 +85,15 @@ class GatewayExhausted(Exception):
         self.last_status = last_status
 
 
+class KeyUndecryptable(Exception):
+    """A stored API key cannot be decrypted with the current ENCRYPTION_KEY.
+
+    Local config problem, not a provider failure: the key is skipped
+    without cooldown and remembered for the process lifetime so later
+    requests fail fast instead of retrying it on every call.
+    """
+
+
 class Gateway:
     def __init__(self) -> None:
         s = get_settings()
@@ -92,6 +101,7 @@ class Gateway:
         self.rotator = Rotator()
         self.quota = self.rotator.quota
         self.breaker = CircuitBreaker()
+        self._undecryptable: set[int] = set()
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(
                 s.request_timeout_s, connect=s.connect_timeout_s
@@ -100,6 +110,21 @@ class Gateway:
 
     async def close(self) -> None:
         await self.client.aclose()
+
+    def _decrypt_key(self, key: ApiKey) -> str:
+        if key.id in self._undecryptable:
+            raise KeyUndecryptable(
+                f"{key.provider.name if key.provider else 'key'} · {key.label or key.id} "
+                "can't be decrypted — ENCRYPTION_KEY changed; re-enter it in Admin → Keys"
+            )
+        try:
+            return decrypt_key(key.encrypted_key)
+        except ValueError:
+            self._undecryptable.add(key.id)
+            raise KeyUndecryptable(
+                f"{key.provider.name if key.provider else 'key'} · {key.label or key.id} "
+                "can't be decrypted — ENCRYPTION_KEY changed; re-enter it in Admin → Keys"
+            ) from None
 
     async def _mark_model_dead(
         self, session: AsyncSession, provider: Provider, model: str
@@ -458,9 +483,11 @@ class Gateway:
                 if key is None:
                     break
                 tried.add(key.id)
+                if key.id in self._undecryptable:
+                    continue
                 attempts += 1
                 try:
-                    raw = decrypt_key(key.encrypted_key)
+                    raw = self._decrypt_key(key)
                     adapter = build_adapter(provider)
                     try:
                         result = await asyncio.wait_for(
@@ -472,6 +499,12 @@ class Gateway:
                             f"no response in {self.settings.attempt_timeout_s:.0f}s",
                             retryable=True,
                         )
+                except KeyUndecryptable as e:
+                    # Local key problem: skip without cooldown, surface a
+                    # clear message instead of a provider error.
+                    last_err = ProviderError(str(e), retryable=False)
+                    emit({"event": "fail", "text": str(e)[:120]})
+                    continue
                 except ProviderError as e:
                     last_err = e
                     if e.status_code == 404 and "model" in e.message.lower():
@@ -562,8 +595,15 @@ class Gateway:
                     if key is None:
                         break
                     tried.add(key.id)
+                    if key.id in self._undecryptable:
+                        continue
                     attempts += 1
-                    raw = decrypt_key(key.encrypted_key)
+                    try:
+                        raw = self._decrypt_key(key)
+                    except KeyUndecryptable as e:
+                        last_err = ProviderError(str(e), retryable=False)
+                        emit({"event": "retry", "text": str(e)[:120]})
+                        continue
                     adapter = build_adapter(provider)
                     stream = adapter.chat_stream(self.client, raw, body)
                     try:

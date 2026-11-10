@@ -52,15 +52,24 @@ async function refresh(){
 
   $('#kp').innerHTML=providers.map(p=>`<option>${esc(p.name)}</option>`).join('');
 
+  const badDecrypt=keys.filter(k=>k.decryptable===false);
+  const warn=$('#keyDecryptWarn');
+  warn.style.display=badDecrypt.length?'block':'none';
+  warn.textContent=badDecrypt.length
+    ?`⚠️ ${badDecrypt.length} stored API key(s) can't be decrypted — the ENCRYPTION_KEY changed. `
+      +'Delete and re-enter them below, or restore the previous ENCRYPTION_KEY.'
+    :'';
   document.querySelector('#keys tbody').innerHTML=keys.map(k=>{
+    const undecryptable=k.decryptable===false;
     const status=!k.enabled?['bad','disabled']:
+      undecryptable?['bad','undecryptable']:
       (k.cooldown_until&&new Date(k.cooldown_until)>new Date())?['warn','cooldown']:['ok','healthy'];
     return `<tr>
       <td>${esc(k.provider)}</td><td>${esc(k.label)}</td><td class="mono">…${esc(k.key_hint)}</td>
       <td>${k.quota_group?`<span class="pill info">${esc(k.quota_group)}</span>`:'—'}</td>
       <td>${k.daily_request_count}</td><td>${k.daily_token_count}</td>
       <td class="tx-3">${k.cooldown_until?fmt.time(k.cooldown_until):'—'}</td>
-      <td><span class="pill ${status[0]}">${status[1]}</span></td>
+      <td><span class="pill ${status[0]}"${undecryptable?' title="ENCRYPTION_KEY changed — delete and re-enter this key"':''}>${status[1]}</span></td>
       <td><div class="actions">
         <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="testKey(${k.id})">test</button>
         <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="resetKey(${k.id})">reset</button>
