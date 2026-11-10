@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_gateway_key
@@ -211,6 +212,34 @@ async def chat_completions(
                 )
             else:
                 payload["messages"].insert(0, {"role": "system", "content": mem})
+    except Exception:
+        pass
+    # User-defined custom instructions (Settings page) — appended to the
+    # system prompt so they shape every chat answer. Never replaces the
+    # component contract; failure to load leaves chat unaffected.
+    try:
+        from app.models import Setting
+
+        row = (
+            await session.execute(
+                select(Setting).where(Setting.key == "custom_instructions")
+            )
+        ).scalar_one_or_none()
+        custom = (row.value if row else "").strip()
+        if custom and isinstance(payload.get("messages"), list):
+            sys_idx = next(
+                (i for i, m in enumerate(payload["messages"])
+                 if m.get("role") == "system"),
+                None,
+            )
+            block = f"## USER CUSTOM INSTRUCTIONS\n{custom}"
+            if sys_idx is not None:
+                payload["messages"][sys_idx] = dict(
+                    payload["messages"][sys_idx],
+                    content=f"{payload['messages'][sys_idx].get('content', '')}\n\n{block}",
+                )
+            else:
+                payload["messages"].insert(0, {"role": "system", "content": block})
     except Exception:
         pass
     # One-line reminder as the LAST message for weaker models (the full

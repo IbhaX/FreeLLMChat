@@ -92,6 +92,17 @@
     </div>
 
     <div class="ui-card ui-card-pad set-card">
+      <h3>Custom instructions</h3>
+      <div class="desc">Appended to the system prompt of every chat answer. Stored on the server; the component format contract always stays in effect.</div>
+      <textarea id="ciInput" class="ui-input" rows="5" placeholder="e.g. Always answer in bullet points. I am a backend engineer — skip beginner explanations. Prefer Python examples." style="width:100%;resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+        <button class="ui-btn ui-btn-primary" onclick="saveCI()">Save instructions</button>
+        <button class="ui-btn ui-btn-ghost" onclick="clearCI()">Clear</button>
+        <span id="ciStatus" class="t-xs tx-3"></span>
+      </div>
+    </div>
+
+    <div class="ui-card ui-card-pad set-card">
       <h3>Long-term memory</h3>
       <div class="desc">Facts injected into every chat and agent. Stored on the server.</div>
       <div style="display:flex;gap:8px;margin-bottom:12px">

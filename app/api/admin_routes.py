@@ -572,6 +572,40 @@ async def delete_conversation(
         await session.commit()
 
 
+# ---------- settings (custom instructions) ----------
+
+CUSTOM_INSTRUCTIONS_KEY = "custom_instructions"
+
+
+@router.get("/settings/custom-instructions")
+async def get_custom_instructions(session: AsyncSession = Depends(get_session)) -> dict:
+    from app.models import Setting
+
+    row = (
+        await session.execute(select(Setting).where(Setting.key == CUSTOM_INSTRUCTIONS_KEY))
+    ).scalar_one_or_none()
+    return {"custom_instructions": row.value if row else ""}
+
+
+@router.put("/settings/custom-instructions")
+async def put_custom_instructions(
+    body: dict, session: AsyncSession = Depends(get_session)
+) -> dict:
+    from app.models import Setting
+
+    value = str(body.get("custom_instructions") or "")[:8000]
+    row = (
+        await session.execute(select(Setting).where(Setting.key == CUSTOM_INSTRUCTIONS_KEY))
+    ).scalar_one_or_none()
+    if row is None:
+        row = Setting(key=CUSTOM_INSTRUCTIONS_KEY, value=value)
+        session.add(row)
+    else:
+        row.value = value
+    await session.commit()
+    return {"custom_instructions": row.value}
+
+
 # ---------- memories ----------
 
 @router.get("/memories")
