@@ -72,6 +72,15 @@ async def init_db() -> None:
             if col not in cols:
                 await conn.exec_driver_sql(
                     f"ALTER TABLE request_logs ADD COLUMN {col} TEXT")
+        # create_all adds new tables but never alters existing ones.
+        rr_cols = {
+            r[1]
+            for r in (await conn.exec_driver_sql(
+                "PRAGMA table_info(research_runs)")).fetchall()
+        }
+        if rr_cols and "conversation_id" not in rr_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE research_runs ADD COLUMN conversation_id VARCHAR(64)")
 
 
 async def close_db() -> None:

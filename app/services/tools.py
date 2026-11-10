@@ -373,6 +373,7 @@ async def run_tool_loop(
     emit: Callable[[dict[str, Any]], None] | None = None,
     max_rounds: int = 5,
     call_timeout: float | None = None,
+    tool_output_hook: Callable[[str, str], None] | None = None,
 ) -> dict[str, Any]:
     """Server-side tool-call loop over the built-in tools.
 
@@ -412,6 +413,13 @@ async def run_tool_loop(
         except asyncio.TimeoutError:
             raise TimeoutError(f"agent timed out after {call_timeout}s")
         msg = ((result.get("choices") or [{}])[0]).get("message", {})
+        if not isinstance(msg.get("content"), str):
+            # Some providers return content as a list of parts (text chunks);
+            # flatten before it is sent back as the assistant message.
+            parts = msg.get("content")
+            msg["content"] = "".join(
+                str(p.get("text") or "") for p in parts if isinstance(p, dict)
+            ) if isinstance(parts, list) else (parts or "")
         calls = msg.get("tool_calls") or []
         if not calls:
             calls = _parse_text_tool_calls(msg.get("content") or "")
@@ -436,6 +444,11 @@ async def run_tool_loop(
                 args = {}
             emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
             out = await run_tool(name, args)
+            if tool_output_hook is not None:
+                try:
+                    tool_output_hook(name, out)
+                except Exception:
+                    pass
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.get("id", ""),

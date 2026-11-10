@@ -124,6 +124,25 @@ class RequestLog(Base):
     response_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class ResearchRun(Base):
+    """A saved deep-research run (question, plan, findings, answer)."""
+
+    __tablename__ = "research_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    question: Mapped[str] = mapped_column(Text)
+    conversation_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    depth: Mapped[str] = mapped_column(String(16), default="standard")
+    answer: Mapped[str] = mapped_column(Text, default="")
+    plan: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    findings: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    sources: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    meta: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
 class StickyRoute(Base):
     """Last working (provider, model) per requested model/alias — tried
     first so routing doesn't sweep every provider on each request."""
