@@ -253,6 +253,7 @@ class AgentOut(BaseModel):
 class AgentChatRequest(BaseModel):
     message: Any  # str or OpenAI-style content parts list (text + image_url)
     history: list[dict[str, Any]] = Field(default_factory=list)
+    conversation_id: Optional[str] = Field(default=None, max_length=128)
     stream: bool = False
 
 
