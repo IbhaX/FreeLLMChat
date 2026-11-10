@@ -8,12 +8,19 @@ const GRADS={'groq':'#f55036','gemini':'#4e8ef7','openrouter':'#8b5cf6','mistral
 function pgrad(n){return GRADS[n]||'linear-gradient(135deg,var(--accent),var(--accent-2))'}
 
 let ADD_PROV='';
+function provHint(){
+  const p=PROVIDERS.find(x=>x.name===$('#keyProvider').value);
+  const el=$('#keyProvHint');
+  if(el)el.textContent=p?p.base_url+' · '+(p.default_models||[]).length+' models · '+p.rotation_strategy.replace('_',' '):'';
+}
 function renderProviderSelect(){
   const sel=$('#keyProvider');
   const cur=ADD_PROV||(SEL!=='*'?SEL:'')||sel.value||'';
   sel.innerHTML=PROVIDERS.map(p=>`<option value="${esc(p.name)}" ${p.name===cur?'selected':''}>${esc(p.display_name||p.name)} (${esc(p.name)})</option>`).join('');
   if(!sel.value&&PROVIDERS.length)sel.value=PROVIDERS[0].name;
   ADD_PROV=sel.value;
+  sel.onchange=()=>{ADD_PROV=sel.value;provHint();};
+  provHint();
 }
 async function refresh(){
   [PROVIDERS,KEYS]=await Promise.all([adminApi('/admin/providers'),adminApi('/admin/keys')]);
