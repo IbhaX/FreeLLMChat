@@ -139,6 +139,8 @@ class StatsOut(BaseModel):
     keys_healthy: int
     keys_in_cooldown: int
     per_provider: list[dict[str, Any]]
+    token_budget: list[dict[str, Any]] = []
+    est_tokens_total: int | None = None
 
 
 # ---------- OpenAI-compatible ----------

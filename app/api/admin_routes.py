@@ -509,6 +509,30 @@ async def stats(session: AsyncSession = Depends(get_session)) -> StatsOut:
         )
     ).all()
 
+    # Estimated daily token budget per provider: display-only `est_tpd`
+    # figures (from providers.yaml) multiplied by enabled key count, against
+    # actual 24h usage from request logs.
+    used_by_provider = {r[0]: r[2] for r in per_provider}
+    prov_rows = (
+        (await session.execute(
+            select(Provider).options(selectinload(Provider.keys))
+            .where(Provider.enabled == True)))  # noqa: E712
+        .scalars().all()
+    )
+    token_budget, est_total = [], 0
+    for p in prov_rows:
+        est = (p.limits or {}).get("est_tpd")
+        n_keys = sum(1 for k in p.keys if k.enabled)
+        est_daily = est * n_keys if est else None
+        est_total += est_daily or 0
+        token_budget.append({
+            "provider": p.name,
+            "est_daily": est_daily,
+            "keys": n_keys,
+            "used_24h": used_by_provider.get(p.name, 0),
+        })
+    token_budget.sort(key=lambda r: -(r["est_daily"] or 0))
+
     return StatsOut(
         total_requests=total,
         requests_24h=n24,
@@ -523,6 +547,8 @@ async def stats(session: AsyncSession = Depends(get_session)) -> StatsOut:
             {"provider": r[0], "requests": r[1], "tokens": r[2]}
             for r in per_provider
         ],
+        token_budget=token_budget,
+        est_tokens_total=est_total or None,
     )
 
 
