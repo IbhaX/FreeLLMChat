@@ -51,3 +51,11 @@ def test_routing_failure_falls_back_safely():
     r = asyncio.run(orch.route_message(Boom(), None, {"messages": [], "builtin_tools": True},
                                        last_user="hi", history=[]))
     assert r in ("tools", "research")
+
+
+def test_research_agent_registry_covers_pipeline():
+    from app.services.research import RESEARCH_AGENTS
+
+    assert set(RESEARCH_AGENTS) == {"planner", "researcher", "gap_checker", "verifier", "synthesizer"}
+    for spec in RESEARCH_AGENTS.values():
+        assert spec["role"] and (spec["prompt"].endswith("_PROMPT") or spec["prompt"].endswith("_SYSTEM"))

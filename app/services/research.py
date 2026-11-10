@@ -67,6 +67,22 @@ def classify_depth(question: str, history: list[dict[str, Any]] | None = None) -
     return "quick"
 
 
+# ---------------------------------------------------------------- agents
+
+# The research pipeline is a team of named sub-agents. Each owns one stage,
+# has its own prompt constant, and can be pinned to its own model via
+# ``RESEARCH_<NAME>_MODEL`` env vars (see :func:`_stage_model`). The
+# orchestrator (``app.services.orchestrator``) decides WHEN this team runs;
+# the renderer agent (``app.services.renderer``) owns final presentation.
+RESEARCH_AGENTS: dict[str, dict[str, str]] = {
+    "planner": {"role": "break the question into sub-questions", "prompt": "PLANNER_PROMPT"},
+    "researcher": {"role": "fan-out web research per sub-question (parallel)", "prompt": "RESEARCHER_SYSTEM"},
+    "gap_checker": {"role": "find coverage gaps, trigger follow-up rounds", "prompt": "GAP_CHECKER_PROMPT"},
+    "verifier": {"role": "fact-check claims against cited sources", "prompt": "VERIFIER_PROMPT"},
+    "synthesizer": {"role": "write the final answer from verified findings", "prompt": "SYNTHESIZER_PROMPT"},
+}
+
+
 # ---------------------------------------------------------------- prompts
 
 PLANNER_PROMPT = f"""You are the research planner. Today's date is {TODAY}.
@@ -411,7 +427,8 @@ async def _plan(
     msgs = [{"role": "user", "content":
              f"Conversation history (for resolving follow-ups):\n{hist}\n{prior_txt}\n"
              f"Question: {question}\n\nPlan for depth='{depth}' with at most {n} sub-questions."}]
-    emit({"event": "stage", "text": "Planning research…", "stage": "plan"})
+    emit({"event": "stage", "text": "Planning research…", "stage": "plan",
+          "agent": "planner"})
     text = await _call(gateway, session, model, msgs, system=PLANNER_PROMPT,
                        json_mode=True)
     plan = _extract_json(text) or {}
@@ -443,7 +460,7 @@ async def _research_one(
         f"Investigate and return the JSON described in your instructions."
     )
     emit({"event": "stage", "text": f"Researching {qid}: {question[:80]}",
-          "stage": "research", "sub": qid})
+          "stage": "research", "sub": qid, "agent": "researcher"})
     seen_urls: list[str] = []
 
     def harvest(name: str, output: str) -> None:
@@ -582,7 +599,8 @@ async def _gap_check(
     """Returns gaps needing a follow-up round, or None when complete."""
     if state.depth != "deep" or state.rounds >= 2:
         return None
-    emit({"event": "stage", "text": "Checking coverage…", "stage": "gap"})
+    emit({"event": "stage", "text": "Checking coverage…", "stage": "gap",
+          "agent": "gap_checker"})
     plan_txt = json.dumps(state.plan.get("sub_questions") or [], ensure_ascii=False)[:6000]
     res_txt = json.dumps([
         {"sub_question": f.sub_question, "claim": f.claim[:300],
@@ -609,7 +627,8 @@ async def _verify(
     """Separate verifier: sees only claims + sources, never the draft."""
     if not state.findings:
         return
-    emit({"event": "stage", "text": "Verifying claims against sources…", "stage": "verify"})
+    emit({"event": "stage", "text": "Verifying claims against sources…", "stage": "verify",
+          "agent": "verifier"})
     src_list = [
         {"id": s.id, "title": s.title, "url": s.url, "publisher": s.publisher,
          "date": s.date, "type": s.type, "quality": s.quality}
@@ -645,7 +664,8 @@ async def _synthesize(
     gateway: Any, session: Any, model: str, question: str,
     state: ResearchState, emit: Emit,
 ) -> str:
-    emit({"event": "stage", "text": "Writing the answer…", "stage": "synthesize"})
+    emit({"event": "stage", "text": "Writing the answer…", "stage": "synthesize",
+          "agent": "synthesizer"})
     src_list = sorted(state.sources.values(), key=lambda s: -s.score)
     findings = [
         {"claim": f.claim, "evidence": f.evidence, "source_id": f.source_id,
@@ -894,6 +914,17 @@ async def run_research(
     emit({"event": "research_done", "text": f"Research complete: {meta['findings']} findings, "
           f"{meta['sources']} sources in {meta['seconds']}s", **meta})
     state.answer += _sources_block(state)
+    # Renderer agent owns final presentation: convert the markdown report
+    # into a component envelope when possible; keep markdown on failure.
+    try:
+        from app.services.renderer import convert_to_components
+
+        rendered = await convert_to_components(gateway, session, state.answer)
+        if rendered:
+            state.answer = rendered
+            emit({"event": "note", "text": "answer rendered as components"})
+    except Exception:
+        pass
     state.meta = meta
     return state
 
