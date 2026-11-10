@@ -65,7 +65,13 @@
       // A nova-response envelope still streaming looks like raw JSON to
       // markdown — show a soft placeholder until the fence closes and the
       // real component render can take over.
-      if (/```nova-response/.test(text)) {
+      // Models sometimes tag the envelope fence 'json' — treat it as an
+      // envelope-in-progress only when the inner text carries the
+      // envelope's response_type key (real json code still renders as code).
+      const isEnv =
+        /```nova-response/.test(text) ||
+        (/```json/.test(text) && /"response_type"\s*:/.test(text));
+      if (isEnv) {
         const env = Nova.ResponseClassifier.tryParseEnvelope(text);
         if (!env) {
           const html = '<div class="nova-composing">✨ Composing response…</div>' + CURSOR;
