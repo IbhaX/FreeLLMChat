@@ -24,9 +24,10 @@
   // inner JSON. Allows trailing/leading whitespace and other markdown around.
   // Accept canonical and line-wrapped tags (```nova\\n-response).
   const NOVA_TAG = "nova(?:[ \\t]*\\r?\\n[ \\t]*)?-response";
-  const FENCE_RE = /```nova(?:[ \t]*\r?\n[ \t]*)?-response[ \t]*\r?\n([\s\S]*?)\r?\n```/i;
-  // Unterminated fence: model forgot the closing ``` (or stream was cut).
-  const FENCE_OPEN_RE = /```nova(?:[ \t]*\r?\n[ \t]*)?-response[ \t]*\r?\n([\s\S]*)$/i;
+  // Accept canonical, line-broken, and malformed split tags. In the
+  // malformed form "-response" may be the first line inside the code fence.
+  const FENCE_RE = /```(?:nova-response|nova[ \\t]*\\r?\\n[ \\t]*-response|nova)[ \\t]*\\r?\\n([\\s\\S]*?)\\r?\\n```/i;
+  const FENCE_OPEN_RE = /```(?:nova-response|nova[ \\t]*\\r?\\n[ \\t]*-response|nova)[ \\t]*\\r?\\n([\\s\\S]*)$/i;
   // Some models wrap the envelope in a plain ```json fence — accept it
   // when the inner JSON is a valid envelope (has response_type).
   const JSON_FENCE_RE = /```json\s*\n([\s\S]*?)\n```/;
@@ -34,7 +35,7 @@
 
   function parseEnvelopeJson(inner, match) {
     try {
-      const obj = JSON.parse(inner.trim());
+      const cleaned = inner.trim().replace(/^-response\\s*/i, "");\n      const obj = JSON.parse(cleaned);
       if (!obj || typeof obj !== "object" || !obj.response_type) return null;
       return { envelope: obj, match };
     } catch (_) {
@@ -350,7 +351,7 @@
     const end = inner.search(/\n```/);
     if (end >= 0) inner = inner.slice(0, end);
     else inner = inner.replace(/\n`{1,2}$/, "");
-    const parsed = parsePartialJson(inner);
+    inner = inner.replace(/^\\s*-response\\s*/i, "");\n    const parsed = parsePartialJson(inner);
     const isJsonFence = m[1] === "json";
     if (!parsed || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
       if (isJsonFence && inner.trim()) return null;
