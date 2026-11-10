@@ -136,6 +136,31 @@ async function importCsv(input){
   input.value='';refresh();
 }
 
+async function testAllKeys(){
+  const btn=$('#testKeysBtn'),st=$('#keysTestStatus'),box=$('#keysTestResults');
+  btn.disabled=true;st.textContent='testing keys against providers…';st.style.color='var(--text-3)';box.innerHTML='';
+  try{
+    const r=await adminApi('/admin/keys/test-all',{method:'POST'});
+    st.textContent=`${r.ok}/${r.tested} usable · ${r.failed} failed`;
+    st.style.color=r.failed?'var(--warn)':'var(--success)';
+    box.innerHTML='<div class="ui-table-scroll"><table class="ui-table"><thead><tr>'
+      +'<th>Status</th><th>Provider</th><th>Key</th><th>Model</th><th>Latency</th><th>Error</th>'
+      +'</tr></thead><tbody>'
+      +r.results.map(k=>'<tr>'
+        +`<td><span class="pill ${k.ok?'ok':'bad'}">${k.ok?'usable':'failed'}</span></td>`
+        +`<td>${esc(k.provider)}${k.enabled?'':' <span class="tx-3 t-xs">(disabled)</span>'}</td>`
+        +`<td class="mono t-xs">${esc(k.label||'—')} ${esc(k.key_hint?'…'+k.key_hint:'')}</td>`
+        +`<td class="t-xs tx-3">${esc(k.model_used||'—')}</td>`
+        +`<td class="t-xs">${k.latency_ms!=null?Math.round(k.latency_ms)+'ms':'—'}</td>`
+        +`<td class="t-xs" style="color:var(--error);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(k.error||'')}">${esc(k.error||'')}</td>`
+        +'</tr>').join('')
+      +'</tbody></table></div>';
+    if(!r.results.length)box.innerHTML='<div class="t-sm tx-3">No keys stored yet.</div>';
+  }catch(e){
+    st.textContent='Test failed: '+e.message;st.style.color='var(--error)';
+  }finally{btn.disabled=false;}
+}
+
 async function toggleK(id,en){await adminApi(`/admin/keys/${id}`,{method:'PATCH',body:JSON.stringify({enabled:en})});refresh();}
 async function resetKey(id){await adminApi(`/admin/keys/${id}/reset-cooldown`,{method:'POST'});toast('Cooldown reset','ok');refresh();}
 async function delKey(id){if(!confirm('Delete this key?'))return;await adminApi(`/admin/keys/${id}`,{method:'DELETE'});refresh();}
