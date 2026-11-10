@@ -336,6 +336,7 @@ class Gateway:
     async def chat(
         self, session: AsyncSession, payload: dict[str, Any],
         on_event: Any | None = None,
+        attempt_timeout: float | None = None,
     ) -> tuple[dict[str, Any], Provider, ApiKey, str]:
         """Non-streaming request with key rotation + provider failover.
 
@@ -375,6 +376,7 @@ class Gateway:
             inner = await self._chat_sweep(
                 session, request_id, t0, payload, by_provider,
                 emit if sweep == 0 else (lambda ev: None), tried, attempts,
+                attempt_timeout=attempt_timeout,
             )
             if inner is not None:
                 await self._sticky_set(session, requested, inner[1], inner[3])
@@ -465,11 +467,13 @@ class Gateway:
 
     async def _chat_sweep(
         self, session, request_id, t0, payload, by_provider, emit, tried, attempts,
+        attempt_timeout: float | None = None,
     ):
         """One pass over providers. Returns (result, provider, key, model)
         on success or None when the sweep is exhausted. Stashes
         _last_err/_last_attempts for the caller."""
         last_err: ProviderError | None = None
+        attempt_timeout = attempt_timeout or self.settings.attempt_timeout_s
         for provider, model in by_provider:
             if not self.breaker.allow(provider.name):
                 continue
@@ -492,11 +496,11 @@ class Gateway:
                     try:
                         result = await asyncio.wait_for(
                             adapter.chat_completion(self.client, raw, body),
-                            timeout=self.settings.attempt_timeout_s,
+                            timeout=attempt_timeout,
                         )
                     except asyncio.TimeoutError:
                         raise ProviderError(
-                            f"no response in {self.settings.attempt_timeout_s:.0f}s",
+                            f"no response in {attempt_timeout:.0f}s",
                             retryable=True,
                         )
                 except KeyUndecryptable as e:

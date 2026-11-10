@@ -792,12 +792,21 @@ async def run_research(
     if state.depth == "quick":
         # One search + short answer via the plain tool loop.
         from app.services.tools import run_tool_loop
+        seen: list[str] = []
+
+        def harvest(_name: str, output: str) -> None:
+            for u in _URL_RE.findall(output or ""):
+                u = u.rstrip(".,;:)")
+                if u not in seen:
+                    seen.append(u)
+
         payload = {"model": model, "messages": messages, "stream": False}
         res = await run_tool_loop(gateway, session, payload,
                                   ["web_search", "http_get"], emit=emit,
-                                  max_rounds=3, call_timeout=120)
+                                  max_rounds=3, call_timeout=120,
+                                  tool_output_hook=harvest)
         state.answer = text_of(((res.get("choices") or [{}])[0]).get("message", {}).get("content"))
-        state.meta = {"depth": "quick", "sources": 0, "findings": 0, "rounds": 0}
+        state.meta = {"depth": "quick", "sources": len(seen), "findings": 0, "rounds": 0}
         emit({"event": "research_done", "text": "Quick answer ready",
               **state.meta})
         return state

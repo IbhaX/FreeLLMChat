@@ -400,6 +400,10 @@ async def run_tool_loop(
     messages = body["messages"]
 
     result: dict[str, Any] = {}
+    # Tool-loop rounds (researchers, agents) need longer per-attempt patience
+    # than plain chat: free models routinely take 30-90s once tools are in
+    # play. Scale the per-attempt timeout with the round budget, capped at 2m.
+    attempt_timeout = min(call_timeout, 120.0) if call_timeout else None
     for _round in range(max_rounds):
         # Re-routing happens every round; after the first, keep only
         # failover/retry events so the activity list doesn't repeat
@@ -407,7 +411,8 @@ async def run_tool_loop(
         round_emit = emit if _round == 0 else _routing_once(emit)
         try:
             result, _p, _k, _m = await asyncio.wait_for(
-                gateway.chat(session, body, on_event=round_emit),
+                gateway.chat(session, body, on_event=round_emit,
+                             attempt_timeout=attempt_timeout),
                 timeout=call_timeout,
             )
         except asyncio.TimeoutError:
@@ -461,10 +466,63 @@ async def run_tool_loop(
     body.pop("tools", None)
     body.pop("tool_choice", None)
     emit({"event": "note", "text": "research limit reached — answering with what's gathered"})
-    result, _p, _k, _m = await asyncio.wait_for(
-        gateway.chat(session, body, on_event=_routing_once(emit)),
-        timeout=call_timeout,
-    )
+    # Weak models often respond to the closing call by emitting MORE
+    # <tool_call> text blobs (which sanitize would strip to "") instead of
+    # answering. Execute those blobs like real calls so the model gets
+    # actual results/errors, then ask again — bounded to 3 attempts.
+    messages.append({
+        "role": "user",
+        "content": "Tool limit reached. Do NOT call any tools — reply with "
+                   "the final answer now, using only what you already gathered.",
+    })
+    result: dict[str, Any] = {}
+    for _try in range(3):
+        result, _p, _k, _m = await asyncio.wait_for(
+            gateway.chat(session, body, on_event=_routing_once(emit),
+                         attempt_timeout=attempt_timeout),
+            timeout=call_timeout,
+        )
+        msg = ((result.get("choices") or [{}])[0]).get("message", {})
+        content = msg.get("content")
+        text = content if isinstance(content, str) else ""
+        calls = _parse_text_tool_calls(text) if "<tool_call>" in text else []
+        if not calls:
+            if text.strip():
+                break
+            messages.append({
+                "role": "user",
+                "content": "Stop calling tools. Reply with the final answer text only.",
+            })
+            continue
+        # Blobs instead of an answer: run them and feed results back.
+        messages.append({
+            "role": "assistant",
+            "content": _strip_text_tool_calls(text),
+            "tool_calls": calls,
+        })
+        for tc in calls:
+            fn = tc.get("function", {})
+            name = fn.get("name", "")
+            try:
+                args = _json.loads(fn.get("arguments") or "{}")
+            except Exception:
+                args = {}
+            emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
+            out = await run_tool(name, args)
+            if tool_output_hook is not None:
+                try:
+                    tool_output_hook(name, out)
+                except Exception:
+                    pass
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id", ""),
+                "content": out,
+            })
+        messages.append({
+            "role": "user",
+            "content": "Now reply with the final answer only — no tool calls.",
+        })
     return _sanitize_result(result)
 
 
