@@ -259,8 +259,7 @@ def _build_agent(agent_cfg: AgentConfig, gateway: Gateway, custom: str = "") -> 
     from pydantic_ai.output import PromptedOutput
     model = GatewayModel(agent_cfg.model, gateway)
     system_prompt = _compile_system_prompt(agent_cfg)
-    if agent_cfg.output_format == "structured":
-        system_prompt = structured_system_prompt() + "\n\n" + system_prompt
+    system_prompt = structured_system_prompt() + "\n\n" + system_prompt
     if custom:
         from app.services.settings_store import custom_instructions_block
         system_prompt += "\n\n" + custom_instructions_block(custom)
@@ -269,11 +268,9 @@ def _build_agent(agent_cfg: AgentConfig, gateway: Gateway, custom: str = "") -> 
         settings["temperature"] = agent_cfg.temperature
     if agent_cfg.max_tokens is not None:
         settings["max_tokens"] = agent_cfg.max_tokens
-    if agent_cfg.output_format == "structured":
-        settings["response_format"] = {"type": "json_object"}
-        return Agent(model, output_type=PromptedOutput(ResponseEnvelope),
-                     system_prompt=system_prompt, model_settings=settings)
-    return Agent(model, system_prompt=system_prompt, model_settings=settings or None)
+    settings["response_format"] = {"type": "json_object"}
+    return Agent(model, output_type=PromptedOutput(ResponseEnvelope),
+                 system_prompt=system_prompt, model_settings=settings)
 
 
 def _tool_names(agent_cfg: AgentConfig) -> list[str]:
@@ -313,8 +310,7 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
 def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]], custom: str = "") -> list[dict[str, Any]]:
     msgs = _bounded_history(history) + [{"role": "user", "content": message}]
     system_prompt = _compile_system_prompt(agent_cfg)
-    if agent_cfg.output_format == "structured":
-        system_prompt = structured_system_prompt() + "\n\n" + system_prompt
+    system_prompt = structured_system_prompt() + "\n\n" + system_prompt
     if custom:
         from app.services.settings_store import custom_instructions_block
         system_prompt += "\n\n" + custom_instructions_block(custom)
@@ -378,7 +374,7 @@ async def run_agent(
 
 
 def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
-    if agent_cfg.output_format != "structured" or not content:
+    if not content:
         return content
     candidates = [content.strip()]
     import re
@@ -404,7 +400,7 @@ async def stream_agent(
         mem = await get_memory_text(str(message), conversation_id)
         if mem:
             openai_messages.insert(1, {"role": "system", "content": mem})
-    if agent_cfg.output_format == "structured":
+    if True:  # All agent replies use the rich response envelope, regardless of legacy output_format.
         try:
             text = await run_agent(gateway, agent_cfg, message, history,
                                    custom_instructions=custom_instructions, conversation_id=conversation_id)
