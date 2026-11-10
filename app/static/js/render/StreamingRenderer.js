@@ -178,7 +178,7 @@
         Nova.ResponseRenderer.renderComponent(comp, tmp);
         slot.final = true;
         slot.skel = null;
-      } else if (liveRender(comp, tmp)) {
+      } else if (!final && liveRender(comp, tmp)) {
         slot.skel = null;
       } else {
         const shape = SKEL_SHAPE[comp.type] || "card";
@@ -189,11 +189,19 @@
       slot.node.replaceChildren(...tmp.childNodes);
     }
 
+    const ROWLESS = new Set(["table", "comparison", "keyvalue", "financial_summary", "heatmap"]);
+
     // Partial-data render for the in-progress component. Heavy/visual types
-    // (charts, media) wait for complete data and show a skeleton instead.
+    // (charts, media) and empty containers wait for real content and show a
+    // skeleton instead.
     function liveRender(comp, tmp) {
       const type = comp && comp.type;
       if (!type || !comp.data || typeof comp.data !== "object" || NO_LIVE.has(type)) return false;
+      const d = comp.data;
+      const empty =
+        (ROWLESS.has(type) && (!Array.isArray(d.rows) || !d.rows.length)) ||
+        (type === "stat_grid" ? (!Array.isArray(d.stats) || !d.stats.length) : type === "list" ? (!Array.isArray(d.items) || !d.items.length) : false);
+      if (empty) return false;
       const fn = Nova.ComponentRegistry.getComponent(type);
       if (!fn) return false;
       try {
@@ -232,10 +240,11 @@
         setSkeleton(content ? "block" : "intro");
         return;
       }
+      const arrDone = closed.has(comps);
       comps.forEach((c, i) => {
-        if (c && typeof c === "object") renderSlot(i, c, closed.has(c));
+        if (c && typeof c === "object") renderSlot(i, c, arrDone);
       });
-      if (!closed.has(comps)) {
+      if (!arrDone) {
         const last = comps[comps.length - 1];
         const lastDone = !last || closed.has(last);
         setSkeleton(lastDone ? "block" : null);
