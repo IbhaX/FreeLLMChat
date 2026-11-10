@@ -189,3 +189,39 @@ def test_keys_test_raw(monkeypatch):
         r404 = c.post("/admin/keys/test-raw", headers=ADMIN, json={
             "provider": "nope", "keys": ["x"]})
         assert r404.status_code == 404
+
+
+def test_wants_tools_classifier():
+    import pytest
+    from app.services.tools import wants_tools
+
+    class FakeGW:
+        def __init__(self, reply=None, boom=False):
+            self.reply, self.boom, self.calls = reply, boom, []
+
+        async def chat(self, session, payload, **kw):
+            self.calls.append(payload)
+            if self.boom:
+                raise RuntimeError("down")
+            return {"choices": [{"message": {"content": self.reply}}]}, None, None, "m"
+
+    async def run(reply, text):
+        gw = FakeGW(reply)
+        payload = {"model": "auto", "messages": [{"role": "user", "content": text}]}
+        return await wants_tools(gw, None, payload), gw
+
+    async def main():
+        assert (await run("NO", "hello how are you"))[0] is False
+        assert (await run("YES", "search the web for latest AI news"))[0] is True
+        assert (await run("yes", "what is 123*456?"))[0] is True
+        assert (await run("", "hi"))[0] is True
+        _, gw = await run("NO", "hi")
+        p = gw.calls[0]
+        assert p["max_tokens"] == 4 and p["temperature"] == 0 and p["stream"] is False
+        assert p["messages"][-1]["content"] == "hi"
+        assert "builtin_tools" not in p and "tools" not in p
+        boom = FakeGW(boom=True)
+        assert await wants_tools(boom, None, {"messages": [{"role": "user", "content": "hi"}]}) is True
+
+    import asyncio
+    asyncio.run(main())

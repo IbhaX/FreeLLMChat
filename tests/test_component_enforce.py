@@ -146,3 +146,33 @@ def test_stream_endpoint_replaces_markdown_with_components(monkeypatch):
         assert "<tool_call>" not in repl[0]["content"]
         assert r.text.rstrip().endswith("data: [DONE]")
         assert r.text.count("[DONE]") == 1
+
+
+def test_tool_loop_answer_is_replayed_in_deltas(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import app.services.tools as tools_mod
+    from app.api import openai_routes
+    from app.main import app
+
+    monkeypatch.setattr(openai_routes, "_REPLAY_DELAY_S", 0)
+
+    async def wants_tools(*a, **kw):
+        return True
+
+    async def run_tool_loop(gateway, session, payload, builtin, **kw):
+        return _res(ENV)
+
+    monkeypatch.setattr(tools_mod, "wants_tools", wants_tools, raising=False)
+    monkeypatch.setattr(tools_mod, "run_tool_loop", run_tool_loop)
+    with TestClient(app) as c:
+        r = c.post("/v1/chat/completions", json={
+            "model": "auto", "stream": True, "builtin_tools": True,
+            "messages": [{"role": "user", "content": "search the web for x"}],
+        })
+        events = [json.loads(l[6:]) for l in r.text.split("\n") if l.startswith("data: {")]
+        deltas = [ch["delta"].get("content") for e in events for ch in e.get("choices", [])
+                  if ch.get("delta", {}).get("content")]
+        assert len(deltas) > 1, r.text
+        assert "".join(deltas) == ENV
+        assert r.text.count("[DONE]") == 1

@@ -672,3 +672,48 @@ async def run_tool(name: str, args: dict[str, Any]) -> str:
         return f"tool arg error: {e}"
     except Exception as e:
         return f"tool error: {e}"
+
+
+_WANTS_TOOLS_SYSTEM = (
+    "Decide whether answering the user's latest message requires calling an "
+    "external tool (web search, fetching a URL, exact arithmetic, image/audio "
+    "generation). Answer with exactly one word: YES or NO. Greetings, small "
+    "talk, opinions, explanations from general knowledge, and follow-ups "
+    "answerable from the conversation are NO. Current facts, prices, news, "
+    "'search', explicit calculations, and media requests are YES."
+)
+
+
+async def wants_tools(gateway: Any, session: Any, payload: dict[str, Any]) -> bool:
+    """Model-based tool gate: one tiny classifier call decides whether the
+    latest user message genuinely needs tools. Fail-open (True) on any error
+    so a broken gate never disables tool use."""
+    msgs = payload.get("messages") or []
+    last = next((m for m in reversed(msgs) if m.get("role") == "user"), None)
+    if not last:
+        return True
+    text = last.get("content")
+    if isinstance(text, list):
+        text = " ".join(str(p.get("text", "")) for p in text if isinstance(p, dict))
+    text = (text or "").strip()[:2000]
+    if not text:
+        return True
+    probe = {
+        "model": payload.get("model") or "auto",
+        "stream": False,
+        "temperature": 0,
+        "max_tokens": 4,
+        "messages": [
+            {"role": "system", "content": _WANTS_TOOLS_SYSTEM},
+            {"role": "user", "content": text},
+        ],
+    }
+    try:
+        result, *_ = await gateway.chat(session, probe, attempt_timeout=25.0)
+    except Exception:
+        return True
+    out = ""
+    for c in result.get("choices") or []:
+        out += (c.get("message") or {}).get("content") or ""
+    out = out.strip().upper()
+    return not (out.startswith("NO") or out in {"N", "0", "FALSE"})

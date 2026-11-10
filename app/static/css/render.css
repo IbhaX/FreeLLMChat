@@ -499,3 +499,22 @@
   .nova-metric-value{font-size:24px}
 }
 .nova-composing{color:var(--text-3);font-size:13px;padding:10px 2px;animation:uiFade .3s ease}
+
+/* streaming skeletons (StreamingRenderer) */
+.nova-stream-comps{display:flex;flex-direction:column;gap:10px}
+.nova-stream-comps:empty{display:none}
+.nova-stream-slot>.nova-comp-slot{margin:0}
+.nova-skel-wrap:not(:empty){margin-top:10px}
+.nova-skel-box{display:flex;flex-direction:column;gap:8px;animation:uiFade .25s ease}
+.nova-skel-card{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;padding:12px 14px;border:1px solid var(--border-1);border-radius:10px;background:var(--surface-1)}
+.nova-skel-row{display:flex;gap:8px;align-items:center}
+.nova-skel-col{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+.nova-skel{border-radius:6px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:novaShimmer 1.3s ease-in-out infinite}
+.nova-skel-line{height:10px}
+.nova-skel-cell{height:26px;flex:1}
+.nova-skel-num{height:22px;width:70%}
+.nova-skel-media{height:160px;border-radius:10px}
+.nova-skel-avatar{width:56px;height:56px;border-radius:50%;flex:none}
+.nova-skel-chip{height:26px;width:110px;border-radius:999px}
+@keyframes novaShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.nova-skel{animation:none}}
