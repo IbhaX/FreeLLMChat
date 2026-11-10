@@ -210,3 +210,44 @@ def test_empty_content_envelope_is_valid():
     env = validate_envelope({"response_type": "general"})
     assert env.content == ""
     assert env.components == []
+
+
+# ---------- architecture / flowchart component protocol ----------
+
+def test_architecture_diagram_is_allowlisted_and_documented():
+    env = validate_envelope({
+        "response_type": "complex",
+        "content": "The system is split into layers.",
+        "components": [{
+            "type": "architecture_diagram",
+            "data": {
+                "title": "Agent architecture",
+                "layers": [
+                    {"title": "API Gateway", "subtitle": "Authentication"},
+                    {"title": "Runtime", "nodes": [{"title": "Memory"}, {"title": "Tools"}]},
+                ],
+            },
+        }],
+    })
+    assert env.components[0].type == ComponentType.ARCHITECTURE_DIAGRAM
+    descriptor = protocol_descriptor()
+    assert "architecture_diagram" in descriptor["component_types"]
+    assert descriptor["components"]["architecture_diagram"]["required"] == ["layers"]
+
+
+def test_flowchart_is_allowlisted_and_prompt_teaches_when_to_use_it():
+    env = validate_envelope({
+        "response_type": "complex",
+        "components": [{
+            "type": "flowchart",
+            "data": {
+                "nodes": [{"id": "start", "label": "Start", "kind": "start"}],
+                "edges": [],
+            },
+        }],
+    })
+    assert env.components[0].type == ComponentType.FLOWCHART
+    prompt = structured_system_prompt()
+    assert "architecture_diagram" in prompt
+    assert "flowchart" in prompt
+    assert "do not substitute a text/ASCII diagram" in prompt
