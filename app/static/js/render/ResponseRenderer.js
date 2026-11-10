@@ -19,9 +19,16 @@
     const fn = Nova.ComponentRegistry.getComponent(comp.type);
     const slot = el("div", { class: "nova-comp-slot" });
     if (!fn) {
-      slot.append(
-        el("div", { class: "nova-unsupported" }, `Unsupported component: ${esc(comp.type)}`)
-      );
+      // Unknown component type: never lose the content — render it as a
+      // readable generic card instead of an error note.
+      const card = el("div", { class: "nova-comp-card", style: "padding:10px 12px;border:1px solid var(--border-1);border-radius:10px;background:var(--bg-1)" });
+      card.append(el("div", { class: "t-xs tx-3", style: "margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em" }, `✦ ${esc(comp.type || "component")}`));
+      const data = comp.data;
+      const text = typeof data === "string" ? data
+        : data && typeof data === "object" && typeof data.text === "string" ? data.text
+        : JSON.stringify(data ?? {}, null, 2);
+      card.append(el("div", { style: "white-space:pre-wrap;font-size:13px" }, String(text).slice(0, 4000)));
+      slot.append(card);
       host.append(slot);
       return;
     }
