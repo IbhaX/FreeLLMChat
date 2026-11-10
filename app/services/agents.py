@@ -294,9 +294,11 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
     parts: list[str] = []
     try:
         async with get_session_factory()() as s:
-            rows = (await s.execute(select(Memory).order_by(Memory.id).limit(50))).scalars().all()
-        if rows:
-            parts.append("## Long-term Memory\n" + "\n".join(f"- {m.content}" for m in rows))
+            rows = (await s.execute(select(Memory).order_by(Memory.id.desc()).limit(100))).scalars().all()
+        ranked = sorted(rows, key=lambda m: (_memory_relevance(m.content, query), m.id), reverse=True)
+        selected = [m for m in ranked if _memory_relevance(m.content, query) > 0][:8]
+        if selected:
+            parts.append("## Relevant Long-term Memory\\n" + "\\n".join(f"- {m.content}" for m in selected))
     except Exception:
         pass
     try:
@@ -428,11 +430,14 @@ async def stream_agent(
         payload["temperature"] = agent_cfg.temperature
     if agent_cfg.max_tokens is not None:
         payload["max_tokens"] = agent_cfg.max_tokens
+    execution = (agent_cfg.config or {}).get("execution", {})
+    timeout_s = max(1.0, min(float(execution.get("timeout", 120)), 600.0))
     try:
-        async with get_session_factory()() as session:
-            stream, provider, key, model = await gateway.chat_stream(session, payload)
-            async for chunk in stream:
-                yield chunk
+        async with asyncio.timeout(timeout_s):
+            async with get_session_factory()() as session:
+                stream, provider, key, model = await gateway.chat_stream(session, payload)
+                async for chunk in stream:
+                    yield chunk
     except Exception as e:
         err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
         yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
