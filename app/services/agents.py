@@ -298,7 +298,7 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
         ranked = sorted(rows, key=lambda m: (_memory_relevance(m.content, query), m.id), reverse=True)
         selected = [m for m in ranked if _memory_relevance(m.content, query) > 0][:8]
         if selected:
-            parts.append("## Relevant Long-term Memory\\n" + "\\n".join(f"- {m.content}" for m in selected))
+            parts.append("## Relevant Long-term Memory\n" + "\n".join(f"- {m.content}" for m in selected))
     except Exception:
         pass
     try:
@@ -367,7 +367,7 @@ async def run_agent(
         content = (choice.get("message") or {}).get("content") or ""
         return _maybe_structured(agent_cfg, content)
     memory = await get_memory_text(str(message), conversation_id)
-    agent = _build_agent(agent_cfg, gateway, custom_instructions + ("\\n\\n" + memory if memory else ""))
+    agent = _build_agent(agent_cfg, gateway, custom_instructions + ("\n\n" + memory if memory else ""))
     result = await asyncio.wait_for(
         agent.run(message, message_history=_to_model_history(history)), timeout=timeout_s
     )
