@@ -471,7 +471,7 @@ def structured_system_prompt() -> str:
     )
     return f"""## Structured Response Protocol (MANDATORY)
 
-Always wrap your response in a `{RESPONSE_FENCE_TAG}` fenced block containing ONE JSON object — never bare text/markdown:
+Always wrap your response in a fenced block whose language tag is literally `{RESPONSE_FENCE_TAG}` (not `json`) containing ONE JSON object — never bare text/markdown:
 
 ```json
 {{"response_type": "<general|code|table|list|math|data_visualization|statistics|search_results|product_recommendations|business_recommendations|weather|financial|instructions|comparison|api_response|error|warning|success|file_attachment|image|video|audio|progress|interactive_question|complex>",
