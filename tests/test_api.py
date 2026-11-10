@@ -160,3 +160,32 @@ def test_keys_test_all_prunes_dead_model(monkeypatch):
         gemini_models = [m["id"] for m in models if m["id"].startswith("gemini/")]
         # The dead default model was pruned from the catalog.
         assert "gemini/gemini-3.6-flash" not in gemini_models
+
+
+def test_keys_test_raw(monkeypatch):
+    import app.api.admin_routes as ar
+
+    class FakeAdapter:
+        def __init__(self, provider):
+            self.provider = provider
+
+        async def chat_completion(self, client, api_key, payload):
+            if "bad" in api_key:
+                raise RuntimeError("401 invalid api key")
+            return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setattr(ar, "build_adapter", lambda provider: FakeAdapter(provider))
+    with TestClient(app) as c:
+        before = len(c.get("/admin/keys", headers=ADMIN).json())
+        r = c.post("/admin/keys/test-raw", headers=ADMIN, json={
+            "provider": "groq", "keys": ["gsk_good_key_0001", "gsk_bad_key_0002"]})
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["tested"] == 2 and data["ok"] == 1 and data["failed"] == 1
+        assert data["results"][0]["ok"] is True and data["results"][0]["model_used"]
+        assert data["results"][1]["ok"] is False and "401" in data["results"][1]["error"]
+        # nothing was persisted
+        assert len(c.get("/admin/keys", headers=ADMIN).json()) == before
+        r404 = c.post("/admin/keys/test-raw", headers=ADMIN, json={
+            "provider": "nope", "keys": ["x"]})
+        assert r404.status_code == 404

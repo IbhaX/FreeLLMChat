@@ -136,6 +136,35 @@ async function importCsv(input){
   input.value='';refresh();
 }
 
+async function testRawKeys(){
+  const raw=$('#keyArea').value.trim();
+  if(!raw){toast('Paste at least one key first','err');return;}
+  const provider=$('#keyProvider').value;
+  if(!provider){toast('Select a provider first','err');return;}
+  const keys=raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean).slice(0,50);
+  const btn=event.target,st=$('#addTestStatus'),box=$('#addTestResults');
+  btn.disabled=true;st.textContent=`testing ${keys.length} key${keys.length===1?'':'s'} against ${provider}…`;
+  st.style.color='var(--text-3)';box.innerHTML='';
+  try{
+    const r=await adminApi('/admin/keys/test-raw',{method:'POST',body:JSON.stringify({provider,keys})});
+    st.textContent=`${r.ok}/${r.tested} usable · ${r.failed} failed — only add the ones you want`;
+    st.style.color=r.failed?'var(--warn)':'var(--success)';
+    box.innerHTML='<div class="ui-table-scroll"><table class="ui-table"><thead><tr>'
+      +'<th>Status</th><th>Key</th><th>Model</th><th>Latency</th><th>Error</th>'
+      +'</tr></thead><tbody>'
+      +r.results.map(k=>'<tr>'
+        +`<td><span class="pill ${k.ok?'ok':'bad'}">${k.ok?'usable':'failed'}</span></td>`
+        +`<td class="mono t-xs">${esc(k.key_hint||'')}</td>`
+        +`<td class="t-xs tx-3">${esc(k.model_used||'—')}</td>`
+        +`<td class="t-xs">${k.latency_ms!=null?Math.round(k.latency_ms)+'ms':'—'}</td>`
+        +`<td class="t-xs" style="color:var(--error);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(k.error||'')}">${esc(k.error||'')}</td>`
+        +'</tr>').join('')
+      +'</tbody></table></div>';
+  }catch(e){
+    st.textContent='Test failed: '+e.message;st.style.color='var(--error)';
+  }finally{btn.disabled=false;}
+}
+
 async function testAllKeys(){
   const btn=$('#testKeysBtn'),st=$('#keysTestStatus'),box=$('#keysTestResults');
   btn.disabled=true;st.textContent='testing keys against providers…';st.style.color='var(--text-3)';box.innerHTML='';

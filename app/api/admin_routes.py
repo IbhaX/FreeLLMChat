@@ -24,6 +24,9 @@ from app.schemas import (
     KeyBulkTestItem,
     KeyBulkTestResult,
     KeyCreate,
+    RawKeyTestIn,
+    RawKeyTestItem,
+    RawKeyTestResult,
     KeyImportResult,
     KeyOut,
     KeyTestResult,
@@ -431,6 +434,62 @@ async def test_all_keys(
             await gateway._mark_model_dead(session, k.provider, r["model_used"])
     items = [KeyBulkTestItem(**r) for r in results]
     return KeyBulkTestResult(
+        tested=len(items),
+        ok=sum(1 for i in items if i.ok),
+        failed=sum(1 for i in items if not i.ok),
+        results=items,
+    )
+
+
+@router.post("/keys/test-raw", response_model=RawKeyTestResult)
+async def test_raw_keys(
+    body: RawKeyTestIn, request: Request, session: AsyncSession = Depends(get_session)
+) -> RawKeyTestResult:
+    """Ping unsaved keys against a provider before they are added (4 at a time)."""
+    provider = await _provider(session, body.provider)
+    if provider is None:
+        raise HTTPException(404, f"unknown provider '{body.provider}'")
+    model = (provider.default_models or [None])[0]
+    gateway = _gateway(request)
+    adapter = build_adapter(provider)
+    sem = asyncio.Semaphore(4)
+
+    async def ping(raw_key: str) -> dict:
+        hint = (raw_key[:4] + "…" + raw_key[-4:]) if len(raw_key) > 10 else "…"
+        base = {"key_hint": hint, "model_used": model}
+
+        def fail(error: str, **kw) -> dict:
+            return {**base, "ok": False, "error": error[:300],
+                    "status_code": kw.get("status_code"),
+                    "latency_ms": kw.get("latency_ms")}
+
+        if model is None:
+            return fail("provider has no default model to test")
+        async with sem:
+            t0 = time.monotonic()
+            try:
+                await asyncio.wait_for(
+                    adapter.chat_completion(
+                        gateway.client, raw_key,
+                        {"model": model,
+                         "messages": [{"role": "user", "content": "hi"}],
+                         "max_tokens": 1, "stream": False},
+                    ),
+                    timeout=30,
+                )
+            except asyncio.TimeoutError:
+                return fail("timed out after 30s",
+                            latency_ms=(time.monotonic() - t0) * 1000)
+            except Exception as e:
+                return fail(str(e), status_code=getattr(e, "status_code", None),
+                            latency_ms=(time.monotonic() - t0) * 1000)
+            return {**base, "ok": True, "status_code": 200,
+                    "latency_ms": (time.monotonic() - t0) * 1000}
+
+    keys = [k.strip() for k in body.keys if k and k.strip()][:50]
+    results = await asyncio.gather(*(ping(k) for k in keys))
+    items = [RawKeyTestItem(**r) for r in results]
+    return RawKeyTestResult(
         tested=len(items),
         ok=sum(1 for i in items if i.ok),
         failed=sum(1 for i in items if not i.ok),

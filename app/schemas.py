@@ -145,6 +145,26 @@ class KeyBulkTestResult(BaseModel):
     failed: int
     results: list[KeyBulkTestItem]
 
+class RawKeyTestIn(BaseModel):
+    provider: str
+    keys: list[str]
+
+
+class RawKeyTestItem(BaseModel):
+    key_hint: str = ""
+    ok: bool
+    status_code: Optional[int] = None
+    latency_ms: Optional[float] = None
+    error: Optional[str] = None
+    model_used: Optional[str] = None
+
+
+class RawKeyTestResult(BaseModel):
+    tested: int
+    ok: int
+    failed: int
+    results: list[RawKeyTestItem]
+
 
 # ---------- Admin: stats ----------
 
