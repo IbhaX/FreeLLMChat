@@ -511,7 +511,11 @@ async function streamAPIReply(c){
         if(data==='[DONE]')continue;
         try{
           const j=JSON.parse(data);
-          if(j.freellm){addAct(j.freellm.text||j.freellm.event);continue;}
+          if(j.freellm){const ev=j.freellm;
+            if(ev.event==='replace_content'){acc=ev.content||'';msg.text=collapseRepeats(acc);
+              if(sr)sr.setText(acc);else if(bubble){bubble.innerHTML=md(acc)+'<span class="cursor"></span>';scrollBottom();}
+              continue;}
+            addAct(ev.text||ev.event);continue;}
           if(j.error){acc+=`\n\n_${errText(j.error)}_`;continue;}
           const delta=j.choices?.[0]?.delta||{};
           if(delta.reasoning||delta.reasoning_content)reasoning+=(delta.reasoning||delta.reasoning_content);

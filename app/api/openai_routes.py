@@ -121,6 +121,10 @@ def _remember(gateway, conv_id: str | None, user_text: str, reply: str) -> None:
 
     from app.services import astra_memory
 
+    from app.services.tools import _sanitize_final_text
+
+    reply = _sanitize_final_text(reply) or ""
+
     async def _bg() -> None:
         astra_memory.store_short(str(conv_id), "assistant", reply)
         await astra_memory.extract_and_store(gateway, user_text, reply)
@@ -158,9 +162,11 @@ async def chat_completions(
         )
         struct_prompt = structured_system_prompt()
         if sys_idx is not None:
+            # Component contract goes FIRST so provider-agnostic output rules
+            # are not diluted by persona/agent instructions.
             payload["messages"][sys_idx] = dict(
                 payload["messages"][sys_idx],
-                content=f"{payload['messages'][sys_idx].get('content', '')}\n\n{struct_prompt}",
+                content=f"{struct_prompt}\n\n{payload['messages'][sys_idx].get('content', '')}",
             )
         else:
             payload["messages"].insert(0, {"role": "system", "content": struct_prompt})
@@ -194,6 +200,15 @@ async def chat_completions(
                 payload["messages"].insert(0, {"role": "system", "content": mem})
     except Exception:
         pass
+    # One-line reminder as the LAST message for weaker models (the full
+    # contract is at the start of the system prompt; this keeps components
+    # salient at the point of generation).
+    if payload.get("nova_structured", True) and isinstance(payload.get("messages"), list):
+        from app.services.component_enforce import COMPONENT_REMINDER
+
+        payload["messages"] = list(payload["messages"]) + [
+            {"role": "system", "content": COMPONENT_REMINDER}
+        ]
     if body.stream:
         import asyncio
         import json as _json
@@ -255,6 +270,13 @@ async def chat_completions(
                     err = {"error": {"message": str(res), "type": "gateway_exhausted", "code": 503}}
                     yield f"data: {_json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
                     return
+                if payload.get("nova_structured", True):
+                    from app.services.component_enforce import enforce_components
+
+                    res, _comp_metrics = await enforce_components(
+                        gateway, session, payload, res,
+                        model=str(res.get("model") or ""),
+                    )
                 text = ""
                 for c in res.get("choices", []):
                     text += (c.get("message") or {}).get("content") or ""
@@ -277,18 +299,40 @@ async def chat_completions(
                 "model": model,
             })
             reply = ""
+            structured = payload.get("nova_structured", True)
             async for chunk in stream:
-                if last_user:
-                    try:
-                        for part in chunk.split(b"data: "):
-                            part = part.strip()
-                            if not part or part == b"[DONE]":
-                                continue
-                            for ch in _json.loads(part).get("choices", []):
-                                reply += (ch.get("delta") or {}).get("content") or ""
-                    except Exception:
-                        pass
+                try:
+                    for part in chunk.split(b"data: "):
+                        part = part.strip()
+                        if not part or part == b"[DONE]":
+                            continue
+                        for ch in _json.loads(part).get("choices", []):
+                            reply += (ch.get("delta") or {}).get("content") or ""
+                except Exception:
+                    pass
+                if structured:
+                    # Hold [DONE] back: enforcement may replace the reply.
+                    chunk = chunk.replace(b"data: [DONE]\n\n", b"").replace(b"data: [DONE]", b"")
+                    if not chunk.strip():
+                        continue
                 yield chunk
+            if structured:
+                # Tokens were already shown, so enforcement here swaps the
+                # finished message via a replace_content event.
+                from app.services.component_enforce import enforce_components
+                from app.services.tools import _sanitize_final_text
+
+                clean = _sanitize_final_text(reply) or reply
+                fake = {"choices": [{"message": {"role": "assistant", "content": clean}}]}
+                fake, _m = await enforce_components(
+                    gateway, session, payload, fake,
+                    provider=provider.name, model=model,
+                )
+                fixed = fake["choices"][0]["message"]["content"]
+                if fixed != reply:
+                    reply = fixed
+                    yield _meta({"event": "replace_content", "content": fixed})
+                yield b"data: [DONE]\n\n"
             if last_user:
                 _remember(gateway, conv_id, last_user, reply)
 
@@ -299,6 +343,13 @@ async def chat_completions(
         )
     try:
         result, provider, key, model = await gateway.chat(session, payload)
+        if payload.get("nova_structured", True):
+            from app.services.component_enforce import enforce_components
+
+            result, _comp_metrics = await enforce_components(
+                gateway, session, payload, result,
+                provider=provider.name, model=model,
+            )
         if last_user:
             reply = ""
             for c in (result or {}).get("choices", []):

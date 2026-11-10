@@ -219,7 +219,7 @@ def _build_agent(agent_cfg: AgentConfig, gateway: Gateway) -> Agent:
     model = GatewayModel(agent_cfg.model, gateway)
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":
-        system_prompt += "\n\n" + structured_system_prompt()
+        system_prompt = structured_system_prompt() + "\n\n" + system_prompt
     settings: dict[str, Any] = {}
     if agent_cfg.temperature is not None:
         settings["temperature"] = agent_cfg.temperature
@@ -293,7 +293,7 @@ def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]
             msgs.insert(0, {"role": role, "content": content})
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":
-        system_prompt += "\n\n" + structured_system_prompt()
+        system_prompt = structured_system_prompt() + "\n\n" + system_prompt
     msgs.insert(0, {"role": "system", "content": system_prompt})
     return msgs
 
