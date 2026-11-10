@@ -334,6 +334,8 @@ async def test_key(
         )
     except Exception as e:
         status_code = getattr(e, "status_code", None)
+        if status_code == 404 and "model" in str(e).lower():
+            await gateway._mark_model_dead(session, provider, model)
         return KeyTestResult(
             ok=False, status_code=status_code,
             latency_ms=(time.monotonic() - t0) * 1000,
@@ -416,6 +418,17 @@ async def test_all_keys(
             return await _ping_key(gateway, k, adapters)
 
     results = await asyncio.gather(*(guarded(k) for k in keys))
+    # A 404 "model ... not found" means the model is retired, not the key:
+    # prune it from the catalog so /v1/models stops offering it.
+    for k, r in zip(keys, results):
+        if (
+            not r["ok"]
+            and r.get("status_code") == 404
+            and "model" in (r.get("error") or "").lower()
+            and k.provider is not None
+            and r.get("model_used")
+        ):
+            await gateway._mark_model_dead(session, k.provider, r["model_used"])
     items = [KeyBulkTestItem(**r) for r in results]
     return KeyBulkTestResult(
         tested=len(items),

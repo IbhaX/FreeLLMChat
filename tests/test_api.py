@@ -134,3 +134,29 @@ def test_keys_test_all(monkeypatch):
         assert by_hint["0002"]["ok"] is False
         assert "401" in by_hint["0002"]["error"]
         assert "provider" in by_hint["0001"] and "latency_ms" in by_hint["0001"]
+
+
+def test_keys_test_all_prunes_dead_model(monkeypatch):
+    import app.api.admin_routes as ar
+
+    class DeadModel(Exception):
+        status_code = 404
+
+    class FakeAdapter:
+        def __init__(self, provider):
+            self.provider = provider
+
+        async def chat_completion(self, client, api_key, payload):
+            raise DeadModel("404 This model is no longer available")
+
+    monkeypatch.setattr(ar, "build_adapter", lambda provider: FakeAdapter(provider))
+    with TestClient(app) as c:
+        c.post("/admin/keys", headers=ADMIN, json={
+            "provider": "gemini", "keys": ["AIza_dead_model_key"], "label_prefix": "t"})
+        r = c.post("/admin/keys/test-all", headers=ADMIN)
+        assert r.status_code == 200, r.text
+        assert r.json()["failed"] >= 1
+        models = c.get("/v1/models").json()["data"]
+        gemini_models = [m["id"] for m in models if m["id"].startswith("gemini/")]
+        # The dead default model was pruned from the catalog.
+        assert "gemini/gemini-3.6-flash" not in gemini_models
