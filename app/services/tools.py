@@ -50,7 +50,9 @@ _SAFE_OPS = {
 
 
 def _eval(node: ast.AST) -> float:
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+        if abs(node.value) > 10**12:
+            raise ValueError("numeric literal too large")
         return node.value
     if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_OPS:
         return _SAFE_OPS[type(node.op)](_eval(node.left), _eval(node.right))
@@ -78,8 +80,12 @@ async def _calculator(expression: str) -> str:
             return "calculation error: expression too long"
         tree = ast.parse(expression, mode="eval")
         _check_pow(tree)
+        if sum(1 for _ in ast.walk(tree)) > 64:
+            return "calculation error: expression too complex"
         result = _eval(tree.body)
-        if isinstance(result, float) and abs(result) > 1e308:
+        if not isinstance(result, (int, float)) or not __import__("math").isfinite(result):
+            return "calculation error: non-finite result"
+        if abs(result) > 1e100:
             return "calculation error: result overflow"
         return f"{expression} = {result}"
     except Exception as e:
@@ -103,12 +109,24 @@ def _ssrf_blocked(url: str) -> bool:
         host = (urlparse(url).hostname or "").lower()
     except Exception:
         return True
-    if not host or _BLOCKED_HOST_RE.match(host):
+    if not host or _BLOCKED_HOST_RE.match(host) or "%" in host:
         return True
     try:
-        return ipaddress.ip_address(host).is_private
+        address = ipaddress.ip_address(host)
+        return not address.is_global
     except ValueError:
-        return False
+        pass
+    # Reject hostnames resolving to any non-public address before connecting.
+    # Redirects are revalidated at every hop; DNS pinning is still best handled
+    # by an outbound proxy/firewall in production to prevent rebinding races.
+    try:
+        import socket
+        for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM):
+            if not ipaddress.ip_address(info[4][0].split("%", 1)[0]).is_global:
+                return True
+    except (OSError, ValueError):
+        return True
+    return False
 
 
 async def _http_get(url: str, max_chars: int = 4000) -> str:
@@ -365,6 +383,54 @@ def specs_for(names: list[str] | None) -> list[dict[str, Any]]:
     return [TOOLS[n].openai_spec() for n in names if n in TOOLS]
 
 
+async def _execute_tool_call(tc: dict[str, Any]) -> tuple[str, str, dict[str, Any], str]:
+    """Validate, execute and time one tool call without leaking arguments to logs."""
+    import json as _json
+    import logging
+    import time
+
+    logger = logging.getLogger("freellm.agent.tools")
+    fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+    name = fn.get("name", "") if isinstance(fn, dict) else ""
+    try:
+        args = _json.loads(fn.get("arguments") or "{}")
+    except (TypeError, ValueError):
+        args = None
+    call_id = tc.get("id", "") if isinstance(tc, dict) else ""
+    if name not in TOOLS or not isinstance(args, dict):
+        return call_id, str(name), {}, "tool error: unknown tool or arguments must be an object"
+
+    spec = TOOLS[name].parameters
+    allowed = set(spec.get("properties", {}))
+    required = set(spec.get("required", []))
+    unexpected = set(args) - allowed
+    missing = required - set(args)
+    if unexpected or missing:
+        details = []
+        if missing:
+            details.append("missing: " + ", ".join(sorted(missing)))
+        if unexpected:
+            details.append("unexpected: " + ", ".join(sorted(unexpected)))
+        return call_id, name, args, "tool error: " + "; ".join(details)
+
+    started = time.perf_counter()
+    try:
+        output = await asyncio.wait_for(run_tool(name, args), timeout=30)
+        output = str(output)[:12000]
+        logger.info("tool execution completed", extra={
+            "tool_name": name,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            "success": not output.lower().startswith(("error:", "tool error:", "fetch error:")),
+        })
+    except asyncio.TimeoutError:
+        output = "tool error: execution timed out after 30 seconds"
+        logger.warning("tool execution timed out", extra={"tool_name": name})
+    except Exception as exc:
+        output = f"tool error: {type(exc).__name__}: {exc}"
+        logger.exception("tool execution failed", extra={"tool_name": name})
+    return call_id, name, args, output
+
+
 async def run_tool_loop(
     gateway: Any,
     session: Any,
@@ -447,15 +513,11 @@ async def run_tool_loop(
             "content": msg.get("content") or "",
             "tool_calls": calls,
         })
-        for tc in calls:
-            fn = tc.get("function", {})
-            name = fn.get("name", "")
-            try:
-                args = _json.loads(fn.get("arguments") or "{}")
-            except Exception:
-                args = {}
+        # Tool calls in the same model turn are independent; execute concurrently
+        # while preserving their original order when appending results to history.
+        executed = await asyncio.gather(*(_execute_tool_call(tc) for tc in calls))
+        for call_id, name, args, out in executed:
             emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
-            out = await run_tool(name, args)
             if tool_output_hook is not None:
                 try:
                     tool_output_hook(name, out)
@@ -463,7 +525,7 @@ async def run_tool_loop(
                     pass
             messages.append({
                 "role": "tool",
-                "tool_call_id": tc.get("id", ""),
+                "tool_call_id": call_id,
                 "content": out,
             })
     # Rounds exhausted while the model still wanted tools: without a final
@@ -507,15 +569,9 @@ async def run_tool_loop(
             "content": _strip_text_tool_calls(text),
             "tool_calls": calls,
         })
-        for tc in calls:
-            fn = tc.get("function", {})
-            name = fn.get("name", "")
-            try:
-                args = _json.loads(fn.get("arguments") or "{}")
-            except Exception:
-                args = {}
+        executed = await asyncio.gather(*(_execute_tool_call(tc) for tc in calls))
+        for call_id, name, args, out in executed:
             emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
-            out = await run_tool(name, args)
             if tool_output_hook is not None:
                 try:
                     tool_output_hook(name, out)
@@ -523,13 +579,9 @@ async def run_tool_loop(
                     pass
             messages.append({
                 "role": "tool",
-                "tool_call_id": tc.get("id", ""),
+                "tool_call_id": call_id,
                 "content": out,
             })
-        messages.append({
-            "role": "user",
-            "content": "Now reply with the final answer only — no tool calls.",
-        })
     return _sanitize_result(result)
 
 

@@ -14,7 +14,13 @@ import uuid
 from typing import Any, AsyncIterator
 
 from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
-from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    UserPromptPart,
+)
 
 from app.db import get_session_factory
 from app.gateway import Gateway
@@ -73,8 +79,6 @@ class GatewayModel(Model):
         for choice in result.get("choices", []):
             msg = choice.get("message", {})
             text += msg.get("content", "")
-        # Structured output expects raw JSON — models often wrap it in a
-        # fence anyway; salvage the JSON payload before validation.
         if "response_format" in payload and "```" in text:
             import re as _re
 
@@ -110,16 +114,68 @@ def _convert_messages(messages: list[ModelMessage]) -> list[dict[str, Any]]:
     return out
 
 
+def _to_model_history(history: list[dict[str, Any]]) -> list[ModelMessage]:
+    """Convert API history into Pydantic AI's validated message history.
+
+    Only plain user/assistant text turns are accepted. Tool messages and other
+    roles are intentionally excluded because the direct agent path does not
+    replay tool-call state.
+    """
+    messages: list[ModelMessage] = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = item.get("content") or item.get("text", "")
+        if not isinstance(content, str) or not content:
+            continue
+        if role == "user":
+            messages.append(ModelRequest(parts=[UserPromptPart(content=content)]))
+        elif role == "assistant":
+            messages.append(ModelResponse(parts=[TextPart(content=content)]))
+    return messages
+
+
+def _bounded_history(history: list[dict[str, Any]], *, max_messages: int = 40, max_chars: int = 48000) -> list[dict[str, Any]]:
+    """Keep the newest valid turns within a conservative character budget."""
+    valid: list[dict[str, Any]] = []
+    for item in history or []:
+        if not isinstance(item, dict) or item.get("role") not in ("user", "assistant"):
+            continue
+        content = item.get("content") or item.get("text", "")
+        if not isinstance(content, str) or not content.strip():
+            continue
+        valid.append({"role": item["role"], "content": content.strip()})
+    selected: list[dict[str, Any]] = []
+    used = 0
+    for item in reversed(valid[-max_messages:]):
+        content = item["content"]
+        remaining = max_chars - used
+        if remaining <= 0:
+            break
+        if len(content) > remaining:
+            content = content[-remaining:]
+        selected.append({"role": item["role"], "content": content})
+        used += len(content)
+    return list(reversed(selected))
+
+
+def _memory_relevance(content: str, query: str) -> int:
+    """Small dependency-free lexical relevance score for SQL memory snippets."""
+    import re
+    terms = {t for t in re.findall(r"[a-z0-9_]{3,}", query.lower())}
+    if not terms:
+        return 0
+    words = set(re.findall(r"[a-z0-9_]{3,}", content.lower()))
+    return len(terms & words)
+
+
 def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
     """Compile a rich system prompt from the structured config + raw prompt."""
     cfg = agent_cfg.config or {}
     parts: list[str] = []
-
-    # Base identity
     if agent_cfg.system_prompt:
         parts.append(agent_cfg.system_prompt)
-
-    # Step 1: Basic info
     basic = cfg.get("basic", {})
     if basic.get("detailed_description"):
         parts.append(f"## Your Purpose\n{basic['detailed_description']}")
@@ -133,8 +189,6 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
         parts.append(f"## Target Audience\n{basic['target_audience']}")
     if basic.get("domain"):
         parts.append(f"## Domain\n{basic['domain']}")
-
-    # Step 2: Personality
     personality = cfg.get("personality", {})
     traits: list[str] = []
     if personality.get("personality_type"):
@@ -149,9 +203,8 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
         traits.append(f"Language: {personality['language']}")
     if personality.get("technical_detail"):
         traits.append(f"Technical detail level: {personality['technical_detail']}")
-    for k, label in [
-        ("creativity", "Creativity"), ("formality", "Formality"),
-        ("assertiveness", "Assertiveness"), ("empathy", "Empathy")]:
+    for k, label in [("creativity", "Creativity"), ("formality", "Formality"),
+                     ("assertiveness", "Assertiveness"), ("empathy", "Empathy")]:
         v = personality.get(k)
         if v is not None:
             traits.append(f"{label}: {v}/10")
@@ -170,8 +223,6 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
         flags.append("Admit uncertainty instead of guessing.")
     if flags:
         parts.append("## Behavioral Rules\n" + "\n".join(f"- {f}" for f in flags))
-
-    # Step 3: Instructions (extra rules)
     instructions = cfg.get("instructions", {})
     if instructions.get("custom_rules"):
         parts.append(f"## Custom Rules\n{instructions['custom_rules']}")
@@ -179,8 +230,6 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
         parts.append(f"## Constraints\n{instructions['constraints']}")
     if instructions.get("knowledge"):
         parts.append(f"## Knowledge Base\n{instructions['knowledge']}")
-
-    # Step 4: Execution
     execution = cfg.get("execution", {})
     if execution.get("decision_making"):
         parts.append(f"## Decision Making\n{execution['decision_making']}")
@@ -188,34 +237,26 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
         parts.append(f"## Error Handling\n{execution['error_handling']}")
     if execution.get("max_retries"):
         parts.append(f"Max retries: {execution['max_retries']}")
-
-    # Capabilities
     caps = cfg.get("capabilities", {})
     if caps.get("tools_enabled"):
         parts.append("You may use tool/function calls when helpful.")
-
     if agent_cfg.output_format == "json":
         parts.append("Always respond with valid JSON only — no prose, no markdown fences.")
     if agent_cfg.output_format == "structured":
         from app.response_protocol import component_schemas
-
         parts.append(
-            "## Structured Output\n"
-            "Respond using the structured response envelope. Put conversational "
-            "text in `content` (markdown allowed) and rich data in `components`. "
-            "Available component types: "
+            "## Structured Output\nRespond using the structured response envelope. "
+            "Put conversational text in `content` (markdown allowed) and rich data "
+            "in `components`. Available component types: "
             + ", ".join(sorted(component_schemas().keys()))
-            + ". Choose the component type that best fits the data; do not invent "
-            "missing values."
+            + ". Choose the component type that best fits the data; do not invent missing values."
         )
-
     return "\n\n".join(parts) if parts else "You are a helpful assistant."
 
 
 def _build_agent(agent_cfg: AgentConfig, gateway: Gateway, custom: str = "") -> Agent:
     from pydantic_ai import Agent
     from pydantic_ai.output import PromptedOutput
-
     model = GatewayModel(agent_cfg.model, gateway)
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":
@@ -228,25 +269,11 @@ def _build_agent(agent_cfg: AgentConfig, gateway: Gateway, custom: str = "") -> 
         settings["temperature"] = agent_cfg.temperature
     if agent_cfg.max_tokens is not None:
         settings["max_tokens"] = agent_cfg.max_tokens
-
-    # Structured output: pydantic-ai injects the ResponseEnvelope JSON schema
-    # into the prompt, parses the model's JSON text, and validates it against
-    # the envelope — with automatic retries on invalid output. We also request
-    # provider-level JSON mode so providers that support it emit clean JSON.
     if agent_cfg.output_format == "structured":
         settings["response_format"] = {"type": "json_object"}
-        return Agent(
-            model,
-            output_type=PromptedOutput(ResponseEnvelope),
-            system_prompt=system_prompt,
-            model_settings=settings,
-        )
-
-    return Agent(
-        model,
-        system_prompt=system_prompt,
-        model_settings=settings or None,
-    )
+        return Agent(model, output_type=PromptedOutput(ResponseEnvelope),
+                     system_prompt=system_prompt, model_settings=settings)
+    return Agent(model, system_prompt=system_prompt, model_settings=settings or None)
 
 
 def _tool_names(agent_cfg: AgentConfig) -> list[str]:
@@ -261,21 +288,17 @@ def _tool_names(agent_cfg: AgentConfig) -> list[str]:
 async def get_memory_text(query: str = "", conversation_id: str | None = None) -> str:
     """Fetch persistent + vector memories for system-prompt injection."""
     from sqlalchemy import select
-
     from app.db import get_session_factory
     from app.models import Memory
     from app.services import astra_memory
-
     parts: list[str] = []
     try:
         async with get_session_factory()() as s:
-            rows = (
-                (await s.execute(select(Memory).order_by(Memory.id).limit(50)))
-                .scalars().all()
-            )
-        if rows:
-            parts.append("## Long-term Memory\n"
-                         + "\n".join(f"- {m.content}" for m in rows))
+            rows = (await s.execute(select(Memory).order_by(Memory.id.desc()).limit(100))).scalars().all()
+        ranked = sorted(rows, key=lambda m: (_memory_relevance(m.content, query), m.id), reverse=True)
+        selected = [m for m in ranked if _memory_relevance(m.content, query) > 0][:8]
+        if selected:
+            parts.append("## Relevant Long-term Memory\n" + "\n".join(f"- {m.content}" for m in selected))
     except Exception:
         pass
     try:
@@ -288,12 +311,7 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
 
 
 def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]], custom: str = "") -> list[dict[str, Any]]:
-    msgs = [{"role": "user", "content": message}]
-    for h in reversed(history):
-        role = h.get("role", "user")
-        content = h.get("content") or h.get("text", "")
-        if role in ("user", "assistant") and content:
-            msgs.insert(0, {"role": role, "content": content})
+    msgs = _bounded_history(history) + [{"role": "user", "content": message}]
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":
         system_prompt = structured_system_prompt() + "\n\n" + system_prompt
@@ -305,23 +323,15 @@ def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]
 
 
 async def _chat_with_tools(
-    gateway: Gateway, agent_cfg: AgentConfig, messages: list[dict[str, Any]]
+    gateway: Gateway, agent_cfg: AgentConfig, messages: list[dict[str, Any]],
+    conversation_id: str | None = None,
 ) -> dict[str, Any]:
-    """Non-streaming chat with a tool-call execution loop.
-
-    Delegates the loop itself to ``tools.run_tool_loop`` (same loop the
-    OpenAI route uses) after injecting memory and agent payload options.
-    """
     from app.db import get_session_factory
     from app.services.tools import run_tool_loop
-
     tool_names = _tool_names(agent_cfg)
-    query = next(
-        (m.get("content", "") for m in reversed(messages)
-         if m.get("role") == "user" and isinstance(m.get("content"), str)),
-        "",
-    )
-    mem = await get_memory_text(query)
+    query = next((m.get("content", "") for m in reversed(messages)
+                  if m.get("role") == "user" and isinstance(m.get("content"), str)), "")
+    mem = await get_memory_text(query, conversation_id)
     if mem:
         messages.insert(1 if messages and messages[0].get("role") == "system" else 0,
                         {"role": "system", "content": mem})
@@ -335,32 +345,32 @@ async def _chat_with_tools(
     execution = (agent_cfg.config or {}).get("execution", {})
     timeout_s = execution.get("timeout")
     max_rounds = min(int(execution.get("max_retries") or 5), 10)
-
     async with get_session_factory()() as session:
-        return await run_tool_loop(
-            gateway, session, payload, tool_names,
-            max_rounds=max_rounds, call_timeout=timeout_s,
-        )
+        return await run_tool_loop(gateway, session, payload, tool_names,
+                                   max_rounds=max_rounds, call_timeout=timeout_s)
 
 
 async def run_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
-    *, custom_instructions: str = "",
+    *, custom_instructions: str = "", conversation_id: str | None = None,
 ) -> str:
-    """Run an agent non-streaming; uses the tool loop when tools are enabled.
-
-    When ``output_format == "structured"``, pydantic-ai validates the model
-    output into a :class:`ResponseEnvelope`, which we serialize into the
-    ``nova-response`` fenced block the frontend classifier renders.
-    """
+    """Run an agent with bounded context, relevant memory and execution limits."""
+    history = _bounded_history(history)
+    execution = (agent_cfg.config or {}).get("execution", {})
+    timeout_s = max(1.0, min(float(execution.get("timeout", 120)), 600.0))
     if _tool_names(agent_cfg):
         messages = _messages(agent_cfg, message, history, custom_instructions)
-        result = await _chat_with_tools(gateway, agent_cfg, messages)
+        result = await asyncio.wait_for(
+            _chat_with_tools(gateway, agent_cfg, messages, conversation_id), timeout=timeout_s
+        )
         choice = (result.get("choices") or [{}])[0]
         content = (choice.get("message") or {}).get("content") or ""
         return _maybe_structured(agent_cfg, content)
-    agent = _build_agent(agent_cfg, gateway, custom_instructions)
-    result = await agent.run(message)
+    memory = await get_memory_text(str(message), conversation_id)
+    agent = _build_agent(agent_cfg, gateway, custom_instructions + ("\n\n" + memory if memory else ""))
+    result = await asyncio.wait_for(
+        agent.run(message, message_history=_to_model_history(history)), timeout=timeout_s
+    )
     out = result.output
     if isinstance(out, ResponseEnvelope):
         return envelope_to_fence(out)
@@ -368,15 +378,10 @@ async def run_agent(
 
 
 def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
-    """Validate raw model content as a ResponseEnvelope when structured mode
-    is on; embed it as a ``nova-response`` fence. Falls back to the raw text
-    if the content isn't a valid envelope (graceful degradation)."""
     if agent_cfg.output_format != "structured" or not content:
         return content
     candidates = [content.strip()]
-    # Model may wrap JSON in a ```json fence — strip and retry once.
     import re
-
     fence_match = re.search(r"```(?:json)?\s*\n?([\s\S]*?)```", content.strip())
     if fence_match:
         candidates.append(fence_match.group(1).strip())
@@ -390,40 +395,28 @@ def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
 
 async def stream_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
-    *, custom_instructions: str = "",
+    *, custom_instructions: str = "", conversation_id: str | None = None,
 ) -> AsyncIterator[bytes]:
-    """Run an agent with streaming via the gateway's internal streaming API.
-
-    Yields SSE bytes compatible with the chat UI's stream parser.
-    """
+    """Run an agent with streaming via the gateway's internal streaming API."""
+    history = _bounded_history(history)
     openai_messages = _messages(agent_cfg, message, history, custom_instructions)
-    mem = await get_memory_text(message)
-    if mem:
-        openai_messages.insert(
-            1 if openai_messages and openai_messages[0].get("role") == "system" else 0,
-            {"role": "system", "content": mem},
-        )
-
-    # Structured output can't be streamed incrementally (partial JSON is not a
-    # valid envelope), so run the agent non-streaming and emit the validated
-    # nova-response fence as a single SSE chunk — the frontend classifier
-    # renders it into structured components. Same pattern as the tool loop.
+    if not _tool_names(agent_cfg):
+        mem = await get_memory_text(str(message), conversation_id)
+        if mem:
+            openai_messages.insert(1, {"role": "system", "content": mem})
     if agent_cfg.output_format == "structured":
         try:
             text = await run_agent(gateway, agent_cfg, message, history,
-                                   custom_instructions=custom_instructions)
+                                   custom_instructions=custom_instructions, conversation_id=conversation_id)
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
             yield f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
         except Exception as e:
             err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
             yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
         return
-
-    # When tools are enabled, run the tool loop non-streaming (tool calls can't
-    # be executed mid-stream), then emit the final answer as SSE.
     if _tool_names(agent_cfg):
         try:
-            result = await _chat_with_tools(gateway, agent_cfg, openai_messages)
+            result = await _chat_with_tools(gateway, agent_cfg, openai_messages, conversation_id)
             choice = (result.get("choices") or [{}])[0]
             text = (choice.get("message") or {}).get("content") or ""
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
@@ -432,22 +425,19 @@ async def stream_agent(
             err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
             yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
         return
-
-    payload = {
-        "model": agent_cfg.model,
-        "messages": openai_messages,
-        "stream": True,
-    }
+    payload = {"model": agent_cfg.model, "messages": openai_messages, "stream": True}
     if agent_cfg.temperature is not None:
         payload["temperature"] = agent_cfg.temperature
     if agent_cfg.max_tokens is not None:
         payload["max_tokens"] = agent_cfg.max_tokens
-
+    execution = (agent_cfg.config or {}).get("execution", {})
+    timeout_s = max(1.0, min(float(execution.get("timeout", 120)), 600.0))
     try:
-        async with get_session_factory()() as session:
-            stream, provider, key, model = await gateway.chat_stream(session, payload)
-            async for chunk in stream:
-                yield chunk
+        async with asyncio.timeout(timeout_s):
+            async with get_session_factory()() as session:
+                stream, provider, key, model = await gateway.chat_stream(session, payload)
+                async for chunk in stream:
+                    yield chunk
     except Exception as e:
         err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
         yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
