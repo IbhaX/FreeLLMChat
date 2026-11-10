@@ -109,6 +109,27 @@
   .topbar .chat-name{font-size:14px;font-weight:600}
   .topbar .chat-status{font-size:11px;color:var(--text-3)}
   .topbar .chat-status .on{color:var(--success)}
+  /* Workspace actions: keep chat identity/model controls separate from task modes. */
+  .workspace-tools{display:flex;align-items:center;gap:10px;padding:8px 16px;
+    border-bottom:1px solid var(--border-1);background:var(--bg-1);flex:none}
+  .workspace-tools .tool-group{display:flex;align-items:center;gap:6px;min-width:0}
+  .workspace-tools .tool-label{font-size:10px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--text-3);margin-right:3px;white-space:nowrap}
+  .workspace-tools .tool-spacer{flex:1}
+  .workspace-tools .pill-btn{min-height:34px;padding:6px 12px}
+  .workspace-tools .agent-create{font-weight:700;color:var(--accent);border-style:dashed}
+  .workspace-tools .agent-create:hover{background:var(--accent-soft);border-color:var(--accent-line)}
+  #agentMenu{top:104px!important;right:16px!important}
+  #rpMenu{top:104px!important;right:auto!important;left:16px}
+  @media(max-width:700px){
+    .workspace-tools{padding:7px 10px;gap:7px;overflow-x:auto;scrollbar-width:none}
+    .workspace-tools::-webkit-scrollbar{display:none}
+    .workspace-tools .tool-label{display:none}
+    .workspace-tools .tool-group{flex:none}
+    .workspace-tools .pill-btn{padding:6px 9px;white-space:nowrap}
+    #agentMenu{top:102px!important;right:10px!important;left:auto!important;max-width:calc(100vw - 20px)}
+    #rpMenu{top:102px!important;left:10px!important;right:auto!important;max-width:calc(100vw - 20px)}
+  }
   .pill-btn{
     display:inline-flex;align-items:center;gap:7px;padding:5px 11px;
     border-radius:var(--r-md);border:1px solid var(--border-1);background:var(--surface-1);
@@ -386,15 +407,25 @@
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         <div class="model-menu ui-menu" id="modelMenu"></div>
       </button>
-      <button class="pill-btn" id="agentBtn" title="Agents">🤖<span class="tb-tx"> Agents</span></button>
-      <button class="pill-btn" id="rpBtn" title="Roleplay: create a character and talk with it">🎭<span class="tb-tx"> Roleplay</span></button>
-      <button class="pill-btn" id="researchBtn" title="Research mode: multi-step cited answers (click to cycle depth: auto → quick → standard → deep)">🔬<span class="tb-tx"> Research</span> <span style="opacity:.7;font-size:10px">auto</span></button>
-      <button class="pill-btn" id="agentNewBtn" title="Create agent">＋</button>
-      <button class="pill-btn" id="agentEditBtn" title="Edit agent" style="display:none">✏️</button>
-      <button class="pill-btn" id="agentDelBtn" title="Delete agent" style="display:none;color:var(--error)">🗑</button>
       <button class="pill-btn" id="shareBtn" title="Share conversation (link)">🔗</button>
     </div>
   </div>
+
+  <nav class="workspace-tools" aria-label="Workspace tools">
+    <div class="tool-group" aria-label="Agents">
+      <span class="tool-label">Work with</span>
+      <button class="pill-btn" id="agentBtn" title="Browse and select agents">🤖<span class="tb-tx"> Agents</span></button>
+      <button class="pill-btn agent-create" id="agentNewBtn" title="Create a new agent">＋<span class="tb-tx"> Create agent</span></button>
+      <button class="pill-btn" id="agentEditBtn" title="Edit selected agent" style="display:none">✏️</button>
+      <button class="pill-btn" id="agentDelBtn" title="Delete selected agent" style="display:none;color:var(--error)">🗑</button>
+    </div>
+    <div class="tool-spacer"></div>
+    <div class="tool-group" aria-label="Modes">
+      <span class="tool-label">Modes</span>
+      <button class="pill-btn" id="rpBtn" title="Choose or create a roleplay character">🎭<span class="tb-tx"> Roleplay</span></button>
+      <button class="pill-btn" id="researchBtn" title="Deep research: click to toggle; double-click to cycle depth">🔬<span class="tb-tx"> Deep research</span> <span style="opacity:.7;font-size:10px">auto</span></button>
+    </div>
+  </nav>
 
   <div id="groupStage" style="display:none"></div>
 
