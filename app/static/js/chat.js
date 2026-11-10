@@ -183,7 +183,7 @@ function richBlock(lang,code){
 }
 function md(src){
   // Normalize line-wrapped protocol tags before either Markdown parser sees them.
-  src=String(src||'').replace(/```nova[ \\t]*\\r?\\n[ \\t]*-response\\b/gi,'```nova-response');
+  src=String(src||'').replace(/```nova[ \t]*\r?\n[ \t]*-response\b/gi,'```nova-response');
   // Rich path: marked + DOMPurify when CDN loaded; custom fallback otherwise.
   if(window.marked&&window.DOMPurify){
     try{
