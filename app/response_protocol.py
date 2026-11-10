@@ -118,6 +118,8 @@ class ComponentType(str, Enum):
     HEATMAP = "heatmap"
     TAGCLOUD = "tagcloud"
     PERSON_CARD = "person_card"
+    ARCHITECTURE_DIAGRAM = "architecture_diagram"
+    FLOWCHART = "flowchart"
 
 
 class Component(BaseModel):
@@ -432,6 +434,16 @@ def component_schemas() -> dict[str, dict[str, Any]]:
             "optional": ["label"],
             "description": "A subtle horizontal section divider with optional label.",
         },
+        ComponentType.ARCHITECTURE_DIAGRAM.value: {
+            "required": ["layers"],
+            "optional": ["title", "direction", "caption"],
+            "description": "A layered architecture diagram with connected service/component cards.",
+        },
+        ComponentType.FLOWCHART.value: {
+            "required": ["nodes"],
+            "optional": ["title", "edges", "direction"],
+            "description": "A process flowchart with steps, decisions and labeled connections.",
+        },
         ComponentType.PERSON_CARD.value: {
             "required": ["name"],
             "optional": ["description", "extract", "thumbnail", "url", "source"],
@@ -504,6 +516,8 @@ _COMPONENT_GUIDE: dict[str, dict[str, Any]] = {
     "heatmap": {"when": "intensity across a grid (2D numbers 0-1)", "example": {"title": "Activity", "data": [[0.1, 0.8], [0.4, 0.2]]}},
     "tagcloud": {"when": "weighted topics/keywords", "example": {"tags": [{"label": "AI", "weight": 5}, {"label": "APIs", "weight": 3}]}},
     "divider": {"when": "separating sections inside a long answer", "example": {}},
+    "architecture_diagram": {"when": "system architecture, service boundaries, layers or data flow; prefer this over ASCII diagrams", "example": {"title": "Agent architecture", "layers": [{"title": "API Gateway", "subtitle": "Authentication and validation"}, {"title": "Agent Orchestrator", "nodes": [{"title": "Planner", "subtitle": "Intent and task planning"}, {"title": "Router", "subtitle": "Model selection"}]}, {"title": "Runtime", "nodes": [{"title": "Memory Engine"}, {"title": "Tool Runtime"}, {"title": "Model Router"}]}, {"title": "Persistence", "subtitle": "Database, traces and metrics"}]}},
+    "flowchart": {"when": "decision trees, request lifecycles and multi-step processes with branches", "example": {"title": "Request flow", "nodes": [{"id": "start", "label": "Request", "kind": "start"}, {"id": "valid", "label": "Valid?", "kind": "decision"}, {"id": "run", "label": "Execute", "kind": "process"}, {"id": "end", "label": "Respond", "kind": "end"}], "edges": [{"from": "start", "to": "valid"}, {"from": "valid", "to": "run", "label": "Yes"}, {"from": "run", "to": "end"}] }},
 }
 
 
@@ -569,8 +583,9 @@ SELECTION GUIDE — pick by content, not habit:
 - warnings/caveats -> `callout` (variant warning) or `warning`; key takeaway -> `callout` (tip)
 - code -> `code`; formulas -> `math`; raw JSON -> `json_viewer`
 - status labels -> `badge`; spec sheets -> `keyvalue`; quote -> `quote`
+- system architecture / layered services -> `architecture_diagram`; decision logic / execution paths -> `flowchart`
 
-COMPOSITION RULE — a good answer = the `content` lead (direct answer first, then substance as needed) + 2 to 4 DIFFERENT component types + prose explanation where the depth rules call for it + a sources block. Never repeat the same component type back-to-back when another fits. Do not invent data; if a value is unknown, omit the component.
+COMPOSITION RULE — a good answer = the `content` lead (direct answer first, then substance as needed) + 2 to 4 DIFFERENT component types + prose explanation where the depth rules call for it + a sources block. For architecture questions, include one `architecture_diagram` as the primary visual; do not substitute a text/ASCII diagram. For workflows with branching decisions, use `flowchart`. Keep labels concise and include only relationships supported by the answer. Never repeat the same component type back-to-back when another fits. Do not invent data; if a value is unknown, omit the component.
 
 FEW-SHOT EXAMPLES
 
