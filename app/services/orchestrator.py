@@ -7,9 +7,12 @@ One classification decides which pipeline handles a message:
 - ``research``— the deep-research pipeline (planner → researchers →
   gap-check → verifier → synthesizer), for deep multi-source questions
 
-Routing is cheap and deterministic where possible: depth comes from
-``research.classify_depth`` (rule-based, no LLM call) and the tools gate
-from ``tools.wants_tools`` (one tiny classifier call, fail-open). The
+Routing is cheap: the research pipeline runs only on explicit research
+intent ("research", "deep dive", "investigate", … — see
+``_EXPLICIT_RESEARCH_RE``); everything else stays on the tool loop, which
+already answers comparisons and lookups cheaply. ``research.classify_depth``
+still picks quick/standard/deep once research is chosen. The tools gate is
+``tools.wants_tools`` (one tiny classifier call, fail-open). The
 orchestrator never raises — any failure falls back to the safest pipeline
 (``tools`` when tools were requested, else ``direct``).
 """
@@ -17,13 +20,20 @@ orchestrator never raises — any failure falls back to the safest pipeline
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 log = logging.getLogger("freellm.orchestrator")
 
-# Depths that justify the full research fan-out. ``quick`` and ``standard``
-# stay on the tool loop, which already does one search + answer cheaply.
-RESEARCH_DEPTHS = {"deep"}
+# The research pipeline only runs on explicit intent — "compare X vs Y" or
+# long questions alone are NOT enough (they stay on the cheap tool loop).
+# ``classify_depth`` still picks quick/standard/deep once research is chosen.
+_EXPLICIT_RESEARCH_RE = re.compile(
+    r"\b(deep[ -]?research|research(?:\s+(?:this|it|that|the))?|deep[ -]?dive|"
+    r"in[- ]depth|investigate|investigation|thorough(?:ly)?\s+(?:research|study|analysis)|"
+    r"comprehensive\s+(?:research|study|analysis)|fact[- ]check|literature\s+review)\b",
+    re.I,
+)
 
 
 async def route_message(
@@ -48,10 +58,8 @@ async def route_message(
 
         if not await wants_tools(gateway, session, payload):
             return "direct"
-        # Deep, multi-source questions go to the research pipeline.
-        from app.services.research import classify_depth
-
-        if classify_depth(last_user, history) in RESEARCH_DEPTHS:
+        # Only explicit research intent goes to the research pipeline.
+        if _EXPLICIT_RESEARCH_RE.search(last_user or ""):
             return "research"
         return "tools"
     except Exception as exc:  # routing must never break chat

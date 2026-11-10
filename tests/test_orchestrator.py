@@ -37,8 +37,16 @@ def test_simple_question_uses_tool_loop():
     assert _route({"messages": [], "builtin_tools": True}, "what is the weather in Paris") == "tools"
 
 
-def test_deep_question_routes_to_research():
-    assert _route({"messages": [], "builtin_tools": True}, DEEP_Q) == "research"
+def test_compare_question_stays_on_tool_loop():
+    # "Compare X vs Y" alone must NOT trigger deep research.
+    assert _route({"messages": [], "builtin_tools": True}, DEEP_Q) == "tools"
+
+
+def test_explicit_research_routes_to_research():
+    for q in ("Research the economic policies of Tesla vs Gauss",
+              "Do a deep dive on REST vs gRPC",
+              "Investigate the history of the transistor"):
+        assert _route({"messages": [], "builtin_tools": True}, q) == "research", q
 
 
 def test_routing_failure_falls_back_safely():
