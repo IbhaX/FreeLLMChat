@@ -194,3 +194,69 @@ async def test_undecryptable_key_skipped_without_cooldown(session):
     with pytest.raises(KeyUndecryptable):
         gw._decrypt_key(k)
     await gw.close()
+
+
+
+async def test_sequential_failover_stops_after_first_success(session, monkeypatch):
+    """Try providers in order and stop immediately after the first success."""
+    import app.routing.fallback as fb
+
+    p1 = await _provider(session, "p1", "https://p1.example/v1", ["m1"])
+    p2 = await _provider(session, "p2", "https://p2.example/v1", ["m1"])
+    p3 = await _provider(session, "p3", "https://p3.example/v1", ["m1"])
+    await make_key(session, p1, "sk-aaa-1111", label="a")
+    k2 = await make_key(session, p2, "sk-bbb-2222", label="b")
+    await make_key(session, p3, "sk-ccc-3333", label="c")
+    monkeypatch.setattr(fb, "load_fallback_chains",
+                        lambda: {"auto": ["p1", "p2", "p3"]})
+
+    with respx.mock:
+        first = respx.post("https://p1.example/v1/chat/completions").mock(
+            return_value=httpx.Response(429, json={"error": "rate limited"})
+        )
+        second = respx.post("https://p2.example/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_ok_payload("m1"))
+        )
+        third = respx.post("https://p3.example/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_ok_payload("m1"))
+        )
+        gw = Gateway()
+        result, provider, key, model = await gw.chat(
+            session, {"model": "auto", "messages": [{"role": "user", "content": "hi"}]}
+        )
+        await gw.close()
+
+    assert provider.name == "p2"
+    assert key.id == k2.id
+    assert first.call_count == 1
+    assert second.call_count == 1
+    assert third.call_count == 0
+
+
+async def test_no_second_sweep_after_all_providers_fail(session, monkeypatch):
+    """A failed routing pass must not repeat providers in a hidden second sweep."""
+    import app.routing.fallback as fb
+
+    p1 = await _provider(session, "p1", "https://p1.example/v1", ["m1"])
+    p2 = await _provider(session, "p2", "https://p2.example/v1", ["m1"])
+    await make_key(session, p1, "sk-aaa-1111", label="a")
+    await make_key(session, p2, "sk-bbb-2222", label="b")
+    monkeypatch.setattr(fb, "load_fallback_chains",
+                        lambda: {"auto": ["p1", "p2"]})
+
+    with respx.mock:
+        first = respx.post("https://p1.example/v1/chat/completions").mock(
+            return_value=httpx.Response(500, json={"error": "server error"})
+        )
+        second = respx.post("https://p2.example/v1/chat/completions").mock(
+            return_value=httpx.Response(500, json={"error": "server error"})
+        )
+        gw = Gateway()
+        with pytest.raises(GatewayExhausted):
+            await gw.chat(
+                session, {"model": "auto", "messages": [{"role": "user", "content": "hi"}]}
+            )
+        await gw.close()
+
+    assert first.call_count == 1
+    assert second.call_count == 1
