@@ -110,6 +110,14 @@ async def research(
             content={"error": {"message": str(e)[:300], "type": "research_failed"}},
         )
     answer = state.answer if state is not None else ""
+    if answer:
+        from app.services.component_enforce import enforce_components
+        result = {"choices": [{"message": {"role": "assistant", "content": answer}}]}
+        result, _metrics = await enforce_components(
+            gw, session, {"messages": _messages(body)}, result,
+        )
+        answer = result["choices"][0]["message"]["content"]
+        state.answer = answer
     done = next((e for e in reversed(events) if e.get("event") == "research_done"), {})
     meta = {k: v for k, v in done.items() if k not in ("event", "text")}
     rid = await _persist(session, body, state, answer)
@@ -133,8 +141,17 @@ async def research_stream(
                 conversation_id=body.conversation_id, on_event=queue.put_nowait,
             )
             state_box["state"] = state
-            rid = await _persist(session, body, state, state.answer)
-            queue.put_nowait({"event": "research_answer", "answer": state.answer,
+            answer = state.answer
+            if answer:
+                from app.services.component_enforce import enforce_components
+                result = {"choices": [{"message": {"role": "assistant", "content": answer}}]}
+                result, _metrics = await enforce_components(
+                    gw, session, {"messages": _messages(body)}, result,
+                )
+                answer = result["choices"][0]["message"]["content"]
+                state.answer = answer
+            rid = await _persist(session, body, state, answer)
+            queue.put_nowait({"event": "research_answer", "answer": answer,
                               "run_id": rid, **(state.meta or {})})
         except Exception as e:
             queue.put_nowait({"event": "error",
