@@ -17,7 +17,7 @@ providers:
       - gemini-2.5-flash
       - gemini-2.5-flash-lite
       - gemini-2.0-flash
-    limits: {}
+    limits: {est_tpd: 1500000}
     daily_reset_tz: America/Los_Angeles
     requires_card: false
     commercial_ok: true
@@ -38,7 +38,7 @@ providers:
       - openai/gpt-oss-20b
       - llama-3.3-70b-versatile
       - qwen/qwen3-32b
-    limits: {}
+    limits: {est_tpd: 500000}
     requires_card: false
     commercial_ok: false
     rotation_strategy: least_used
@@ -97,7 +97,7 @@ providers:
     default_models:
       - command-a-03-2025
       - command-r7b-12-2024
-    limits: {}
+    limits: {est_tpd: 30000}
     requires_card: false
     commercial_ok: false
     rotation_strategy: least_used
@@ -113,7 +113,7 @@ providers:
     auth_style: bearer
     default_env_key: MISTRAL_API_KEY
     default_models: []
-    limits: {}
+    limits: {est_tpd: 1000000}
     requires_card: false
     commercial_ok: false
     rotation_strategy: least_used
@@ -145,7 +145,7 @@ providers:
     auth_style: bearer
     default_env_key: CEREBRAS_API_KEY
     default_models: []
-    limits: {}
+    limits: {est_tpd: 1000000}
     requires_card: true
     commercial_ok: true
     rotation_strategy: least_used

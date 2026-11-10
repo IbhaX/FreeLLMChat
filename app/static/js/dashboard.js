@@ -24,6 +24,22 @@ async function refresh(){
     ['In cooldown',stats.keys_in_cooldown,ICONS.cd],
   ].map(([l,v,i])=>`<div class="ui-card stat-card"><div class="ico">${i}</div><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
 
+  const fmtTok=n=>n==null?'—':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'k':n;
+  document.querySelector('#budget tbody').innerHTML=(stats.token_budget||[]).map(b=>{
+    const pct=b.est_daily?Math.min(100,(b.used_24h/b.est_daily)*100):null;
+    const bar=pct==null?'<span class="tx-3 t-xs">no estimate</span>':
+      `<div style="background:var(--bg-3,#222);border-radius:6px;height:8px;overflow:hidden">
+        <div style="width:${pct.toFixed(1)}%;height:100%;background:${pct>85?'var(--danger,#e5484d)':pct>60?'var(--warn,#f5a524)':'var(--accent,#7c5cff)'}"></div>
+      </div><div class="tx-3 t-xs" style="margin-top:3px">${pct.toFixed(1)}% used</div>`;
+    return `<tr><td><b>${esc(b.provider)}</b></td><td>${b.keys}</td>
+      <td>${fmtTok(b.used_24h)}</td><td>${b.est_daily?'~'+fmtTok(b.est_daily):'—'}</td><td>${bar}</td></tr>`;
+  }).join('')||'<tr><td colspan="5" class="tx-3">No providers</td></tr>';
+  if(stats.est_tokens_total)
+    document.querySelector('#budget tbody').insertAdjacentHTML('beforeend',
+      `<tr id="budgetTotal"><td><b>total est.</b></td><td></td>
+       <td><b>${fmtTok(stats.tokens_in_24h+stats.tokens_out_24h)}</b></td>
+       <td><b>~${fmtTok(stats.est_tokens_total)}</b></td><td></td></tr>`);
+
   document.querySelector('#providers tbody').innerHTML=providers.map(p=>`<tr>
     <td><b>${esc(p.name)}</b><br><span class="tx-3 t-xs">${esc(p.display_name)}</span></td>
     <td class="tx-2">${p.rotation_strategy}</td><td>${p.key_count}</td><td>${p.healthy_key_count}</td>
