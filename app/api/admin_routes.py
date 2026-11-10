@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import time
@@ -20,6 +21,8 @@ from app.gateway import Gateway
 from app.models import ApiKey, KeyUsage, Provider, RequestLog
 from app.providers.registry import build_adapter, seed_providers
 from app.schemas import (
+    KeyBulkTestItem,
+    KeyBulkTestResult,
     KeyCreate,
     KeyImportResult,
     KeyOut,
@@ -339,6 +342,86 @@ async def test_key(
     return KeyTestResult(
         ok=True, status_code=200,
         latency_ms=(time.monotonic() - t0) * 1000, model_used=model,
+    )
+
+
+async def _ping_key(gateway: Gateway, k: ApiKey, adapters: dict) -> dict:
+    """Minimal chat ping for one key; never raises."""
+    provider = k.provider
+    base = {
+        "key_id": k.id,
+        "provider": provider.name if provider else "",
+        "label": k.label or "",
+        "key_hint": k.key_hint or "",
+        "enabled": bool(k.enabled),
+    }
+
+    def fail(error: str, **kw) -> dict:
+        return {**base, "ok": False, "error": error[:300],
+                "status_code": kw.get("status_code"), "latency_ms": kw.get("latency_ms"),
+                "model_used": kw.get("model_used")}
+
+    if provider is None:
+        return fail("provider missing")
+    model = (provider.default_models or [None])[0]
+    if model is None:
+        return fail("provider has no default model to test")
+    try:
+        raw_key = decrypt_key(k.encrypted_key)
+    except ValueError:
+        return fail("cannot decrypt — ENCRYPTION_KEY changed; re-enter the key")
+    adapter = adapters.get(provider.id)
+    if adapter is None:
+        adapter = build_adapter(provider)
+        adapters[provider.id] = adapter
+    t0 = time.monotonic()
+    try:
+        await asyncio.wait_for(
+            adapter.chat_completion(
+                gateway.client, raw_key,
+                {"model": model,
+                 "messages": [{"role": "user", "content": "hi"}],
+                 "max_tokens": 1, "stream": False},
+            ),
+            timeout=30,
+        )
+    except asyncio.TimeoutError:
+        return fail("timed out after 30s", latency_ms=(time.monotonic() - t0) * 1000,
+                    model_used=model)
+    except Exception as e:
+        return fail(str(e), status_code=getattr(e, "status_code", None),
+                    latency_ms=(time.monotonic() - t0) * 1000, model_used=model)
+    return {**base, "ok": True, "status_code": 200,
+            "latency_ms": (time.monotonic() - t0) * 1000, "model_used": model}
+
+
+@router.post("/keys/test-all", response_model=KeyBulkTestResult)
+async def test_all_keys(
+    request: Request, session: AsyncSession = Depends(get_session)
+) -> KeyBulkTestResult:
+    """Ping every stored key against its provider (4 at a time, 30s each)."""
+    keys = (
+        await session.execute(
+            select(ApiKey)
+            .options(selectinload(ApiKey.provider))
+            .order_by(ApiKey.provider_id, ApiKey.id)
+        )
+    ).scalars().all()
+    gateway = _gateway(request)
+    sem = asyncio.Semaphore(4)
+    adapters: dict[int, object] = {}
+
+    async def guarded(k: ApiKey) -> dict:
+        async with sem:
+            return await _ping_key(gateway, k, adapters)
+
+    results = await asyncio.gather(*(guarded(k) for k in keys))
+    items = [KeyBulkTestItem(**r) for r in results]
+    return KeyBulkTestResult(
+        tested=len(items),
+        ok=sum(1 for i in items if i.ok),
+        failed=sum(1 for i in items if not i.ok),
+        results=items,
     )
 
 
