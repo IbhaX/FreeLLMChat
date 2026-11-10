@@ -41,7 +41,7 @@
       // login card
       const login=document.createElement('div');
       login.id='loginGate';
-      login.innerHTML=`<div class="ui-modal" style="position:fixed"><div class="ui-modal-card" style="width:380px;padding:28px">
+      login.innerHTML=`<div class="ui-modal" style="position:fixed"><div class="ui-modal-card" style="width:380px;max-width:calc(100vw - 32px);padding:28px">
         <div class="avatar" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:#fff;font-weight:700;font-size:18px;margin-bottom:14px">F</div>
         <h3 style="margin-bottom:4px">FreeLLM Gateway</h3>
         <p class="tx-2 t-sm" style="margin:0 0 16px">Enter your admin token to continue.</p>
