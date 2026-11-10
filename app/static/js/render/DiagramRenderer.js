@@ -38,13 +38,14 @@
     const stack = el("div", { class: "nova-architecture-stack" });
     layers.forEach((layer, index) => {
       const panel = el("div", { class: "nova-architecture-layer" });
-      if (layer.title || layer.subtitle) {
+      const hasNodes = Array.isArray(layer.nodes) && layer.nodes.length > 0;
+      if (hasNodes && (layer.title || layer.subtitle)) {
         const label = el("div", { class: "nova-layer-heading" });
         if (layer.title) label.append(el("div", { class: "nova-layer-title" }, text(layer.title)));
         if (layer.subtitle) label.append(el("div", { class: "nova-layer-subtitle" }, text(layer.subtitle)));
         panel.append(label);
       }
-      const nodes = Array.isArray(layer.nodes) && layer.nodes.length
+      const nodes = hasNodes
         ? layer.nodes.slice(0, 8)
         : (layer.title ? [{ title: layer.title, subtitle: layer.subtitle, icon: layer.icon }] : []);
       if (nodes.length) {
