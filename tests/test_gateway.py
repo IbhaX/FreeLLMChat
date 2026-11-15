@@ -424,3 +424,26 @@ async def test_no_route_reports_cooldowns(session):
         )
     await gw.close()
     assert "cooldown" in str(exc.value).lower()
+
+
+def test_model_quality_orders_by_capability():
+    """Bigger instruct models rank above tiny/reasoning-tuned ones."""
+    from app.gateway import Gateway
+    q = Gateway._model_quality
+    assert q("llama-3.3-70b-versatile") > q("llama3.2:1b")
+    assert q("llama3.2:1b") > q("deepseek-r1:1.5b")  # reasoning penalized
+    assert q("command-r7b-12-2024") > 0  # NOT a reasoning model (r7b != r1)
+    assert q("mistral-large-latest") == 0.0  # unknown size -> neutral
+
+
+def test_order_models_prefers_capable_alternates():
+    """Curated defaults stay first; discovered models rank by quality."""
+    import types
+    from app.gateway import Gateway
+    gw = Gateway.__new__(Gateway)
+    p = types.SimpleNamespace(default_models=["tiny:1b"])
+    out = gw._order_models(
+        p, ["tiny:1b", "deepseek-r1:1.5b", "llama3.2:1b", "llama-3.3-70b"])
+    assert out[0] == "tiny:1b"  # curated default keeps its slot
+    assert out.index("llama-3.3-70b") < out.index("llama3.2:1b")
+    assert "deepseek-r1:1.5b" not in out  # weakest is capped out entirely

@@ -506,15 +506,35 @@ class Gateway:
             plan.append(ollama_entry)
         return plan
 
+    _SIZE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*b(?:illion)?\b", re.I)
+    _REASONING_HINT = re.compile(
+        r"(?:^|[-_:/])(r1|reasoning|think|qwq|o\d+)(?:[-_:/]|$)", re.I)
+
+    @classmethod
+    def _model_quality(cls, name: str) -> float:
+        """Rough capability score for ordering *uncurated* model lists.
+        Bigger parameter counts rank higher; reasoning-tuned variants
+        (r1/o*/think/qwq) are penalized for general chat — they burn tokens
+        on hidden chain-of-thought and routinely break structured output."""
+        n = name.lower()
+        m = cls._SIZE_RE.search(n)
+        size = float(m.group(1)) if m else 0.0
+        if cls._REASONING_HINT.search(n):
+            size *= 0.2
+        return size
+
     def _order_models(
         self, provider: Provider, models: list[str]
     ) -> list[str]:
-        """Curated ``default_models`` first, capped at the alternate count."""
+        """Curated ``default_models`` first, then discovered models ranked
+        by rough capability, capped at the alternate count."""
         defaults = provider.default_models or []
         dset = set(defaults)
         in_set = set(models)
         ordered = [m for m in defaults if m in in_set]
-        ordered += [m for m in models if m not in dset]
+        rest = [m for m in models if m not in dset]
+        rest.sort(key=lambda m: -self._model_quality(m))
+        ordered += rest
         return ordered[: self._AUTO_MODEL_ALTERNATES]
 
     def _attempt_budget(
