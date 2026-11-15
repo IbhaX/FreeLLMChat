@@ -55,3 +55,12 @@ def test_non_dict_config_is_safe() -> None:
 def test_caps_only_returns_dicts() -> None:
     assert _caps({"capabilities": ["a", "b"]}) == {}
     assert _caps({"capabilities": {"tools_enabled": True}}) == {"tools_enabled": True}
+
+
+def test_null_timeout_falls_back_to_default() -> None:
+    """Seed agents store "timeout": null — float(None) used to crash the
+    whole agent reply with 'float() argument must be ...'."""
+    cfg = _agent({"execution": {"timeout": None}})
+    execution = cfg.config.get("execution", {})
+    timeout_s = max(1.0, min(float(execution.get("timeout") or 120), 600.0))
+    assert timeout_s == 120.0

@@ -372,7 +372,7 @@ async def run_agent(
     """Run an agent with bounded context, relevant memory and execution limits."""
     history = _bounded_history(history)
     execution = _cfg(agent_cfg).get("execution", {})
-    timeout_s = max(1.0, min(float(execution.get("timeout", 120)), 600.0))
+    timeout_s = max(1.0, min(float(execution.get("timeout") or 120), 600.0))
     if _tool_names(agent_cfg):
         messages = _messages(agent_cfg, message, history, custom_instructions)
         result = await asyncio.wait_for(
@@ -446,7 +446,7 @@ async def stream_agent(
     if agent_cfg.max_tokens is not None:
         payload["max_tokens"] = agent_cfg.max_tokens
     execution = _cfg(agent_cfg).get("execution", {})
-    timeout_s = max(1.0, min(float(execution.get("timeout", 120)), 600.0))
+    timeout_s = max(1.0, min(float(execution.get("timeout") or 120), 600.0))
     try:
         async with asyncio.timeout(timeout_s):
             async with get_session_factory()() as session:
