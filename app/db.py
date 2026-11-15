@@ -112,6 +112,23 @@ async def init_db() -> None:
             if c_cols and col not in c_cols:
                 await conn.exec_driver_sql(
                     f"ALTER TABLE characters ADD COLUMN {col} {ddl}")
+        # Activity-log v2: normalized event fields on the agent ledger.
+        ae_cols = {
+            r[1]
+            for r in (await conn.exec_driver_sql(
+                "PRAGMA table_info(agent_events)")).fetchall()
+        }
+        ae_adds = {
+            "kind": "VARCHAR(24) DEFAULT 'note'",
+            "title": "VARCHAR(512) DEFAULT ''",
+            "parent": "VARCHAR(64) DEFAULT ''",
+            "level": "VARCHAR(16) DEFAULT 'normal'",
+            "payload": "JSON",
+        }
+        for col, ddl in ae_adds.items():
+            if ae_cols and col not in ae_cols:
+                await conn.exec_driver_sql(
+                    f"ALTER TABLE agent_events ADD COLUMN {col} {ddl}")
 
 
 async def close_db() -> None:

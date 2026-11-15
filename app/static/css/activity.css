@@ -1,0 +1,162 @@
+/* ActivityLog — agent step timeline (activity-log v2). */
+
+.alog{display:flex;flex-direction:column;font-size:12px;color:var(--text-2);
+  min-width:0;position:relative}
+
+/* ---------- summary header ---------- */
+.alog-head{display:flex;align-items:center;gap:8px;padding:6px 11px;
+  font-size:11.5px;font-weight:600;letter-spacing:.01em;user-select:none}
+.alog-now{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;color:var(--text-1)}
+.alog-count{color:var(--text-3);font-weight:500;font-variant-numeric:tabular-nums}
+.alog-gear{border:0;background:none;color:var(--text-3);cursor:pointer;
+  font-size:13px;padding:2px 4px;border-radius:var(--r-sm);line-height:1}
+.alog-gear:hover{color:var(--text-1);background:var(--surface-3)}
+
+.alog-state{width:9px;height:9px;border-radius:50%;flex:none;
+  background:var(--text-3)}
+.alog-state.s-running{background:var(--accent);
+  box-shadow:0 0 6px var(--accent-soft);animation:alogPulse 1.4s infinite}
+.alog-state.s-done{background:var(--success)}
+.alog-state.s-failed{background:var(--error)}
+
+/* ---------- toolbar ---------- */
+.alog-tools{display:flex;gap:6px;flex-wrap:wrap;padding:4px 11px 8px;
+  border-bottom:1px solid var(--border-1)}
+.alog-tools select,.alog-tools input{
+  background:var(--surface-2);border:1px solid var(--border-1);
+  border-radius:var(--r-sm);color:var(--text-2);font-size:11px;
+  padding:3px 7px;font-family:var(--font-ui)}
+.alog-tools input[type=search]{flex:1;min-width:90px}
+.alog-vb{display:inline-flex;align-items:center;gap:4px;font-size:11px;
+  color:var(--text-3);cursor:pointer;white-space:nowrap}
+
+/* ---------- steps ---------- */
+.alog-steps{overflow-y:auto;max-height:340px;position:relative;
+  scrollbar-width:thin}
+.alog-step[hidden]{display:none}
+.alog-step{display:flex;align-items:stretch;position:relative;
+  padding:0;border-top:1px solid var(--border-1)}
+.alog-step.in{animation:alogIn .28s ease-out}
+@keyframes alogIn{from{opacity:0;transform:translateY(-4px)}
+  to{opacity:1;transform:none}}
+@keyframes alogPulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+.alog-step>.alog-rail{width:26px;flex:none;display:flex;align-items:flex-start;
+  justify-content:center;padding-top:9px;position:relative}
+.alog-step>.alog-rail::after{content:"";position:absolute;top:26px;bottom:0;
+  left:50%;width:1px;background:var(--border-1);transform:translateX(-.5px)}
+.alog-step:last-child>.alog-rail::after{display:none}
+.alog-step>.alog-main{flex:1;min-width:0;padding:5px 10px 6px 0}
+.alog-step>.alog-exp{flex:none;align-self:flex-start;margin-top:6px;
+  border:0;background:none;color:var(--text-3);cursor:pointer;font-size:12px;
+  padding:1px 3px;transition:transform .15s;border-radius:3px}
+.alog-step>.alog-exp.open{transform:rotate(90deg);color:var(--text-1)}
+.alog-step>.alog-exp:hover{color:var(--text-1)}
+
+/* node glyph: kind color + status symbol — never color-only */
+.alog-node{width:17px;height:17px;border-radius:50%;flex:none;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;line-height:1;position:relative;z-index:1;
+  border:1.5px solid var(--border-3);color:var(--text-3);
+  background:var(--surface-1)}
+.alog-step[data-status=running]>.alog-rail>.alog-node{border-style:dashed}
+.alog-step[data-status=running]>.alog-rail>.alog-node::before{
+  content:"";position:absolute;inset:-4px;border-radius:50%;
+  border:1.5px solid transparent;border-top-color:currentColor;
+  animation:alogSpin 1s linear infinite}
+@keyframes alogSpin{to{transform:rotate(360deg)}}
+.alog-step[data-status=done]>.alog-rail>.alog-node{color:var(--success);
+  border-color:var(--success)}
+.alog-step[data-status=failed]>.alog-rail>.alog-node{color:var(--error);
+  border-color:var(--error);background:var(--error-soft)}
+.alog-step[data-status=waiting]>.alog-rail>.alog-node{color:var(--warn);
+  border-color:var(--warn)}
+.alog-step[data-status=skipped]>.alog-rail>.alog-node{color:var(--text-3);
+  border-style:dashed}
+
+/* kind accents (icon color) */
+.alog-node.k-think{color:#a78bfa}.alog-node.k-plan{color:#60a5fa}
+.alog-node.k-search{color:#22d3ee}.alog-node.k-read{color:#2dd4bf}
+.alog-node.k-write{color:#fbbf24}.alog-node.k-run{color:var(--success)}
+.alog-node.k-decide{color:#818cf8}.alog-node.k-wait{color:var(--warn)}
+.alog-node.k-error{color:var(--error)}.alog-node.k-result{color:var(--success)}
+.alog-node.k-usage{color:#f0b429}
+.alog-line{display:flex;align-items:baseline;gap:8px;min-width:0}
+.alog-title{flex:1;min-width:0;color:var(--text-2);line-height:1.5;
+  overflow-wrap:anywhere}
+.alog-step[data-status=running] .alog-title{color:var(--text-1);font-weight:500}
+.alog-step[data-status=failed] .alog-title{color:var(--error)}
+.alog-step[data-status=skipped] .alog-title{color:var(--text-3);
+  text-decoration:line-through;text-decoration-color:var(--border-3)}
+.alog-time{flex:none;color:var(--text-3);font-size:10.5px;
+  font-variant-numeric:tabular-nums}
+.alog-step[data-status=running] .alog-time{color:var(--accent)}
+
+/* groups: container steps + nested children */
+.alog-step.grp>.alog-main>.alog-line>.alog-title{font-weight:600;
+  color:var(--text-1)}
+.alog-kids{display:none;margin:2px 0 4px;border-left:1px solid var(--border-1);
+  padding-left:4px}
+.alog-step.has-kids>.alog-main>.alog-kids{display:block}
+.alog-kids .alog-step{border-top:0}
+.alog-kids .alog-step>.alog-rail::after{display:none}
+.alog-kids .alog-step>.alog-rail{width:20px;padding-top:8px}
+.alog-kids .alog-node{width:13px;height:13px;font-size:8px}
+
+/* inline "model card" on usage steps — visible without expanding */
+.alog-card{margin:4px 0 4px 2px}
+.alog-usage{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;
+  padding:8px 10px;background:var(--surface-2);
+  border:1px solid var(--border-1);border-radius:var(--r-sm);
+  font-size:11px;line-height:1.5}
+.alog-usage .alog-ucell{display:flex;justify-content:space-between;
+  gap:10px;min-width:0}
+.alog-usage .alog-ucell.w{grid-column:1/-1}
+.alog-usage .alog-ukey{color:var(--text-3);flex:none}
+.alog-usage .alog-uval{color:var(--text-1);font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+@media (max-width:560px){.alog-usage{grid-template-columns:1fr}}
+
+/* expandable next-level detail (plan, queries, tool I/O) */
+.alog-step.collapsed>.alog-main>.alog-kids{display:none}
+.alog-detail{margin:4px 0 6px 2px;padding:8px 10px;background:var(--surface-2);
+  border:1px solid var(--border-1);border-radius:var(--r-sm);
+  max-height:260px;overflow-y:auto;display:grid;gap:8px}
+.alog-detail[hidden]{display:none}
+.alog-dlabel{font-size:10px;font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--text-3);margin-bottom:2px}
+.alog-dbody{font-size:12px;line-height:1.55;color:var(--text-2);
+  white-space:pre-wrap;overflow-wrap:anywhere}
+.alog-dbody.mono{font-family:var(--font-mono);font-size:11px;
+  background:var(--code-bg);padding:5px 7px;border-radius:var(--r-sm)}
+
+/* verbose-level rows hidden until toggled */
+.alog-step.v{display:none}
+.alog.show-verbose .alog-step.v{display:flex}
+
+/* failed steps get a subtle left emphasis */
+.alog-step[data-status=failed]{background:linear-gradient(90deg,
+  var(--error-soft),transparent 55%)}
+
+/* jump-to-latest */
+.alog-jump{position:absolute;right:10px;bottom:10px;z-index:5;
+  border:1px solid var(--border-2);background:var(--surface-3);
+  color:var(--text-1);border-radius:999px;padding:3px 11px;font-size:11px;
+  cursor:pointer;box-shadow:var(--shadow-2)}
+.alog-jump:hover{background:var(--surface-2);border-color:var(--border-3)}
+
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+@media (max-width:560px){
+  .alog-steps{max-height:260px}
+  .alog-step>.alog-rail{width:22px}
+  .alog-head{gap:6px}
+}
+@media (prefers-reduced-motion:reduce){
+  .alog-step.in{animation:none}
+  .alog-state.s-running,.alog-step[data-status=running]>.alog-rail>.alog-node::before{
+    animation:none}
+}

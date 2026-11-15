@@ -668,11 +668,13 @@ class Gateway:
                     tin = usage.get("prompt_tokens", 0)
                     tout = usage.get("completion_tokens", 0)
                     await self._record_success(session, key, provider, tin, tout)
+                    elapsed_ms = (time.monotonic() - t0) * 1000
                     await self._log(
                         session, request_id, payload["model"], model, provider,
-                        key, "ok", 200, (time.monotonic() - t0) * 1000, tin, tout,
+                        key, "ok", 200, elapsed_ms, tin, tout,
                         request_input=_payload_input(payload),
                         response_text=_result_text(result))
+                    emit(_usage_event(provider, key, model, tin, tout, elapsed_ms))
                     self._last_err, self._last_attempts = last_err, attempts
                     return result, provider, key, model
             await self._emit_skip_reason(
@@ -765,12 +767,14 @@ class Gateway:
                             retryable=True,
                         )
                         await self._record_failure(session, key, provider, last_err)
-                        emit({"event": "retry", "text": f"{provider.name} · {key.label} — no response, trying next"})
+                        emit({"event": "retry", "text": f"{provider.name} · {key.label} — "
+                                "no response, trying next"})
                         continue
                     except StopAsyncIteration:
                         last_err = ProviderError("empty stream", retryable=True)
                         await self._record_failure(session, key, provider, last_err)
-                        emit({"event": "retry", "text": f"{provider.name} · {key.label} — empty stream, next key"})
+                        emit({"event": "retry", "text": f"{provider.name} · {key.label} — "
+                                "empty stream, next key"})
                         continue
                     except ProviderError as e:
                         last_err = e
@@ -783,7 +787,8 @@ class Gateway:
                                           f"({e.status_code or 'err'}) — next model"})
                             break
                         await self._record_failure(session, key, provider, e)
-                        emit({"event": "retry", "text": f"{provider.name} · {key.label} failed ({e.status_code or 'error'})"})
+                        emit({"event": "retry", "text": f"{provider.name} · {key.label} failed "
+                                f"({e.status_code or 'error'})"})
                         if not e.retryable:
                             provider_done = True
                             break
@@ -791,13 +796,14 @@ class Gateway:
                     except Exception as e:
                         last_err = ProviderError(str(e), retryable=True)
                         await self._record_failure(session, key, provider, last_err)
-                        emit({"event": "retry", "text": f"{provider.name} · {key.label} — {e}, retrying"})
+                        emit({"event": "retry", "text": f"{provider.name} · {key.label} — {e}, "
+                                "retrying"})
                         continue
                     await self._sticky_set(session, requested, provider, model)
                     return (
                         self._wrap_stream(
                             session, stream, first, request_id, requested, model,
-                            provider, key, payload,
+                            provider, key, payload, emit,
                         ),
                         provider,
                         key,
@@ -822,7 +828,9 @@ class Gateway:
         provider: Provider,
         key: ApiKey,
         payload: dict[str, Any],
+        emit: Any | None = None,
     ) -> AsyncIterator[bytes]:
+        emit = emit or (lambda ev: None)
         t0 = time.monotonic()
         tin = tout = 0
         resp_parts: list[str] = []
@@ -852,14 +860,49 @@ class Gateway:
             )
             return
         await self._record_success(session, key, provider, tin, tout)
+        elapsed_ms = (time.monotonic() - t0) * 1000
         await self._log(session, request_id, requested, model, provider, key,
-                        "ok", 200, (time.monotonic() - t0) * 1000, tin, tout,
+                        "ok", 200, elapsed_ms, tin, tout,
                         request_input=_payload_input(payload),
                         response_text="".join(resp_parts)[:8000] or None)
+        emit(_usage_event(provider, key, model, tin, tout, elapsed_ms))
 
     @staticmethod
     def _aware(dt: datetime) -> datetime:
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _usage_event(provider: Provider | None, key: ApiKey | None, model: str,
+                 tin: int, tout: int, duration_ms: float) -> dict[str, Any]:
+    """Activity event carrying per-call model/token/cost accounting.
+
+    Cost is computed from ``provider.pricing`` ({input_per_mtok,
+    output_per_mtok, currency, model_overrides}); ``None`` when no pricing
+    is configured — the UI hides the field rather than show a fake 0.
+    """
+    pricing = dict(provider.pricing or {}) if provider is not None else {}
+    overrides = pricing.pop("model_overrides", None) or {}
+    pricing.update(overrides.get(model) or {})
+    pin, pout = pricing.get("input_per_mtok"), pricing.get("output_per_mtok")
+    cost = (
+        (tin or 0) * float(pin or 0) / 1e6
+        + (tout or 0) * float(pout or 0) / 1e6
+        if pin is not None or pout is not None else None
+    )
+    total = int(tin or 0) + int(tout or 0)
+    return {
+        "event": "usage",
+        "text": f"{model} · {total:,} tokens",
+        "model": model or "",
+        "provider": provider.name if provider else "",
+        "key_label": getattr(key, "label", "") or "",
+        "tokens_in": int(tin or 0),
+        "tokens_out": int(tout or 0),
+        "tokens_total": total,
+        "duration_ms": int(duration_ms),
+        "cost_usd": cost,
+        "currency": str(pricing.get("currency") or "USD"),
+    }
 
 
 def _extract_usage(chunk: bytes) -> tuple[int, int]:

@@ -64,13 +64,16 @@
       const r=await v1Api('/v1/agents/runs/'+id);
       box.innerHTML=`<div style="font-weight:700;margin-bottom:8px">#${r.id} ${esc(r.kind)} — ${esc(r.question.slice(0,120))}
         <span class="pill ${r.status==='done'?'ok':'mut'}" style="margin-left:8px">${r.status}</span></div>
-        ${(r.events||[]).map(e=>`<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border-1);font-size:var(--t-sm)">
-          <span class="tx-3" style="width:34px;flex:none">#${e.seq}</span>
-          <span class="tx-3" style="width:90px;flex:none">${esc(e.stage||e.event)}</span>
-          <b style="width:110px;flex:none">${esc(e.actor)}</b>
-          <span class="${e.status==='fail'?'':''}" style="flex:1;${e.status==='fail'?'color:var(--error)':''}">${esc(e.detail)}</span>
-          <span class="tx-3" style="width:60px;flex:none;text-align:right">${e.duration_ms?e.duration_ms.toFixed(0)+'ms':''}</span>
-        </div>`).join('')||'<div class="tx-3">No events.</div>'}`;
+        <div class="act-steps" style="max-width:none"><div class="act-list"></div></div>`;
+      const host=box.querySelector('.act-list');
+      if(window.Nova&&Nova.ActivityLog){
+        const log=Nova.ActivityLog.create(host);
+        (r.events||[]).forEach(e=>log.ingest(e));
+        log.finish(r.status==='done'?'Replayed trace':'Ended: '+r.status,r.status!=='failed');
+      }else{
+        host.innerHTML=(r.events||[]).map(e=>`<div class="act-item">
+          <span class="act-dot"></span><span>${esc(e.title||e.detail||e.event)}</span></div>`).join('');
+      }
       box.scrollIntoView({behavior:'smooth',block:'nearest'});
     }catch(e){box.innerHTML='<div class="tx-3">'+esc(e.message)+'</div>';}
   }

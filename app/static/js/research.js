@@ -3,15 +3,17 @@
   const $=s=>document.querySelector(s);
   let currentAnswer='';
   let running=false;
+  let actLog=null;
 
   AdminShell.mount('research');
   window.addEventListener('admin-ready',init);
   if(ADMIN_TOKEN)init();
 
-  function addStage(text){
+  function addStage(ev){
+    if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);return;}
     const d=document.createElement('div');
     d.className='rs-stage';
-    d.innerHTML=`<span class="dot"></span><span>${esc(text)}</span>`;
+    d.innerHTML=`<span class="dot"></span><span>${esc(typeof ev==='string'?ev:(ev.text||ev.event))}</span>`;
     $('#stages').appendChild(d);
   }
 
@@ -93,6 +95,7 @@
     if(!q||running)return;
     running=true;$('#runBtn').disabled=true;$('#runBtn').textContent='Researching…';
     $('#stages').innerHTML='';$('#report').innerHTML='<p class="tx-3" style="text-align:center;padding:48px 0">Research in progress — the report appears here when complete.</p>';
+    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create($('#stages')):null;
     currentAnswer='';$('#exportBtn').disabled=true;
     try{
       const modeHints={academic:' Focus on academic and peer-reviewed sources — prefer papers, journals, and .edu domains.',
@@ -121,7 +124,8 @@
               const ev=JSON.parse(data);
               if(ev.freellm){
                 const e=ev.freellm;
-                if(e.text)addStage(e.text);
+                if(e.event==='research_answer'||e.event==='research_done')continue;
+                addStage(e);
               }else if(ev.choices&&ev.choices[0]&&ev.choices[0].delta&&ev.choices[0].delta.content){
                 renderAnswer(ev.choices[0].delta.content);
                 loadRuns();
@@ -131,9 +135,10 @@
         }
       }
     }catch(e){
-      addStage('Error: '+e.message);
+      if(actLog)actLog.fail(e.message);else addStage('Error: '+e.message);
       toast(e.message,'err');
     }finally{
+      if(actLog)actLog.finish();
       running=false;$('#runBtn').disabled=false;$('#runBtn').textContent='Run research';
     }
   }

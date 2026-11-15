@@ -211,8 +211,9 @@ async def list_agent_runs(
 @chat_router.get("/runs/{run_id}")
 async def get_agent_run(run_id: int,
                         session: AsyncSession = Depends(get_session)) -> dict:
-    """Full trace of one run — every recorded step with actor/status/duration."""
+    """Full trace of one run — normalized activity events for replay."""
     from app.models import AgentRun
+    from app.services import agent_log
     r = await session.get(AgentRun, run_id)
     if not r:
         raise HTTPException(404, "run not found")
@@ -221,10 +222,5 @@ async def get_agent_run(run_id: int,
         "subject": r.subject, "model": r.model, "status": r.status,
         "meta": r.meta, "started_at": r.started_at.isoformat() if r.started_at else None,
         "duration_ms": r.duration_ms,
-        "events": [{
-            "seq": e.seq, "stage": e.stage, "actor": e.actor,
-            "event": e.event, "detail": e.detail, "status": e.status,
-            "duration_ms": e.duration_ms,
-            "ts": e.ts.isoformat() if e.ts else None,
-        } for e in sorted(r.events, key=lambda x: x.seq)],
+        "events": await agent_log.list_events(session, run_id),
     }

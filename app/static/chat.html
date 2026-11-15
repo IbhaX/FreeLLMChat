@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/theme.css">
 <link rel="stylesheet" href="/static/css/render.css">
+<link rel="stylesheet" href="/static/css/activity.css">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
@@ -30,6 +31,7 @@
 <script src="/static/js/render/Cards.js"></script>
 <script src="/static/js/render/JsonViewer.js"></script>
 <script src="/static/js/render/StatusRenderers.js"></script>
+<script src="/static/js/render/ActivityLog.js"></script>
 <script src="/static/js/render/MediaRenderer.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="/static/js/render/InteractiveRenderer.js"></script>
@@ -109,26 +111,21 @@
   .topbar .chat-name{font-size:14px;font-weight:600}
   .topbar .chat-status{font-size:11px;color:var(--text-3)}
   .topbar .chat-status .on{color:var(--success)}
-  /* Workspace actions: keep chat identity/model controls separate from task modes. */
-  .workspace-tools{display:flex;align-items:center;gap:10px;padding:8px 16px;
-    border-bottom:1px solid var(--border-1);background:var(--bg-1);flex:none}
-  .workspace-tools .tool-group{display:flex;align-items:center;gap:6px;min-width:0}
-  .workspace-tools .tool-label{font-size:10px;font-weight:700;letter-spacing:.08em;
-    text-transform:uppercase;color:var(--text-3);margin-right:3px;white-space:nowrap}
-  .workspace-tools .tool-spacer{flex:1}
-  .workspace-tools .pill-btn{min-height:34px;padding:6px 12px}
-  .workspace-tools .agent-create{font-weight:700;color:var(--accent);border-style:dashed}
-  .workspace-tools .agent-create:hover{background:var(--accent-soft);border-color:var(--accent-line)}
-  #agentMenu{top:104px!important;right:16px!important}
-  #rpMenu{top:104px!important;right:auto!important;left:16px}
+  /* Composer "+" menu (Manus-style) — tools/modes above the input box */
+  #plusMenu .mi{display:flex;align-items:center;gap:9px}
+  #plusMenu .mi.on{color:var(--accent);font-weight:600}
+  #plusMenu .mi.on::after{content:"✓";margin-left:auto;color:var(--accent)}
+  .mode-chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+  .mode-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 5px 3px 9px;
+    border-radius:999px;border:1px solid var(--accent-line);background:var(--accent-soft);
+    color:var(--text-1);font-size:11px;font-weight:600;white-space:nowrap}
+  .mode-chip .mrm{border:0;background:none;color:var(--text-3);cursor:pointer;
+    font-size:11px;padding:0 3px;border-radius:50%;line-height:1}
+  .mode-chip .mrm:hover{color:var(--error)}
   @media(max-width:700px){
-    .workspace-tools{padding:7px 10px;gap:7px;overflow-x:auto;scrollbar-width:none}
-    .workspace-tools::-webkit-scrollbar{display:none}
-    .workspace-tools .tool-label{display:none}
-    .workspace-tools .tool-group{flex:none}
-    .workspace-tools .pill-btn{padding:6px 9px;white-space:nowrap}
-    #agentMenu{top:102px!important;right:10px!important;left:auto!important;max-width:calc(100vw - 20px)}
-    #rpMenu{top:102px!important;left:10px!important;right:auto!important;max-width:calc(100vw - 20px)}
+    #agentMenu,#rpMenu{left:10px!important;right:10px!important;
+      min-width:0!important;max-width:calc(100vw - 20px)}
+    #plusMenu{left:0;right:0;min-width:0}
   }
   .pill-btn{
     display:inline-flex;align-items:center;gap:7px;padding:5px 11px;
@@ -272,17 +269,18 @@
   }
   .regen-note{font-size:11px;color:var(--text-3);margin-top:5px}
   /* ---------- Composer ---------- */
-  .composer{flex:none;padding:10px 12px 12px;border-top:1px solid var(--border-1);
+  .composer{flex:none;padding:10px 14px 12px;border-top:1px solid var(--border-1);
     background:var(--bg-1)}
-  .comp-inner{max-width:780px;margin:0 auto}
+  .comp-inner{max-width:none;margin:0}
   .comp-box{background:var(--surface-1);border:1px solid var(--border-2);
     border-radius:var(--r-lg);padding:10px 12px;transition:.15s;box-shadow:var(--shadow-1)}
   .comp-box:focus-within{border-color:var(--accent-line);box-shadow:var(--shadow-2),var(--ring)}
   .chip-row{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
   .chip-row:empty{display:none}
   .comp-box textarea{
-    width:100%;border:none;background:transparent;color:var(--text-1);resize:none;
-    font:inherit;font-size:15px;line-height:1.5;outline:none;max-height:160px;
+    width:100%;border:none;outline:none;box-shadow:none;appearance:none;
+    background:transparent;color:var(--text-1);resize:none;
+    font:inherit;font-size:15px;line-height:1.5;max-height:160px;display:block;
   }
   .comp-box textarea::placeholder{color:var(--text-3)}
   .comp-bar{display:flex;align-items:center;gap:4px;margin-top:6px}
@@ -412,25 +410,11 @@
     </div>
   </div>
 
-  <nav class="workspace-tools" aria-label="Workspace tools">
-    <div class="tool-group" aria-label="Agents">
-      <span class="tool-label">Work with</span>
-      <button class="pill-btn" id="agentBtn" title="Browse and select agents">🤖<span class="tb-tx"> Agents</span></button>
-      <button class="pill-btn agent-create" id="agentNewBtn" title="Create a new agent">＋<span class="tb-tx"> Create agent</span></button>
-      <button class="pill-btn" id="agentEditBtn" title="Edit selected agent" style="display:none">✏️</button>
-      <button class="pill-btn" id="agentDelBtn" title="Delete selected agent" style="display:none;color:var(--error)">🗑</button>
-    </div>
-    <div class="tool-spacer"></div>
-    <div class="tool-group" aria-label="Modes">
-      <span class="tool-label">Modes</span>
-      <button class="pill-btn" id="rpBtn" title="Choose or create a roleplay character">🎭<span class="tb-tx"> Roleplay</span></button>
-      <button class="pill-btn" id="researchBtn" title="Deep research: click to toggle; double-click to cycle depth">🔬<span class="tb-tx"> Deep research</span> <span style="opacity:.7;font-size:10px">auto</span></button>
-    </div>
-  </nav>
+  <!-- Mode/agent controls live in the composer "+" menu (Manus-style). -->
 
   <div id="groupStage" style="display:none"></div>
 
-  <div class="ui-menu" id="agentMenu" style="display:none;position:absolute;top:56px;right:16px;z-index:200;min-width:270px">
+  <div class="ui-menu" id="agentMenu" style="display:none;position:absolute;bottom:84px;left:16px;top:auto;right:auto;z-index:200;min-width:270px">
     <div class="mi-head">Select agent</div>
     <div id="agentList" style="max-height:240px;overflow-y:auto"></div>
     <div style="border-top:1px solid var(--border-1);margin-top:4px;padding-top:4px">
@@ -439,7 +423,7 @@
     </div>
   </div>
 
-  <div class="ui-menu" id="rpMenu" style="display:none;position:absolute;top:56px;right:16px;z-index:200;min-width:280px">
+  <div class="ui-menu" id="rpMenu" style="display:none;position:absolute;bottom:84px;left:16px;top:auto;right:auto;z-index:200;min-width:280px">
     <div class="mi-head">Roleplay characters</div>
     <div id="rpList" style="max-height:240px;overflow-y:auto"></div>
     <div style="border-top:1px solid var(--border-1);margin-top:4px;padding-top:4px">
@@ -457,15 +441,30 @@
     <div class="comp-inner comp-wrap">
       <div class="slash-menu" id="slashMenu"></div>
       <div class="comp-box">
+        <div class="ui-menu" id="plusMenu" style="display:none;position:absolute;bottom:calc(100% + 8px);left:0;z-index:200;min-width:250px">
+          <div class="mi-head">Work with</div>
+          <div class="mi" id="agentBtn">🤖<span class="tb-tx"> Agents…</span></div>
+          <div class="mi" id="agentNewBtn">＋<span class="tb-tx"> Create agent</span></div>
+          <div class="mi" id="agentEditBtn" style="display:none">✏️<span class="tb-tx"> Edit agent</span></div>
+          <div class="mi" id="agentDelBtn" style="display:none;color:var(--error)">🗑<span class="tb-tx"> Delete agent</span></div>
+          <div class="mi-head" style="border-top:1px solid var(--border-1);margin-top:4px;padding-top:6px">Modes</div>
+          <div class="mi" id="researchBtn">🔬<span class="tb-tx"> Deep research</span> <span style="opacity:.7;font-size:10px">auto</span></div>
+          <div class="mi" id="pmDepth" style="color:var(--text-3)">↻<span class="tb-tx"> Depth: auto</span></div>
+          <div class="mi" id="rpBtn">🎭<span class="tb-tx"> Roleplay…</span></div>
+        </div>
         <div class="chip-row" id="chipRow"></div>
         <textarea id="input" rows="1" placeholder="Message Nova…  ( / for commands )"></textarea>
         <div class="comp-bar">
+          <button class="ui-btn ui-btn-ghost ui-btn-icon" id="plusBtn" title="Tools, agents & modes" aria-haspopup="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
           <button class="ui-btn ui-btn-ghost ui-btn-icon" id="attachBtn" title="Attach file">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.48-8.48"/></svg>
           </button>
           <button class="ui-btn ui-btn-ghost ui-btn-icon" id="micBtn" title="Voice input">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg>
           </button>
+          <span class="mode-chips" id="modeChips"></span>
           <span class="comp-hint"><kbd>Enter</kbd> send · <kbd>Shift+Enter</kbd> newline · <kbd>/</kbd> commands</span>
           <button class="send-btn" id="sendBtn" title="Send">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>

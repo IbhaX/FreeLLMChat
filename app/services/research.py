@@ -532,6 +532,13 @@ async def _plan(
     if not subs:
         subs = [{"id": "q1", "question": question, "search_queries": [question]}]
     plan["sub_questions"] = subs[:n]
+    emit({"event": "plan", "stage": "plan", "agent": "planner",
+          "text": f"Plan ready: {len(subs[:n])} sub-question(s)",
+          "detail": "\n".join(
+              f"{i + 1}. {sq.get('question', '')}"
+              + (f"\n   queries: {', '.join(_norm_queries(sq.get('search_queries')))}"
+                 if _norm_queries(sq.get("search_queries")) else "")
+              for i, sq in enumerate(subs[:n]))})
     return plan
 
 
@@ -553,7 +560,8 @@ async def _research_one(
         f"Investigate and return the JSON described in your instructions."
     )
     emit({"event": "stage", "text": f"Researching {qid}: {question[:80]}",
-          "stage": "research", "sub": qid, "agent": "researcher"})
+          "stage": "research", "sub": qid, "agent": "researcher",
+          "detail": f"{question}\n\nQueries: {', '.join(queries)}"})
     seen_urls: list[str] = []
 
     def harvest(name: str, output: str) -> None:
@@ -702,7 +710,9 @@ async def _gap_check(
     if state.rounds >= max_rounds:
         return None
     emit({"event": "stage", "text": "Checking coverage…", "stage": "gap",
-          "agent": "gap_checker"})
+          "agent": "gap_checker",
+          "detail": f"{len(state.findings)} findings across "
+                    f"{len(state.plan.get('sub_questions') or [])} sub-questions"})
     plan_txt = json.dumps(state.plan.get("sub_questions") or [], ensure_ascii=False)[:6000]
     res_txt = json.dumps([
         {"sub_question": f.sub_question, "claim": f.claim[:300],
@@ -716,10 +726,17 @@ async def _gap_check(
                        json_mode=True)
     data = _extract_json(text) or {}
     if data.get("complete") is True:
+        emit({"event": "note", "stage": "gap", "text": "Coverage complete"})
         return None
     gaps = [g for g in (data.get("gaps") or []) if isinstance(g, dict)]
     state.contradictions += [c for c in (data.get("contradictions_to_resolve") or [])
                              if isinstance(c, str)]
+    if gaps:
+        emit({"event": "note", "stage": "gap",
+              "text": f"Coverage gap — running follow-up round",
+              "detail": "\n".join(
+                  f"- {str(g.get('question') or g.get('gap') or g)[:200]}"
+                  for g in gaps[:12])})
     return gaps or None
 
 
@@ -730,7 +747,9 @@ async def _verify(
     if not state.findings:
         return
     emit({"event": "stage", "text": "Verifying claims against sources…", "stage": "verify",
-          "agent": "verifier"})
+          "agent": "verifier",
+          "detail": f"{min(40, len(state.findings))} claims × "
+                    f"{len(state.sources)} sources"})
     src_list = [
         {"id": s.id, "title": s.title, "url": s.url, "publisher": s.publisher,
          "date": s.date, "type": s.type, "quality": s.quality}
@@ -760,6 +779,14 @@ async def _verify(
         f.verdict_note = str(v.get("note") or "")
         if f.verdict.lower() in bad:
             state.unverified.append(f"{f.claim[:160]} — {f.verdict}")
+    ok = sum(1 for f in state.findings
+             if (f.verdict or "").lower() in ("supported", "partially supported"))
+    flagged = [f for f in state.findings if (f.verdict or "").lower() in bad]
+    emit({"event": "note", "stage": "verify",
+          "text": f"{ok} verified · {len(flagged)} flagged",
+          "detail": "\n".join(
+              f"- {f.claim[:160]} ({f.verdict}: {f.verdict_note[:120]})"
+              for f in flagged[:10]) or "all clear"})
 
 
 def _group_findings(state: ResearchState) -> list[dict[str, Any]]:
@@ -847,7 +874,9 @@ async def _synthesize_sections(
         return t.strip()
 
     emit({"event": "stage", "text": f"Writing report — {len(groups)} sections",
-          "stage": "synthesize", "agent": "synthesizer"})
+          "stage": "synthesize", "agent": "synthesizer",
+          "detail": "\n".join(f"{i + 1}. {g['title']}"
+                             for i, g in enumerate(groups[:12]))})
     results = await asyncio.gather(
         write_summary(),
         *(write_section(g) for g in groups[:12]),

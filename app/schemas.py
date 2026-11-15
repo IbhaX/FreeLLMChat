@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------- Admin: providers ----------
@@ -307,6 +307,30 @@ class CharacterOut(BaseModel):
     creator_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+
+    # Rows created before the extended columns existed hold NULL — coerce
+    # to field defaults instead of failing validation.
+    @field_validator(
+        "background", "knowledge_domain", "motivations", "boundaries",
+        "example_dialogue", "speaking_style", "avatar_url", mode="before")
+    @classmethod
+    def _none_str(cls, v: object) -> object:
+        return "" if v is None else v
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _none_category(cls, v: object) -> object:
+        return "custom" if v is None else v
+
+    @field_validator("visibility", mode="before")
+    @classmethod
+    def _none_visibility(cls, v: object) -> object:
+        return "public" if v is None else v
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _none_tags(cls, v: object) -> object:
+        return [] if v is None else v
 
 
 class CharacterSyncIn(BaseModel):

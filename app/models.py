@@ -432,6 +432,12 @@ class AgentEvent(Base):
     status: Mapped[str] = mapped_column(String(16), default="ok")
     duration_ms: Mapped[float] = mapped_column(Float, default=0.0)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Activity-log v2 (normalized event contract — see services/activity.py)
+    kind: Mapped[str] = mapped_column(String(24), default="note")
+    title: Mapped[str] = mapped_column(String(512), default="")
+    parent: Mapped[str] = mapped_column(String(64), default="")
+    level: Mapped[str] = mapped_column(String(16), default="normal")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
 
     run: Mapped[AgentRun] = relationship(back_populates="events")
 

@@ -117,7 +117,7 @@ function mkConv(name){return{id:Math.random().toString(36).slice(2,9),name,msgs:
 function seed(){
   const c=mkConv('Welcome chat');
   c.msgs.push({role:'assistant',t:Date.now(),
-    text:"Welcome to **Nova Chat** — powered by your FreeLLM Gateway.\n\nTry:\n- Asking me anything (I stream replies)\n- Typing `/` for commands\n- Creating an agent with **＋** up top\n- Switching models in the top bar"});
+    text:"Welcome to **Nova Chat** — powered by your FreeLLM Gateway.\n\nTry:\n- Asking me anything (I stream replies)\n- Typing `/` for commands\n- Agents & modes from **＋** in the message box\n- Switching models in the top bar"});
   state.conversations.push(c);state.current=c;
 }
 
@@ -229,7 +229,7 @@ function renderSidebar(filter=''){
       <span class="conv-time">${timeStr(c.t)}</span>
       <button class="conv-x" title="Delete">✕</button>`;
     el.querySelector('.conv-x').onclick=e=>{e.stopPropagation();delConv(c);};
-    el.onclick=()=>{state.current=c;renderAll();if(innerWidth<1024)closeSidebar();};
+    el.onclick=()=>{state.current=c;renderAll();checkLive(c);if(innerWidth<1024)closeSidebar();};
     list.appendChild(el);
   }
 }
@@ -386,6 +386,10 @@ async function send(){
       text+=`\n\n--- file: ${f.name} ---\n${body.slice(0,20000)}${body.length>20000?'\n…(truncated)':''}`;
     }catch(_){}
   }
+  // A detached job may still be answering — attach to it instead of
+  // stacking a second send onto the same conversation.
+  const live=await liveStatus(c.id);
+  if(live&&live.running){toast('Still answering the previous message…');resumeLive(c);return;}
   const userMsg={role:'user',text,t:Date.now()};
   if(imgs.length){
     try{
@@ -441,7 +445,41 @@ function handleSlash(q){
   }
   c.msgs.push({role:'assistant',t:Date.now(),text:"Unknown command. Try `/summary`, `/export`, or `/clear`."});
 }
-async function streamAPIReply(c){
+// --- Detached generation (refresh-resilient) --------------------------------
+// The server keeps a per-conversation job alive after disconnect; on load
+// we re-attach to a running job or pick up a reply that finished while away.
+async function liveStatus(id){
+  try{
+    const r=await fetch(API_BASE+'/v1/conversations/'+id+'/live',{headers:apiHeaders()});
+    return r.ok?await r.json():null;
+  }catch(_){return null;}
+}
+async function checkLive(c){
+  if(!c)return;
+  const j=await liveStatus(c.id);
+  if(!j)return;
+  if(j.running){resumeLive(c);return;}
+  if(j.done&&j.reply){
+    // Reply finished while the page was away — merge it if not already here.
+    const last=c.msgs[c.msgs.length-1];
+    if(last&&last.role==='assistant'&&!last.text)c.msgs.pop();
+    const cur=c.msgs[c.msgs.length-1];
+    const same=cur&&cur.role==='assistant'&&cur.text&&
+      (cur.text.slice(0,80)===j.reply.slice(0,80));
+    if(!same){
+      c.msgs.push({role:'assistant',text:j.reply,t:Date.now(),model:j.model||state.model.name});
+      renderAll();
+    }
+  }
+}
+function resumeLive(c){
+  if(state.streaming)return;
+  const last=c.msgs[c.msgs.length-1];
+  if(last&&last.role==='assistant'&&!last.text)c.msgs.pop();
+  toast('Re-attaching to the reply in progress…');
+  streamAPIReply(c,true);
+}
+async function streamAPIReply(c,live){
   state.streaming=true;setSend(true);
   const inner=$('#chatInner');
   const scroller=$('#chatScroll');
@@ -450,13 +488,20 @@ async function streamAPIReply(c){
   trow.innerHTML=`<div class="msg-av ai">${state.agent?'🤖':'N'}</div><div class="msg-col"><div class="typing"><i></i><i></i><i></i></div><details class="act-steps" open><summary><span class="act-ico">⚡</span><span class="act-lbl">Agent activity</span></summary><div class="act-list"></div></details></div>`;
   inner.appendChild(trow);scrollBottom();
   const actList=trow.querySelector('.act-list'),actLbl=trow.querySelector('.act-lbl'),t0=Date.now();
+  const actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList):null;
   const acts=[];
-  const addAct=text=>{acts.push(text);actLbl.textContent=`${acts.length} step${acts.length!==1?'s':''}…`;
-    const it=document.createElement('div');it.className='act-item';
-    it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
-    actList.appendChild(it);scrollBottom();};
-  addAct('routing request…');
-  const actTimer=setInterval(()=>{if(acts.length===1)actLbl.textContent=`routing · ${Math.round((Date.now()-t0)/1000)}s`;},500);
+  const stepCount=()=>actLog?actLog.count():acts.length;
+  const addAct=ev=>{
+    if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);}
+    else{const text=typeof ev==='string'?ev:(ev.text||ev.event);
+      acts.push(text);
+      const it=document.createElement('div');it.className='act-item';
+      it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
+      actList.appendChild(it);}
+    actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
+    scrollBottom();};
+  addAct({kind:'wait',status:'running',title:'Routing request…'});
+  const actTimer=setInterval(()=>{if(stepCount()===1)actLbl.textContent=`routing · ${Math.round((Date.now()-t0)/1000)}s`;},500);
   const ctrl=new AbortController();
   const ab={get stop(){return ctrl.signal.aborted},set stop(v){if(v)ctrl.abort()}};
   state.abort=ab;
@@ -497,7 +542,9 @@ async function streamAPIReply(c){
   const payload=isAgent
     ?{message:lastContent,history:messages.slice(0,-1),stream:true}
     :{model:state.model.id,messages,stream:true,builtin_tools:['*'],conversation_id:c.id};
-  const doFetch=()=>fetch(url,{method:'POST',headers:apiHeaders(),signal:ctrl.signal,body:JSON.stringify(payload)});
+  const doFetch=live
+    ?()=>fetch(API_BASE+'/v1/conversations/'+c.id+'/live/stream',{headers:apiHeaders(),signal:ctrl.signal})
+    :()=>fetch(url,{method:'POST',headers:apiHeaders(),signal:ctrl.signal,body:JSON.stringify(payload)});
   try{
     let resp=await doFetch();
     if(resp.status===401){
@@ -532,7 +579,7 @@ async function streamAPIReply(c){
             if(ev.event==='replace_content'){acc=ev.content||'';msg.text=collapseRepeats(acc);
               if(sr)sr.setText(acc);else if(bubble){bubble.innerHTML=md(acc)+'<span class="cursor"></span>';scrollBottom();}
               continue;}
-            addAct(ev.text||ev.event);continue;}
+            addAct(ev);continue;}
           if(j.error){acc+=`\n\n_${errText(j.error)}_`;continue;}
           const delta=j.choices?.[0]?.delta||{};
           if(delta.reasoning||delta.reasoning_content)reasoning+=(delta.reasoning||delta.reasoning_content);
@@ -545,9 +592,10 @@ async function streamAPIReply(c){
         sr=(window.NovaRender&&NovaRender.StreamingRenderer)
           ?NovaRender.StreamingRenderer.create(bubble,scroller):null;
         const steps=trow.querySelector('.act-steps');
-        if(acts.length){
+        if(stepCount()){
+          if(actLog)actLog.finish();
           steps.removeAttribute('open');
-          actLbl.textContent=`⚡ ${acts.length} step${acts.length!==1?'s':''} — click to expand`;
+          actLbl.textContent=`⚡ ${stepCount()} step${stepCount()!==1?'s':''} — click to expand`;
           steps.querySelectorAll('.act-item').forEach(i=>i.classList.add('done'));
           row.querySelector('.msg-col').prepend(steps);
         }
@@ -562,7 +610,11 @@ async function streamAPIReply(c){
     maybeAttachPerson(c,msg,bubble);
   }catch(e){
     clearInterval(actTimer);
-    if(ctrl.signal.aborted)fail('⏹ Stopped by user.');
+    if(ctrl.signal.aborted){
+      if(!isAgent)fetch(API_BASE+'/v1/conversations/'+c.id+'/live',
+        {method:'DELETE',headers:apiHeaders()}).catch(()=>{});
+      fail('⏹ Stopped by user.');
+    }
     else fail(`⚠ ${e.message}`);
   }
 }
@@ -695,6 +747,7 @@ function toggleGroupAgent(a){
   if(i>=0)state.group.agents.splice(i,1);else state.group.agents.push(a);
 }
 function renderGroupBar(){
+  paintModeChips();
   const bar=$('#groupStage'),g=state.group;
   if(!state.groupMode||!g||!g.agents.length){bar.style.display='none';return;}
   bar.style.display='flex';
@@ -744,13 +797,14 @@ async function streamGroupReply(c){
   const ctrl=new AbortController();
   state.abort={get stop(){return ctrl.signal.aborted},set stop(v){if(v)ctrl.abort()}};
   // per-speaker typing row + activity list
-  let trow=null,acts=null,actLbl=null,actList=null;
+  let trow=null,acts=null,actLbl=null,actList=null,actLog=null;
+  const stepCount=()=>actLog?actLog.count():(acts?acts.length:0);
   const endTurn=()=>{
     if(trow){const steps=trow.querySelector('.act-steps');
+      if(actLog)actLog.finish();
       steps.removeAttribute('open');
       steps.querySelectorAll('.act-item').forEach(i=>i.classList.add('done'));
-      actLbl.textContent=`⚡ ${acts.length} step${acts.length!==1?'s':''}`;
-      const c2=trow.querySelector('.msg-col');
+      actLbl.textContent=`⚡ ${stepCount()} step${stepCount()!==1?'s':''}`;
       trow.remove();/* keep it simple: drop typing row; the real bubble is appended */
     }
     trow=null;
@@ -761,13 +815,18 @@ async function streamGroupReply(c){
     trow.innerHTML=`<div class="msg-av ai" style="background:${agentColor(name)}">🤖</div><div class="msg-col"><div class="msg-meta"><b>${esc(name)}</b></div><div class="typing"><i></i><i></i><i></i></div><details class="act-steps" open><summary><span class="act-ico">⚡</span><span class="act-lbl">working…</span></summary><div class="act-list"></div></details></div>`;
     inner.appendChild(trow);scrollBottom();
     acts=[];actLbl=trow.querySelector('.act-lbl');actList=trow.querySelector('.act-list');
+    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList):null;
     setStageLive(name,false);
   };
-  const addAct=text=>{if(!actList)return;acts.push(text);
-    actLbl.textContent=`${acts.length} step${acts.length!==1?'s':''}…`;
-    const it=document.createElement('div');it.className='act-item';
-    it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
-    actList.appendChild(it);scrollBottom();};
+  const addAct=ev=>{if(!actList)return;
+    if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);}
+    else{const text=typeof ev==='string'?ev:(ev.text||ev.event);
+      acts.push(text);
+      const it=document.createElement('div');it.className='act-item';
+      it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
+      actList.appendChild(it);}
+    actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
+    scrollBottom();};
   const fail=note=>{
     if(trow)trow.remove();
     c.msgs.push({role:'assistant',text:`_${note}_`,t:Date.now(),failed:true});
@@ -799,16 +858,17 @@ async function streamGroupReply(c){
           else if(ev.event==='agent_message'){
             setStageLive(ev.agent,true);
             const steps=trow?trow.querySelector('.act-steps'):null;
+            if(actLog)actLog.finish();
             if(trow)trow.remove();
             const msg={role:'assistant',text:ev.content,t:Date.now(),agentName:ev.agent,model:'group'};
             c.msgs.push(msg);
             const row=msgEl(msg);
-            if(steps&&acts&&acts.length)row.querySelector('.msg-col').prepend(steps);
+            if(steps&&stepCount())row.querySelector('.msg-col').prepend(steps);
             inner.appendChild(row);scrollBottom();
             trow=null;
           }
-          else if(ev.event==='error'){addAct('⚠ '+ev.text);}
-          else addAct(ev.text||ev.event);
+          else if(ev.event==='error'){addAct({event:'error',text:ev.text});}
+          else addAct(ev);
         }catch(_){}
       }
     }
@@ -834,7 +894,29 @@ function cycleResearchDepth(){
 function paintResearchBtn(){
   const b=$('#researchBtn');if(!b)return;
   b.classList.toggle('on',!!state.researchMode);
-  b.innerHTML='🔬<span class="tb-tx"> Research</span> <span style="opacity:.7;font-size:10px">'+esc(state.researchDepth)+'</span>';
+  b.innerHTML='🔬<span class="tb-tx"> Deep research</span> <span style="opacity:.7;font-size:10px">'+esc(state.researchDepth)+'</span>';
+  const d=$('#pmDepth');
+  if(d)d.innerHTML='↻<span class="tb-tx"> Depth: '+esc(state.researchDepth)+'</span>';
+  paintModeChips();
+}
+function paintModeChips(){
+  const host=$('#modeChips');if(!host)return;
+  const chips=[];
+  if(state.groupMode&&state.group&&state.group.agents.length)
+    chips.push({ico:'👥',tx:`Group · ${state.group.agents.length}`,off:exitGroupMode});
+  else if(state.agent)
+    chips.push({ico:'🤖',tx:state.agent.name,off:()=>selectAgent(null)});
+  if(state.rpChar)
+    chips.push({ico:'🎭',tx:state.rpChar.name,off:rpExit});
+  if(state.researchMode)
+    chips.push({ico:'🔬',tx:'Research · '+state.researchDepth,off:toggleResearchMode});
+  host.innerHTML='';
+  chips.forEach(c=>{
+    const el=document.createElement('span');el.className='mode-chip';
+    el.innerHTML=`${c.ico} ${esc(c.tx)} <button class="mrm" title="Turn off" aria-label="Turn off">✕</button>`;
+    el.querySelector('.mrm').onclick=e=>{e.stopPropagation();c.off();};
+    host.appendChild(el);
+  });
 }
 function toggleResearchMode(){
   state.researchMode=!state.researchMode;
@@ -857,10 +939,12 @@ async function streamResearchReply(c){
     depth:state.researchDepth==='auto'?null:state.researchDepth,conversation_id:c.id,save:true};
   const ctrl=new AbortController();
   state.abort={get stop(){return ctrl.signal.aborted},set stop(v){if(v)ctrl.abort()}};
-  let trow=null,acts=null,actLbl=null,actList=null,answer=null,meta=null;
+  let trow=null,acts=null,actLbl=null,actList=null,actLog=null,answer=null,meta=null;
+  const stepCount=()=>actLog?actLog.count():(acts?acts.length:0);
   const endTurn=()=>{if(trow){const steps=trow.querySelector('.act-steps');
-    if(steps){steps.removeAttribute('open');steps.querySelectorAll('.act-item').forEach(i=>i.classList.add('done'));
-      actLbl.textContent=`⚡ ${acts.length} step${acts.length!==1?'s':''}`;}
+    if(steps){if(actLog)actLog.finish();
+      steps.removeAttribute('open');steps.querySelectorAll('.act-item').forEach(i=>i.classList.add('done'));
+      actLbl.textContent=`⚡ ${stepCount()} step${stepCount()!==1?'s':''}`;}
     trow.remove();}trow=null;};
   const startTurn=()=>{
     endTurn();
@@ -870,12 +954,18 @@ async function streamResearchReply(c){
       <div class="bubble typing"><span class="dots"><i></i><i></i><i></i></span></div></div>`;
     inner.appendChild(trow);scrollBottom();
     acts=[];actLbl=trow.querySelector('.act-lbl');actList=trow.querySelector('.act-list');
+    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList):null;
+    addAct({kind:'plan',status:'running',title:'Planning research…'});
   };
-  const addAct=text=>{if(!actList)return;acts.push(text);
-    actLbl.textContent=`${acts.length} step${acts.length!==1?'s':''}…`;
-    const it=document.createElement('div');it.className='act-item';
-    it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
-    actList.appendChild(it);scrollBottom();};
+  const addAct=ev=>{if(!actList)return;
+    if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);}
+    else{const text=typeof ev==='string'?ev:(ev.text||ev.event);
+      acts.push(text);
+      const it=document.createElement('div');it.className='act-item';
+      it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
+      actList.appendChild(it);}
+    actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
+    scrollBottom();};
   const finish=(msg,bubble)=>{
     if(window.NovaRender&&NovaRender.ResponseRenderer){
       NovaRender.ResponseRenderer.renderMessage(msg,bubble,{showActions:true});
@@ -913,18 +1003,24 @@ async function streamResearchReply(c){
           const j=JSON.parse(data);
           const ev=j.freellm;
           if(ev&&ev.event==='research_answer'){answer=ev.answer;meta=ev;continue;}
-          if(ev&&ev.event==='error'){addAct('⚠ '+ev.text);continue;}
-          if(ev)addAct(ev.text||ev.event);
+          if(ev&&ev.event==='error'){addAct({event:'error',text:ev.text});continue;}
+          if(ev)addAct(ev);
           else if(j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content){answer=j.choices[0].delta.content;}
         }catch(_){}
       }
     }
     if(!answer)throw new Error('research returned no answer');
-    endTurn();
+    const steps=trow?trow.querySelector('.act-steps'):null;
+    if(actLog)actLog.finish();
+    if(steps){steps.removeAttribute('open');
+      if(actLbl)actLbl.textContent=`⚡ ${stepCount()} step${stepCount()!==1?'s':''} — click to expand`;}
+    if(trow)trow.remove();trow=null;
     const msg={role:'assistant',text:answer,t:Date.now(),model:'research',agentName:'Research'};
     if(meta){msg.research={depth:meta.depth,sources:meta.sources,findings:meta.findings,verified:meta.verified,seconds:meta.seconds,rounds:meta.rounds,run_id:meta.run_id};}
     c.msgs.push(msg);
-    const row=msgEl(msg);inner.appendChild(row);
+    const row=msgEl(msg);
+    if(steps&&stepCount())row.querySelector('.msg-col').prepend(steps);
+    inner.appendChild(row);
     const bubble=row.querySelector('.bubble');
     finish(msg,bubble);
   }catch(e){
@@ -950,6 +1046,7 @@ window.selectAgent=function(a){
     $('#agentEditBtn').style.display='none';
     $('#agentDelBtn').style.display='none';
   }
+  paintModeChips();
 };
 $('#agentBtn').onclick=e=>{e.stopPropagation();
   $('#agentMenu').style.display=$('#agentMenu').style.display==='block'?'none':'block';};
@@ -1029,14 +1126,14 @@ function renderRpMenu(){
   });
 }
 function rpActivate(ch){
-  state.rpChar=ch;localStorage.setItem(RP_CHAR_KEY,JSON.stringify(ch));paintRpBtn();
+  state.rpChar=ch;localStorage.setItem(RP_CHAR_KEY,JSON.stringify(ch));paintRpBtn();paintModeChips();
   $('#chatStatus').textContent=`roleplay · ${ch.name} · in character`;
   const c=state.current;
   if(c&&c.msgs.length===0&&ch.greeting){c.msgs.push({role:'assistant',text:ch.greeting,t:Date.now(),agentName:ch.name});renderAll();saveState();}
   toast(`Roleplay: ${ch.name}`);
 }
 function rpExit(){
-  state.rpChar=null;try{localStorage.removeItem(RP_CHAR_KEY);}catch(_){}paintRpBtn();
+  state.rpChar=null;try{localStorage.removeItem(RP_CHAR_KEY);}catch(_){}paintRpBtn();paintModeChips();
   $('#chatStatus').textContent='connected · replies stream in real time';toast('Roleplay off');
 }
 function rpOpenModal(i){
@@ -1078,6 +1175,23 @@ paintRpBtn();
 rpServerSync();
 $('#researchBtn').onclick=()=>{toggleResearchMode();};
 $('#researchBtn').ondblclick=e=>{e.preventDefault();cycleResearchDepth();};
+// "+" composer menu (Manus-style): all tools/modes in one popover.
+$('#plusBtn').onclick=e=>{e.stopPropagation();
+  const m=$('#plusMenu');m.style.display=m.style.display==='block'?'none':'block';};
+$('#pmDepth').onclick=e=>{e.preventDefault();cycleResearchDepth();};
+document.addEventListener('click',e=>{
+  const m=$('#plusMenu');
+  if(m&&m.style.display==='block'&&!e.target.closest('#plusMenu')&&!e.target.closest('#plusBtn'))
+    m.style.display='none';
+});
+// Action items close the popover; toggle items (research/depth) stay open.
+// Capture phase: agentBtn/rpBtn call stopPropagation in their own handlers.
+$('#plusMenu').addEventListener('click',e=>{
+  const mi=e.target.closest('.mi');
+  if(mi&&mi.id!=='researchBtn'&&mi.id!=='pmDepth')
+    $('#plusMenu').style.display='none';
+},true);
+paintModeChips();
 paintResearchBtn();
 $('#shareBtn').onclick=async()=>{
   const c=state.current;
@@ -1248,5 +1362,6 @@ function collapseRepeats(text){
 if(!loadState())seed();
 renderModels();renderAll();loadModels();loadAgents();refreshTokenMeter();
 fetchServerConversations().then(()=>renderAll());
+checkLive(state.current);
 window.refreshAgents=loadAgents;
 })();

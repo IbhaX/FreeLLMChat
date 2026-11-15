@@ -14,3 +14,4 @@ __pycache__/
 *.egg-info/
 freellmchat.db
 server_ollama.log
+.playwright-mcp/

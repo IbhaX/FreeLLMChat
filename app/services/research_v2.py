@@ -218,9 +218,17 @@ async def steer(session: AsyncSession, run: ResearchRunV2,
 # ---------------------------------------------------------------- handler
 
 def _v1_event_to_run_event(ev: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
-    """Map a v1 pipeline emit dict to (type, actor, payload)."""
+    """Map a v1 pipeline emit dict to (type, actor, payload).
+
+    The emit dict is first normalized by ``activity.enrich`` so the stored
+    payload carries the canonical activity fields (kind/status/title/…)
+    alongside the legacy keys.
+    """
+    from app.services.activity import enrich
+    ev = enrich(ev)
     kind = str(ev.get("event") or "note")
-    actor = str(ev.get("agent") or ("lead" if ev.get("stage") else "system"))
+    actor = str(ev.get("actor") or ev.get("agent")
+              or ("lead" if ev.get("stage") else "system"))
     payload = {k: v for k, v in ev.items() if k != "event"}
     type_map = {"stage": "stage", "note": "note",
                 "research_done": "research.done",

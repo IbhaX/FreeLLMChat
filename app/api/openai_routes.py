@@ -342,6 +342,16 @@ async def chat_completions(
         "",
     )
     conv_id = payload.pop("conversation_id", None)
+    # A detached job may already be answering this conversation (the
+    # client refreshed or resent) — re-attach instead of duplicating work.
+    if body.stream and conv_id:
+        from app.services import chat_jobs
+
+        running = chat_jobs.get_running(str(conv_id))
+        if running is not None:
+            return StreamingResponse(
+                running.stream(), media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache"})
     # Usage metering + plan quota (single-tenant mode => 'anon'/free).
     from app.api.deps import optional_user, subject_for
     from app.services import usage as _usage
@@ -416,6 +426,14 @@ async def chat_completions(
     if body.stream:
         import asyncio
         import json as _json
+
+        # Conversation-scoped requests run detached from this HTTP
+        # connection (refresh-resilient): they need their own session —
+        # the request-scoped one is closed when the response ends.
+        if conv_id:
+            from app.db import get_session_factory
+
+            session = get_session_factory()()
 
         events: asyncio.Queue[dict] = asyncio.Queue()
         # `builtin_tools` (extra field): run the server-side tool-call loop
@@ -641,6 +659,12 @@ async def chat_completions(
                     if not chunk.strip():
                         continue
                 yield chunk
+                # Meta events (e.g. per-call usage) emitted while streaming —
+                # the main drain loop above already exited once `task` was done.
+                while not events.empty():
+                    yield _meta(events.get_nowait())
+            while not events.empty():
+                yield _meta(events.get_nowait())
             if structured:
                 # Tokens were already shown, so enforcement here swaps the
                 # finished message via a replace_content event.
@@ -661,6 +685,13 @@ async def chat_completions(
             if last_user:
                 _remember(gateway, conv_id, last_user, reply)
 
+        if conv_id:
+            from app.services import chat_jobs
+
+            job = chat_jobs.start(str(conv_id), gen(), session)
+            return StreamingResponse(
+                job.stream(), media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache"})
         return StreamingResponse(
             gen(),
             media_type="text/event-stream",
@@ -695,3 +726,42 @@ async def chat_completions(
             "X-Gateway-Model": model,
         },
     )
+
+
+# ---------- detached generation (refresh-resilient chat) ----------
+
+@router.get("/conversations/{client_id}/live")
+async def conversation_live(client_id: str) -> dict[str, Any]:
+    """Job status for a conversation's detached generation."""
+    from app.services import chat_jobs
+
+    return chat_jobs.status(chat_jobs.get(client_id))
+
+
+@router.get("/conversations/{client_id}/live/stream")
+async def conversation_live_stream(client_id: str) -> StreamingResponse:
+    """Re-attach to a detached generation: replays buffered SSE frames
+    then tails live, ending with [DONE]."""
+    from app.services import chat_jobs
+
+    job = chat_jobs.get(client_id)
+
+    async def _empty() -> Any:
+        yield b"data: [DONE]\n\n"
+
+    return StreamingResponse(
+        job.stream() if job else _empty(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.delete("/conversations/{client_id}/live")
+async def conversation_live_cancel(client_id: str) -> dict[str, bool]:
+    """Cancel the running detached job (Stop button / user abort)."""
+    from app.services import chat_jobs
+
+    job = chat_jobs.get(client_id)
+    if job is not None:
+        job.cancel()
+    return {"ok": True}

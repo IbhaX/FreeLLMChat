@@ -400,6 +400,30 @@ async def _execute_tool_call(tc: dict[str, Any]) -> tuple[str, str, dict[str, An
     return call_id, name, args, output
 
 
+async def _timed_tool_call(
+    tc: dict[str, Any],
+) -> tuple[str, str, dict[str, Any], str, float]:
+    """_execute_tool_call + wall-clock duration for the activity log."""
+    import time
+    t0 = time.perf_counter()
+    call_id, name, args, out = await _execute_tool_call(tc)
+    return call_id, name, args, out, (time.perf_counter() - t0) * 1000
+
+
+def _emit_tool_result(
+    emit: Callable[[dict[str, Any]], None],
+    name: str, args: dict[str, Any], out: str, dur_ms: float,
+) -> None:
+    """One structured tool-result event — name, inputs, outcome, duration."""
+    ok = not out.lower().startswith((
+        "error:", "tool error:", "fetch error:", "search error:", "empty"))
+    emit({
+        "event": "tool", "tool": name, "args": _brief_args(args),
+        "result": out[:400], "ok": ok, "duration_ms": round(dur_ms, 1),
+        "text": f"🔧 {name}({_brief_args(args)})",
+    })
+
+
 async def run_tool_loop(
     gateway: Any,
     session: Any,
@@ -484,9 +508,9 @@ async def run_tool_loop(
         })
         # Tool calls in the same model turn are independent; execute concurrently
         # while preserving their original order when appending results to history.
-        executed = await asyncio.gather(*(_execute_tool_call(tc) for tc in calls))
-        for call_id, name, args, out in executed:
-            emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
+        executed = await asyncio.gather(*(_timed_tool_call(tc) for tc in calls))
+        for call_id, name, args, out, dur_ms in executed:
+            _emit_tool_result(emit, name, args, out, dur_ms)
             if tool_output_hook is not None:
                 try:
                     tool_output_hook(name, out)
@@ -538,9 +562,9 @@ async def run_tool_loop(
             "content": _strip_text_tool_calls(text),
             "tool_calls": calls,
         })
-        executed = await asyncio.gather(*(_execute_tool_call(tc) for tc in calls))
-        for call_id, name, args, out in executed:
-            emit({"event": "tool", "text": f"🔧 {name}({_brief_args(args)})"})
+        executed = await asyncio.gather(*(_timed_tool_call(tc) for tc in calls))
+        for call_id, name, args, out, dur_ms in executed:
+            _emit_tool_result(emit, name, args, out, dur_ms)
             if tool_output_hook is not None:
                 try:
                     tool_output_hook(name, out)
