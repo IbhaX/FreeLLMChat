@@ -393,3 +393,42 @@ class CustomSkill(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class AgentRun(Base):
+    """One recorded agentic execution — the durable trace header."""
+
+    __tablename__ = "agent_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)  # orchestrate|research|agent|group|roleplay
+    question: Mapped[str] = mapped_column(Text, default="")
+    subject: Mapped[str] = mapped_column(String(64), default="anon", index=True)
+    model: Mapped[str] = mapped_column(String(128), default="")
+    status: Mapped[str] = mapped_column(String(16), default="running", index=True)  # running|done|degraded|failed
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+
+    events: Mapped[list["AgentEvent"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", lazy="selectin")
+
+
+class AgentEvent(Base):
+    """One recorded step inside an agent run."""
+
+    __tablename__ = "agent_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True)
+    seq: Mapped[int] = mapped_column(Integer, default=0)
+    stage: Mapped[str] = mapped_column(String(32), default="")
+    actor: Mapped[str] = mapped_column(String(64), default="")
+    event: Mapped[str] = mapped_column(String(32), default="")
+    detail: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="ok")
+    duration_ms: Mapped[float] = mapped_column(Float, default=0.0)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    run: Mapped[AgentRun] = relationship(back_populates="events")

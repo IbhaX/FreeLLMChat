@@ -160,3 +160,25 @@ def test_custom_skill_registry(session_factory):
             await skills.load_custom_skills(s)
             assert skills.get_skill("sql_lint") is None
     _run(go())
+
+
+def test_agent_run_ledger(session_factory):
+    from app.services import agent_log
+    from app.models import AgentRun
+    from sqlalchemy import select
+
+    async def go():
+        async with session_factory() as s:
+            rid = await agent_log.start_run(s, "orchestrate", "test q", meta={"intent": "lookup"})
+            await s.commit()
+            assert rid
+            await agent_log.record(s, rid, 1, stage="plan", actor="orchestrator",
+                                   event="stage", detail="planning")
+            await agent_log.finish_run(s, rid, "done", meta={"steps": 2}, duration_ms=1500)
+            await s.commit()
+            run = await s.get(AgentRun, rid)
+            assert run.status == "done" and run.meta["steps"] == 2
+            assert len(run.events) == 1 and run.events[0].actor == "orchestrator"
+            runs = await agent_log.list_runs(s, kind="orchestrate")
+            assert runs[0].id == rid
+    _run(go())

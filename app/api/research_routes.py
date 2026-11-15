@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from typing import Any, Literal
 
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_gateway_key
 from app.db import get_session
 from app.models import ResearchRun
+from app.services import agent_log
 from app.services.research import run_research
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_gateway_key)])
@@ -125,20 +127,40 @@ async def research_stream(
     gw = _gateway(request)
     queue: asyncio.Queue[dict] = asyncio.Queue()
     state_box: dict[str, Any] = {}
+    # Durable agent ledger for this research run.
+    from app.db import get_session_factory
+    factory = get_session_factory()
+    async with factory() as ls:
+        arun = await agent_log.start_run(
+            ls, "research", body.message, model=body.model or "auto",
+            meta={"depth": body.depth or "auto"})
+        await ls.commit()
+    _t0 = time.monotonic()
 
     async def run() -> None:
         try:
             state = await run_research(
                 gw, session, _messages(body), model=body.model, depth=body.depth,
-                conversation_id=body.conversation_id, on_event=queue.put_nowait,
+                conversation_id=body.conversation_id,
+                on_event=agent_log.tap_emit(arun, queue.put_nowait),
             )
             state_box["state"] = state
             rid = await _persist(session, body, state, state.answer)
             queue.put_nowait({"event": "research_answer", "answer": state.answer,
                               "run_id": rid, **(state.meta or {})})
+            async with factory() as ls:
+                await agent_log.finish_run(
+                    ls, arun, "done",
+                    meta={"research_run_id": rid, "depth": state.depth},
+                    duration_ms=int((time.monotonic() - _t0) * 1000))
+                await ls.commit()
         except Exception as e:
             queue.put_nowait({"event": "error",
                               "text": f"research failed: {str(e)[:200]}"})
+            async with factory() as ls:
+                await agent_log.finish_run(ls, arun, "failed",
+                                           duration_ms=int((time.monotonic() - _t0) * 1000))
+                await ls.commit()
 
     task = asyncio.ensure_future(run())
 

@@ -19,6 +19,7 @@ requests reach ``orchestrate``.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from app.services.intent import Complexity, Intent, IntentResult, classify
@@ -109,8 +110,35 @@ async def run_orchestrated(
     intent = await classify_request(
         gateway, session, payload or {},
         last_user=question, history=history)
-    return await orchestrate(
+    # Durable agent ledger: record the run header + every traced step.
+    from app.services import agent_log
+    factory = None
+    try:
+        from app.db import get_session_factory
+        factory = get_session_factory()
+    except Exception:
+        factory = None
+    run_id = None
+    t0 = time.monotonic()
+    if factory:
+        async with factory() as s:
+            run_id = await agent_log.start_run(
+                s, "orchestrate", question, model=str((payload or {}).get("model") or "auto"),
+                meta={"intent": intent.intent.value if intent else ""})
+            await s.commit()
+    tapped = agent_log.tap_emit(run_id, emit) if run_id else emit
+    result = await orchestrate(
         gateway, session, question,
         intent=intent, history=history,
         model=str((payload or {}).get("model") or "auto"),
-        emit=emit)
+        emit=tapped)
+    if run_id and factory:
+        async with factory() as s:
+            await agent_log.persist_events(run_id, result.trace)
+            await agent_log.finish_run(
+                s, run_id, "degraded" if result.degraded else "done",
+                meta={"intent": result.intent, "strategy": result.strategy,
+                      "steps": len(result.steps)},
+                duration_ms=int((time.monotonic() - t0) * 1000))
+            await s.commit()
+    return result
