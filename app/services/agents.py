@@ -13,6 +13,7 @@ import json
 import uuid
 from typing import Any, AsyncIterator
 
+from pydantic_ai import Agent
 from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 from pydantic_ai.messages import (
     ModelMessage,
@@ -256,8 +257,9 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
     return "\n\n".join(parts) if parts else "You are a helpful assistant."
 
 
-def _build_agent(agent_cfg: AgentConfig, gateway: Gateway, custom: str = "") -> Agent:
-    from pydantic_ai import Agent
+def _build_agent(
+    agent_cfg: AgentConfig, gateway: Gateway, custom: str = ""
+) -> Agent:
     from pydantic_ai.output import PromptedOutput
     model = GatewayModel(agent_cfg.model, gateway)
     system_prompt = _compile_system_prompt(agent_cfg)
@@ -319,7 +321,10 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
     except Exception:
         pass
     try:
-        astra = astra_memory.recall_text(query, conversation_id)
+        # astrapy calls are synchronous HTTP — run off the event loop so a
+        # slow Astra round-trip cannot stall concurrent requests.
+        astra = await asyncio.to_thread(
+            astra_memory.recall_text, query, conversation_id)
         if astra:
             parts.append(astra)
     except Exception:

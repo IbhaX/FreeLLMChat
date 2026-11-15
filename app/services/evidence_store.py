@@ -17,6 +17,7 @@ Invariants enforced here, not in prompts:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -50,6 +51,8 @@ _TRACKING_PARAMS = {
 }
 
 VECTORIZE_SERVICE = {"provider": "nvidia", "modelName": "NV-Embed-QA"}
+# NV-Embed-QA hard-rejects inputs over 512 tokens (~2048 chars).
+VECTORIZE_MAX_CHARS = 1800
 
 
 # ---------------------------------------------------------------- errors
@@ -292,7 +295,10 @@ async def add_evidence(
     )
     session.add(ev)
     await session.flush()
-    _index_evidence(ev, domain=source.domain, quote=quote, summary=ev.summary)
+    # astrapy insert is synchronous — index off the event loop.
+    await asyncio.to_thread(
+        _index_evidence, ev, domain=source.domain, quote=quote,
+        summary=ev.summary)
     return ev
 
 
@@ -324,9 +330,11 @@ async def recall_evidence(
     col = _vector_collection()
     if col is not None:
         try:
-            docs = col.find(
+            # astrapy is synchronous — keep the event loop free.
+            docs = await asyncio.to_thread(
+                col.find,
                 filter={"run_id": run_id},
-                sort={"$vectorize": query[:4000]},
+                sort={"$vectorize": query[:VECTORIZE_MAX_CHARS]},
                 limit=limit,
                 projection={"_id": 1},
             )

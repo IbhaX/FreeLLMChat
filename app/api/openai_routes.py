@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 from datetime import datetime, timezone
@@ -298,7 +299,6 @@ def _remember(gateway, conv_id: str | None, user_text: str, reply: str) -> None:
     """Fire-and-forget: store the turn in short-term memory and extract facts."""
     if not conv_id:
         return
-    import asyncio
 
     from app.services import astra_memory
 
@@ -307,7 +307,8 @@ def _remember(gateway, conv_id: str | None, user_text: str, reply: str) -> None:
     reply = _sanitize_final_text(reply) or ""
 
     async def _bg() -> None:
-        astra_memory.store_short(str(conv_id), "assistant", reply)
+        await asyncio.to_thread(
+            astra_memory.store_short, str(conv_id), "assistant", reply)
         await astra_memory.extract_and_store(gateway, user_text, reply)
 
     asyncio.create_task(_bg())
@@ -396,30 +397,49 @@ async def chat_completions(
     # memory lookup below is a network call. Holding it any longer locks
     # out every other writer (including this request's own job session).
     await session.commit()
+    mem_task: asyncio.Task | None = None
     try:
         from app.services import astra_memory
         from app.services.agents import get_memory_text
 
-        astra_memory.ensure_collections()
+        # astrapy calls are synchronous HTTP — fire them off-thread so a
+        # slow Astra round-trip never blocks the event loop (it used to add
+        # ~4-6s before generation even started).
+        asyncio.ensure_future(
+            asyncio.to_thread(astra_memory.ensure_collections))
         if last_user and conv_id:
-            astra_memory.store_short(str(conv_id), "user", last_user)
-        mem = await get_memory_text(last_user, conv_id and str(conv_id))
-        if mem and isinstance(payload.get("messages"), list):
-            # Append memory alongside any existing system prompt; never replace it.
-            sys_idx = next(
-                (i for i, m in enumerate(payload["messages"])
-                 if m.get("role") == "system"),
-                None,
-            )
-            if sys_idx is not None:
-                payload["messages"][sys_idx] = dict(
-                    payload["messages"][sys_idx],
-                    content=f"{payload['messages'][sys_idx].get('content', '')}\n\n{mem}",
-                )
-            else:
-                payload["messages"].insert(0, {"role": "system", "content": mem})
+            asyncio.ensure_future(asyncio.to_thread(
+                astra_memory.store_short, str(conv_id), "user", last_user))
+        # Memory retrieval overlaps the routing probe + prompt building.
+        mem_task = asyncio.ensure_future(
+            get_memory_text(last_user, conv_id and str(conv_id)))
     except Exception:
-        pass
+        mem_task = None
+
+    async def _apply_memory() -> None:
+        """Await the prefetched memory block and append it to the system
+        prompt. Called right before generation — never replaces the
+        component contract."""
+        if mem_task is None or not isinstance(payload.get("messages"), list):
+            return
+        try:
+            mem = await mem_task
+        except Exception:
+            return
+        if not mem:
+            return
+        sys_idx = next(
+            (i for i, m in enumerate(payload["messages"])
+             if m.get("role") == "system"),
+            None,
+        )
+        if sys_idx is not None:
+            payload["messages"][sys_idx] = dict(
+                payload["messages"][sys_idx],
+                content=f"{payload['messages'][sys_idx].get('content', '')}\n\n{mem}",
+            )
+        else:
+            payload["messages"].insert(0, {"role": "system", "content": mem})
     # User-defined custom instructions (Settings page) — appended to the
     # system prompt so they shape every chat answer. Never replaces the
     # component contract; failure to load leaves chat unaffected.
@@ -484,7 +504,6 @@ async def chat_completions(
             {"role": "system", "content": COMPONENT_REMINDER}
         ]
     if body.stream:
-        import asyncio
         import json as _json
 
         # Conversation-scoped requests run detached from this HTTP
@@ -519,6 +538,10 @@ async def chat_completions(
                 )
             except Exception:
                 route = "tools"
+
+        # Routing decision is done — fold the prefetched memory into the
+        # payload before whichever generation path runs.
+        await _apply_memory()
 
         async def _open():
             try:
@@ -786,6 +809,7 @@ async def chat_completions(
             headers={"Cache-Control": "no-cache"},
         )
     try:
+        await _apply_memory()
         result, provider, key, model = await gateway.chat(session, payload)
         if payload.get("nova_structured", True):
             from app.services.component_enforce import enforce_components

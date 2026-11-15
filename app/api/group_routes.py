@@ -143,9 +143,11 @@ async def group_stream(
 
     custom = await get_custom_instructions(session)
     conv_id = str(body.conversation_id) if body.conversation_id else None
-    astra_memory.ensure_collections()
+    # astrapy calls are synchronous HTTP — never block the loop on them.
+    asyncio.ensure_future(asyncio.to_thread(astra_memory.ensure_collections))
     if conv_id:
-        astra_memory.store_short(conv_id, "user", body.message)
+        asyncio.ensure_future(asyncio.to_thread(
+            astra_memory.store_short, conv_id, "user", body.message))
 
     transcript: list[dict[str, Any]] = list(body.history or [])
     transcript.append({"role": "user", "name": "You", "content": body.message})
@@ -221,7 +223,8 @@ async def group_stream(
                                  "agent": a.name, "content": text})
                     prev_name, prev_out = a.name, text
                 if conv_id:
-                    astra_memory.store_short(conv_id, "assistant", prev_out)
+                    asyncio.ensure_future(asyncio.to_thread(
+                        astra_memory.store_short, conv_id, "assistant", prev_out))
                     asyncio.ensure_future(
                         astra_memory.extract_and_store(gw, body.message, prev_out)
                     )
@@ -298,7 +301,8 @@ async def group_stream(
                 transcript.append({"role": "assistant", "name": ORCHESTRATOR_NAME,
                                    "content": final})
                 if conv_id:
-                    astra_memory.store_short(conv_id, "assistant", final)
+                    asyncio.ensure_future(asyncio.to_thread(
+                        astra_memory.store_short, conv_id, "assistant", final))
                     asyncio.ensure_future(
                         astra_memory.extract_and_store(gw, body.message, final))
                 yield _meta({"event": "agent_message",
@@ -346,7 +350,8 @@ async def group_stream(
                 transcript.append({"role": "assistant", "name": ORCHESTRATOR_NAME,
                                    "content": final})
                 if conv_id:
-                    astra_memory.store_short(conv_id, "assistant", final)
+                    asyncio.ensure_future(asyncio.to_thread(
+                        astra_memory.store_short, conv_id, "assistant", final))
                     asyncio.ensure_future(
                         astra_memory.extract_and_store(gw, body.message, final))
                 yield _meta({"event": "agent_message",
@@ -403,7 +408,8 @@ async def group_stream(
                 transcript.append({"role": "assistant", "name": ORCHESTRATOR_NAME,
                                    "content": final})
                 if conv_id:
-                    astra_memory.store_short(conv_id, "assistant", final)
+                    asyncio.ensure_future(asyncio.to_thread(
+                        astra_memory.store_short, conv_id, "assistant", final))
                     asyncio.ensure_future(
                         astra_memory.extract_and_store(gw, body.message, final))
                 yield _meta({"event": "agent_message",
@@ -443,7 +449,8 @@ async def group_stream(
             answers_txt = "\n\n".join(
                 f"--- {a.name} ---\n{text}" for a, text in answers
             )
-            mem = astra_memory.recall_text(body.message, conv_id)
+            mem = await asyncio.to_thread(
+                astra_memory.recall_text, body.message, conv_id)
             synth = (
                 f"The user asked:\n{body.message}\n\n"
                 + (f"{mem}\n\n" if mem else "")
@@ -461,7 +468,8 @@ async def group_stream(
                 {"role": "assistant", "name": ORCHESTRATOR_NAME, "content": final}
             )
             if conv_id:
-                astra_memory.store_short(conv_id, "assistant", final)
+                asyncio.ensure_future(asyncio.to_thread(
+                        astra_memory.store_short, conv_id, "assistant", final))
                 asyncio.ensure_future(
                     astra_memory.extract_and_store(gw, body.message, final)
                 )

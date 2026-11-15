@@ -114,3 +114,23 @@ class TestPricing:
             for m in ollama:
                 assert m["usable"] is True
                 assert m["pricing"]["input_per_mtok"] == 0.0
+
+
+def test_ensure_collections_runs_once(monkeypatch):
+    """ensure_collections must not hit the remote API on every request —
+    list_collection_names runs once per process."""
+    from app.services import astra_memory
+
+    calls = []
+
+    class FakeDB:
+        def list_collection_names(self):
+            calls.append(1)
+            return ["mem_short", "mem_long"]
+
+    monkeypatch.setattr(astra_memory, "_ensured", False)
+    monkeypatch.setattr(astra_memory, "_db", lambda: FakeDB())
+    astra_memory.ensure_collections()
+    astra_memory.ensure_collections()
+    assert len(calls) == 1
+    monkeypatch.setattr(astra_memory, "_ensured", False)

@@ -14,6 +14,7 @@ Collections (auto-created on first use):
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from functools import lru_cache
@@ -24,6 +25,14 @@ from app.config import get_settings
 SHORT = "mem_short"
 LONG = "mem_long"
 _VECTORIZE = {"provider": "nvidia", "modelName": "NV-Embed-QA"}
+# NV-Embed-QA rejects inputs over 512 tokens (~2048 chars) with a 401/400 —
+# keep every vectorize payload comfortably under the provider limit while
+# retaining the full text in the document body.
+_VECTORIZE_MAX_CHARS = 1800
+
+
+def _vt(text: str) -> str:
+    return (text or "")[:_VECTORIZE_MAX_CHARS]
 
 
 @lru_cache
@@ -63,13 +72,23 @@ def _collection(name: str):
         return None
 
 
+_ensured = False
+
+
 def ensure_collections() -> None:
-    """Create both collections with built-in vectorize. Idempotent."""
+    """Create both collections with built-in vectorize. Idempotent.
+
+    Runs at most once per process — ``list_collection_names`` is a remote
+    API call and every chat request used to pay that latency."""
+    global _ensured
+    if _ensured:
+        return
     db = _db()
     if db is None:
         return
     try:
         existing = set(db.list_collection_names())
+        _ensured = True  # only cache success — transient failures retry
         for name in (SHORT, LONG):
             if name not in existing:
                 try:
@@ -99,7 +118,7 @@ def store_short(conversation_id: str, role: str, text: str) -> None:
         return
     _insert(SHORT, {
         "_id": uuid.uuid4().hex,
-        "$vectorize": text[:4000],
+        "$vectorize": _vt(text),
         "conversation_id": conversation_id,
         "role": role,
         "text": text[:4000],
@@ -115,14 +134,14 @@ def store_long(fact: str, source: str = "auto") -> None:
     # don't store it again.
     try:
         col = _collection(LONG)
-        hit = col.find_one(sort={"$vectorize": fact[:4000]})
+        hit = col.find_one(sort={"$vectorize": _vt(fact)})
         if hit and hit.get("text", "").strip().lower() == fact.lower():
             return
     except Exception:
         pass
     _insert(LONG, {
         "_id": uuid.uuid4().hex,
-        "$vectorize": fact[:2000],
+        "$vectorize": _vt(fact),
         "text": fact[:2000],
         "source": source,
         "ts": time.time(),
@@ -136,7 +155,7 @@ def _recall(col_name: str, query: str, limit: int, flt: dict | None = None) -> l
     try:
         docs = col.find(
             filter=flt,
-            sort={"$vectorize": query[:4000]},
+            sort={"$vectorize": _vt(query)},
             limit=limit,
             projection={"text": 1, "role": 1},
         )
@@ -224,6 +243,7 @@ async def extract_and_store(gateway, user_text: str, assistant_text: str) -> Non
         facts = json.loads(content[start:end + 1])
         for f in facts[:5]:
             if isinstance(f, str):
-                store_long(f)
+                # astrapy is synchronous — keep the event loop free.
+                await asyncio.to_thread(store_long, f)
     except Exception:
         pass
