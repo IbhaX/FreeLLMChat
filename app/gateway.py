@@ -22,7 +22,6 @@ from app.providers.base import ProviderError
 from app.providers.registry import build_adapter
 from app.routing.circuit_breaker import CircuitBreaker
 from app.routing.fallback import resolve_candidates
-from app.routing.quota import QuotaTracker
 from app.routing.rotator import Rotator
 
 
@@ -374,7 +373,7 @@ class Gateway:
 
         plan = await self._plan_attempts(session, requested, candidates)
         if not plan:
-            raise GatewayExhausted("No providers have an enabled, available API key", 503)
+            raise GatewayExhausted(await self._no_route_reason(session), 503)
         emit({"event": "routing",
               "text": f"Sequential fallback: {len(plan)} provider(s) with a live key"})
         await self._sticky_first(session, requested, plan)
@@ -409,6 +408,27 @@ class Gateway:
         re.I,
     )
 
+    async def _no_route_reason(self, session: AsyncSession) -> str:
+        """Honest explanation when the attempt plan is empty: keys may all be
+        on cooldown rather than missing."""
+        n = (await session.execute(
+            select(func.count(ApiKey.id)).where(ApiKey.enabled.is_(True))
+        )).scalar() or 0
+        if not n:
+            return "No providers have an enabled, available API key"
+        soonest = (await session.execute(
+            select(func.min(ApiKey.cooldown_until)).where(
+                ApiKey.enabled.is_(True),
+                ApiKey.cooldown_until.isnot(None))
+        )).scalar()
+        if soonest is not None:
+            cd = self._aware(soonest)
+            wait = max(0, int((cd - datetime.now(timezone.utc)).total_seconds()))
+            return (
+                f"All {n} provider key(s) are on cooldown after upstream "
+                f"errors — soonest retry in ~{wait // 60}m{wait % 60:02d}s")
+        return "No providers are currently routable"
+
     @classmethod
     def _is_model_fault(cls, err: ProviderError) -> bool:
         """True when the upstream rejected the *model*, not the key.
@@ -419,6 +439,10 @@ class Gateway:
         """
         msg = err.message or ""
         if err.status_code == 404 and "model" in msg.lower():
+            return True
+        # A 400 rejects the *request*, never the key — the same malformed
+        # payload would fail on every key, so cooling the key is wrong.
+        if err.status_code == 400:
             return True
         return bool(cls._MODEL_REJECT.search(msg))
 
@@ -721,7 +745,7 @@ class Gateway:
 
         plan = await self._plan_attempts(session, requested, candidates)
         if not plan:
-            raise GatewayExhausted("No providers have an enabled, available API key", 503)
+            raise GatewayExhausted(await self._no_route_reason(session), 503)
         emit({"event": "routing",
               "text": f"Sequential fallback: {len(plan)} provider(s) with a live key"})
         await self._sticky_first(session, requested, plan)

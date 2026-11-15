@@ -380,3 +380,47 @@ def test_scrub_body_strips_nulls():
     assert out["messages"][1] == {"role": "user", "content": "hi"}
     # Original untouched
     assert body["temperature"] is None
+
+
+async def test_400_request_fault_does_not_cool_key(session):
+    """A 400 rejects the request, not the key — the key must stay usable."""
+    p = await _provider(session, "p1", "https://p1.example/v1", ["m1"])
+    k = await make_key(session, p, "sk-aaa-1111", label="a")
+
+    with respx.mock:
+        respx.post("https://p1.example/v1/chat/completions").mock(
+            return_value=httpx.Response(
+                400, json={"error": "invalid value at 'temperature'"})
+        )
+        gw = Gateway()
+        with pytest.raises(GatewayExhausted):
+            await gw.chat(
+                session,
+                {"model": "p1/m1", "messages": [{"role": "user", "content": "hi"}]},
+            )
+        await gw.close()
+
+    await session.refresh(k)
+    assert k.cooldown_until is None
+
+
+async def test_no_route_reports_cooldowns(session):
+    """When every enabled key is cooling, the error must say so — not claim
+    no keys exist."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select
+    from app.models import ApiKey
+
+    p = await _provider(session, "p1", "https://p1.example/v1", ["m1"])
+    k = await make_key(session, p, "sk-aaa-1111", label="a")
+    k.cooldown_until = datetime.now(timezone.utc) + timedelta(minutes=30)
+    await session.commit()
+
+    gw = Gateway()
+    with pytest.raises(GatewayExhausted) as exc:
+        await gw.chat(
+            session,
+            {"model": "p1/m1", "messages": [{"role": "user", "content": "hi"}]},
+        )
+    await gw.close()
+    assert "cooldown" in str(exc.value).lower()
