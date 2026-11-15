@@ -95,6 +95,33 @@ _MULTI_PART_RE = re.compile(
     r"^\s*(?:\d+[.)]|[-*])\s+\S", re.I | re.M,
 )
 _AMBIGUITY_RE = re.compile(r"^(?:it|that|this|them|those|the thing)\b", re.I)
+
+# Pure social turns: greetings, thanks, acknowledgements, farewells — the
+# WHOLE message must be one of these (plus optional addressee/emoji/punct).
+_SMALL_TALK_RE = re.compile(
+    r"^(?:(?:hi|hii+|hello|hey|heya|yo|sup|hola|howdy|greetings|"
+    r"good (?:morning|afternoon|evening|night)|gm|gn|"
+    r"thanks|thank you(?: so much| very much)?|thx|ty|cheers|"
+    r"ok|okay|k|cool|nice|great|awesome|got it|sounds good|perfect|"
+    r"bye|goodbye|see you|see ya|later|"
+    r"how are you(?: doing)?|how's it going|what's up|whats up|wassup)"
+    r"(?:\s+(?:there|nova|again|buddy|man|all|everyone|guys))?"
+    r"[\s,.!?~:;)(\-]*)+$",
+    re.I,
+)
+_SMALL_TALK_MAX_WORDS = 6
+
+
+def is_small_talk(text: str) -> bool:
+    """True when the message is purely social (no actual request).
+
+    Deterministic and conservative: any extra content ("hi, compare X and
+    Y") is NOT small talk, so real questions never lose the full contract.
+    """
+    t = re.sub(r"[^\w\s',.!?~:;()\-]", " ", (text or "")).strip()
+    if not t or len(t.split()) > _SMALL_TALK_MAX_WORDS:
+        return False
+    return bool(_SMALL_TALK_RE.match(t))
 _COMPARE_RE = re.compile(r"\bvs\.?\b|\bversus\b|\bcompare\b|\bcomparison\b|\bpros and cons\b", re.I)
 
 

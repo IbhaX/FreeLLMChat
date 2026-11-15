@@ -22,7 +22,7 @@ import logging
 import time
 from typing import Any
 
-from app.services.intent import Complexity, Intent, IntentResult, classify
+from app.services.intent import Complexity, Intent, IntentResult, classify, is_small_talk
 
 log = logging.getLogger("freellm.orchestrator")
 
@@ -38,7 +38,10 @@ async def classify_request(
     """Full intent understanding for a request. Never raises."""
     try:
         wants: bool | None = None
-        if payload.get("builtin_tools"):
+        # depth=quick means minimal effort: skip the LLM tool-gate probe and
+        # let the deterministic classifier decide (it still catches "latest
+        # news"-style prompts that genuinely need tools).
+        if payload.get("builtin_tools") and payload.get("depth") != "quick":
             try:
                 from app.services.tools import wants_tools
                 wants = await wants_tools(gateway, session, payload)
@@ -65,6 +68,10 @@ async def route_message(
     """
     try:
         builtin = bool(payload.get("builtin_tools"))
+        # Greetings/thanks never need tools: skip the LLM tool-gate probe
+        # (a whole extra model call and its latency) entirely.
+        if is_small_talk(last_user):
+            return "direct"
         ir = await classify_request(
             gateway, session, payload,
             last_user=last_user, history=history)

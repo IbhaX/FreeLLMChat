@@ -35,6 +35,22 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 # in one place avoids drift between backend docs and frontend detection.
 RESPONSE_FENCE_TAG = "nova-response"
 
+# Compact prompt for purely social turns (greetings, thanks, acks). The
+# full structured contract costs ~3k tokens of catalog — pure waste when
+# the message can never produce a chart or table. Kept tiny on purpose.
+CONVERSATIONAL_SYSTEM_PROMPT = (
+    "You are Nova, a helpful AI assistant. This message is casual/social "
+    "(a greeting, thanks, or acknowledgement). Reply naturally in 1-3 "
+    "short sentences, matching the user's tone — no headers, no lists, no "
+    "markdown formatting. If the user actually asks a real question or "
+    "requests something, answer it helpfully and normally instead."
+)
+
+
+def conversational_system_prompt() -> str:
+    """System prompt for small-talk turns — replaces the full contract."""
+    return CONVERSATIONAL_SYSTEM_PROMPT
+
 
 class ResponseType(str, Enum):
     """Top-level response categories the frontend knows how to render."""

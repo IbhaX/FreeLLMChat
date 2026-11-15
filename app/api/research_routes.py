@@ -125,6 +125,17 @@ async def research_stream(
 ):
     """SSE stream of stage events; one terminal chunk carries the answer."""
     gw = _gateway(request)
+    conv_key = str(body.conversation_id) if body.conversation_id else None
+    # Refresh-resilient: if this conversation already has a detached job
+    # running, replay its buffered frames instead of starting over.
+    if conv_key:
+        from app.services import chat_jobs
+
+        running = chat_jobs.get_running(conv_key)
+        if running is not None:
+            return StreamingResponse(
+                running.stream(), media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache"})
     queue: asyncio.Queue[dict] = asyncio.Queue()
     state_box: dict[str, Any] = {}
     # Durable agent ledger for this research run.
@@ -138,14 +149,20 @@ async def research_stream(
     _t0 = time.monotonic()
 
     async def run() -> None:
+        # The run must outlive the HTTP request: it gets its OWN sessions
+        # (the request-scoped one is closed as soon as this handler returns
+        # the streaming response — using it here is why refreshed research
+        # silently died).
         try:
-            state = await run_research(
-                gw, session, _messages(body), model=body.model, depth=body.depth,
-                conversation_id=body.conversation_id,
-                on_event=agent_log.tap_emit(arun, queue.put_nowait),
-            )
+            async with factory() as rs:
+                state = await run_research(
+                    gw, rs, _messages(body), model=body.model, depth=body.depth,
+                    conversation_id=body.conversation_id,
+                    on_event=agent_log.tap_emit(arun, queue.put_nowait),
+                )
             state_box["state"] = state
-            rid = await _persist(session, body, state, state.answer)
+            async with factory() as ps:
+                rid = await _persist(ps, body, state, state.answer)
             queue.put_nowait({"event": "research_answer", "answer": state.answer,
                               "run_id": rid, **(state.meta or {})})
             async with factory() as ls:
@@ -185,6 +202,14 @@ async def research_stream(
             yield _meta(ev)
         yield "data: [DONE]\n\n"
 
+    if conv_key:
+        from app.services import chat_jobs
+
+        job = chat_jobs.start(conv_key, gen())
+        return StreamingResponse(
+            job.stream(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
     return StreamingResponse(
         gen(), media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

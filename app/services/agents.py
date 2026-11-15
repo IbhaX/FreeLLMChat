@@ -172,7 +172,7 @@ def _memory_relevance(content: str, query: str) -> int:
 
 def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
     """Compile a rich system prompt from the structured config + raw prompt."""
-    cfg = agent_cfg.config or {}
+    cfg = _cfg(agent_cfg)
     parts: list[str] = []
     if agent_cfg.system_prompt:
         parts.append(agent_cfg.system_prompt)
@@ -237,7 +237,7 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
         parts.append(f"## Error Handling\n{execution['error_handling']}")
     if execution.get("max_retries"):
         parts.append(f"Max retries: {execution['max_retries']}")
-    caps = cfg.get("capabilities", {})
+    caps = _caps(cfg)
     if caps.get("tools_enabled"):
         parts.append("You may use tool/function calls when helpful.")
     if agent_cfg.output_format == "json":
@@ -276,12 +276,27 @@ def _build_agent(agent_cfg: AgentConfig, gateway: Gateway, custom: str = "") -> 
     return Agent(model, system_prompt=system_prompt, model_settings=settings or None)
 
 
+def _cfg(agent_cfg: AgentConfig) -> dict[str, Any]:
+    """Agent ``config`` column, always a dict (JSON column can hold anything)."""
+    return agent_cfg.config if isinstance(agent_cfg.config, dict) else {}
+
+
+def _caps(cfg: dict[str, Any]) -> dict[str, Any]:
+    """``capabilities`` may be a dict (wizard) or a plain list of strings
+    (builtin seed agents) — only the dict shape carries tool metadata."""
+    caps = cfg.get("capabilities")
+    return caps if isinstance(caps, dict) else {}
+
+
 def _tool_names(agent_cfg: AgentConfig) -> list[str]:
-    cfg = agent_cfg.config or {}
-    caps = cfg.get("capabilities", {})
-    if not (caps.get("tools_enabled") or agent_cfg.enable_tools):
+    cfg = _cfg(agent_cfg)
+    caps = _caps(cfg)
+    if not (caps.get("tools_enabled") or cfg.get("tools_enabled")
+            or agent_cfg.enable_tools):
         return []
-    tools = caps.get("tools")
+    # Wizard stores the list under capabilities.tools; seed/builtin agents
+    # keep it at config.tools.
+    tools = caps.get("tools") or cfg.get("tools")
     return list(tools) if isinstance(tools, list) and tools else ["*"]
 
 
@@ -342,7 +357,7 @@ async def _chat_with_tools(
         payload["max_tokens"] = agent_cfg.max_tokens
     if agent_cfg.output_format in ("json", "structured"):
         payload["response_format"] = {"type": "json_object"}
-    execution = (agent_cfg.config or {}).get("execution", {})
+    execution = _cfg(agent_cfg).get("execution", {})
     timeout_s = execution.get("timeout")
     max_rounds = min(int(execution.get("max_retries") or 5), 10)
     async with get_session_factory()() as session:
@@ -356,7 +371,7 @@ async def run_agent(
 ) -> str:
     """Run an agent with bounded context, relevant memory and execution limits."""
     history = _bounded_history(history)
-    execution = (agent_cfg.config or {}).get("execution", {})
+    execution = _cfg(agent_cfg).get("execution", {})
     timeout_s = max(1.0, min(float(execution.get("timeout", 120)), 600.0))
     if _tool_names(agent_cfg):
         messages = _messages(agent_cfg, message, history, custom_instructions)
@@ -430,7 +445,7 @@ async def stream_agent(
         payload["temperature"] = agent_cfg.temperature
     if agent_cfg.max_tokens is not None:
         payload["max_tokens"] = agent_cfg.max_tokens
-    execution = (agent_cfg.config or {}).get("execution", {})
+    execution = _cfg(agent_cfg).get("execution", {})
     timeout_s = max(1.0, min(float(execution.get("timeout", 120)), 600.0))
     try:
         async with asyncio.timeout(timeout_s):

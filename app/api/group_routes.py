@@ -60,6 +60,10 @@ class GroupChatRequest(BaseModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
     agent_ids: list[int]
     conversation_id: str | None = None  # scopes short-term vector memory
+    # "parallel": all agents answer independently, Orchestrator merges.
+    # "pipeline": agents run in agent_ids order; each receives the previous
+    # agent's output as input; the last agent's output is the final answer.
+    mode: str = "parallel"
 
 
 class ShareRequest(BaseModel):
@@ -158,6 +162,59 @@ async def group_stream(
     async def gen():
         try:
             names = ", ".join(a.name for a in agents)
+            if body.mode == "pipeline":
+                # Sequential chain: each agent's output becomes the next
+                # agent's input; the last agent's output is the final answer
+                # (no orchestrator — that is the difference from "parallel").
+                yield _meta({"event": "group_start",
+                             "text": f"Pipeline: {names}",
+                             "agents": [a.name for a in agents]})
+                prev_name, prev_out = "", ""
+                for a in agents:
+                    yield _meta({"event": "agent_start",
+                                 "agent": a.name,
+                                 "text": f"{a.name} is working on the previous stage's output…"})
+                    if not prev_out:
+                        prompt = (
+                            f"Conversation so far:\n{transcript_txt}\n\n"
+                            f"Answer the latest user message as {a.name}. "
+                            "Be thorough and well-structured: answer fully, "
+                            "cover the relevant substance, and use the "
+                            "component format for anything with more than one "
+                            "fact."
+                        )
+                    else:
+                        prompt = (
+                            f"The user's original request was:\n"
+                            f"{body.message}\n\n"
+                            f"The previous stage of the pipeline (agent "
+                            f"\"{prev_name}\") produced this output:\n\n"
+                            f"{prev_out}\n\n"
+                            f"Take that output as your input and produce the "
+                            f"next stage of the answer as {a.name}. "
+                            "Keep what is correct, fix what is wrong, extend "
+                            "it with your expertise. Use the component format "
+                            "for anything with more than one fact."
+                        )
+                    try:
+                        text = await run_agent(
+                            gw, a, prompt, [], custom_instructions=custom)
+                    except Exception as e:
+                        text = f"*(error: {e})*"
+                    transcript.append(
+                        {"role": "assistant", "name": a.name, "content": text})
+                    yield _meta({"event": "agent_message",
+                                 "agent": a.name, "content": text})
+                    prev_name, prev_out = a.name, text
+                if conv_id:
+                    astra_memory.store_short(conv_id, "assistant", prev_out)
+                    asyncio.ensure_future(
+                        astra_memory.extract_and_store(gw, body.message, prev_out)
+                    )
+                yield _meta({"event": "group_done", "text": "Done"})
+                yield b"data: [DONE]\n\n"
+                return
+
             yield _meta({"event": "group_start",
                          "text": f"Orchestrating: {names}",
                          "agents": [a.name for a in agents] + [ORCHESTRATOR_NAME]})

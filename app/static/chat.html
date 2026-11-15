@@ -118,6 +118,9 @@
   .mode-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 5px 3px 9px;
     border-radius:999px;border:1px solid var(--accent-line);background:var(--accent-soft);
     color:var(--text-1);font-size:11px;font-weight:600;white-space:nowrap}
+  .gagent.dragging{opacity:.4}
+  .gagent.dragover{outline:1px dashed var(--accent);outline-offset:1px}
+  .gord{font-size:10px;color:var(--text-3);min-width:10px}
   .mode-chip .mrm{border:0;background:none;color:var(--text-3);cursor:pointer;
     font-size:11px;padding:0 3px;border-radius:50%;line-height:1}
   .mode-chip .mrm:hover{color:var(--error)}
@@ -448,7 +451,19 @@
           <div class="mi" id="agentDelBtn" style="display:none;color:var(--error)">🗑<span class="tb-tx"> Delete agent</span></div>
           <div class="mi-head" style="border-top:1px solid var(--border-1);margin-top:4px;padding-top:6px">Modes</div>
           <div class="mi" id="researchBtn">🔬<span class="tb-tx"> Deep research</span> <span style="opacity:.7;font-size:10px">auto</span></div>
-          <div class="mi" id="pmDepth" style="color:var(--text-3)">↻<span class="tb-tx"> Depth: auto</span></div>
+          <div class="mi" id="pmDepth">◷<span class="tb-tx"> Depth</span>
+            <span style="margin-left:auto;opacity:.65;font-size:10px" id="pmDepthVal">auto</span></div>
+          <div id="depthSub" style="display:none;border-top:1px solid var(--border-1);margin-top:2px;padding-top:2px">
+            <div class="mi depth-opt" data-d="auto"><span class="dchk" style="width:14px;display:inline-block">✓</span><span class="tb-tx">Auto</span>
+              <span style="margin-left:auto;opacity:.6;font-size:10px">decides itself</span></div>
+            <div class="mi depth-opt" data-d="quick"><span class="dchk" style="width:14px;display:inline-block"></span><span class="tb-tx">Quick</span>
+              <span style="margin-left:auto;opacity:.6;font-size:10px">fast · concise</span></div>
+            <div class="mi depth-opt" data-d="standard"><span class="dchk" style="width:14px;display:inline-block"></span><span class="tb-tx">Standard</span>
+              <span style="margin-left:auto;opacity:.6;font-size:10px">normal detail</span></div>
+            <div class="mi depth-opt" data-d="deep"><span class="dchk" style="width:14px;display:inline-block"></span><span class="tb-tx">Deep</span>
+              <span style="margin-left:auto;opacity:.6;font-size:10px">thorough · more effort</span></div>
+          </div>
+          <div class="mi" id="pipelineBtn">🔗<span class="tb-tx"> Pipeline (ordered)</span></div>
           <div class="mi" id="rpBtn">🎭<span class="tb-tx"> Roleplay…</span></div>
         </div>
         <div class="chip-row" id="chipRow"></div>

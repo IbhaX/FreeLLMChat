@@ -56,8 +56,9 @@ def test_routing_failure_falls_back_safely():
 
     # wants_tools fails open to True inside tools.py; orchestrator itself
     # must still return a valid route even if classification explodes.
+    # (not a greeting — small talk legitimately short-circuits to "direct")
     r = asyncio.run(orch.route_message(Boom(), None, {"messages": [], "builtin_tools": True},
-                                       last_user="hi", history=[]))
+                                       last_user="tell me something interesting", history=[]))
     assert r in ("tools", "research")
 
 

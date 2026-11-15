@@ -317,18 +317,38 @@ async def chat_completions(
         turns = [m for m in msgs if m.get("role") != "system"]
         if len(turns) > 20:
             payload["messages"] = system_msgs + turns[-20:]
+    last_user = next(
+        (m.get("content", "") for m in reversed(payload.get("messages") or [])
+         if m.get("role") == "user" and isinstance(m.get("content"), str)),
+        "",
+    )
+    # Small talk ("hi", "thanks") can never produce components — skip the
+    # ~3k-token catalog entirely and use a compact conversational prompt.
+    from app.services.intent import is_small_talk
+
+    small_talk = bool(payload.get("nova_structured", True)) and is_small_talk(last_user)
+    # Requested depth/effort (Devin-style): quick → concise + skip the
+    # tool-gate probe, deep → thorough. Never forwarded upstream.
+    depth = str(payload.pop("depth", "auto") or "auto").lower()
+    if depth not in ("auto", "quick", "standard", "deep"):
+        depth = "auto"
     # Inject the structured-output system prompt so responses are always
     # structured envelopes (unless the caller explicitly opts out via the
     # `nova_structured: false` extra field).
     if payload.get("nova_structured", True) and isinstance(payload.get("messages"), list):
-        from app.response_protocol import structured_system_prompt
+        if small_talk:
+            from app.response_protocol import conversational_system_prompt
 
+            struct_prompt = conversational_system_prompt()
+        else:
+            from app.response_protocol import structured_system_prompt
+
+            struct_prompt = structured_system_prompt()
         sys_idx = next(
             (i for i, m in enumerate(payload["messages"])
              if m.get("role") == "system"),
             None,
         )
-        struct_prompt = structured_system_prompt()
         if sys_idx is not None:
             # Component contract goes FIRST so provider-agnostic output rules
             # are not diluted by persona/agent instructions.
@@ -338,11 +358,6 @@ async def chat_completions(
             )
         else:
             payload["messages"].insert(0, {"role": "system", "content": struct_prompt})
-    last_user = next(
-        (m.get("content", "") for m in reversed(payload.get("messages") or [])
-         if m.get("role") == "user" and isinstance(m.get("content"), str)),
-        "",
-    )
     conv_id = payload.pop("conversation_id", None)
     # A detached job may already be answering this conversation (the
     # client refreshed or resent) — re-attach instead of duplicating work.
@@ -420,10 +435,36 @@ async def chat_completions(
                 payload["messages"].insert(0, {"role": "system", "content": block})
     except Exception:
         pass
+    # Depth directive appended to the system prompt so every path (direct,
+    # tools, research) honors the chosen effort level.
+    if depth != "auto" and not small_talk and isinstance(payload.get("messages"), list):
+        note = (
+            "## DEPTH\nThe user chose QUICK depth: answer concisely and "
+            "directly — no preamble, minimal elaboration."
+            if depth == "quick" else
+            "## DEPTH\nThe user chose DEEP depth: be thorough — cover "
+            "nuances, trade-offs, edge cases and sources; use rich components."
+            if depth == "deep" else
+            "## DEPTH\nThe user chose STANDARD depth: a clear, complete but "
+            "not exhaustive answer."
+        )
+        sys_idx = next(
+            (i for i, m in enumerate(payload["messages"])
+             if m.get("role") == "system"),
+            None,
+        )
+        if sys_idx is not None:
+            payload["messages"][sys_idx] = dict(
+                payload["messages"][sys_idx],
+                content=f"{payload['messages'][sys_idx].get('content', '')}\n\n{note}",
+            )
+        else:
+            payload["messages"].insert(0, {"role": "system", "content": note})
     # One-line reminder as the LAST message for weaker models (the full
     # contract is at the start of the system prompt; this keeps components
     # salient at the point of generation).
-    if payload.get("nova_structured", True) and isinstance(payload.get("messages"), list):
+    if (payload.get("nova_structured", True) and not small_talk
+            and isinstance(payload.get("messages"), list)):
         from app.services.component_enforce import COMPONENT_REMINDER
 
         payload["messages"] = list(payload["messages"]) + [
@@ -459,7 +500,7 @@ async def chat_completions(
 
                 route = await route_message(
                     gateway, session,
-                    {**payload, "builtin_tools": True},
+                    {**payload, "builtin_tools": True, "depth": depth},
                     last_user=last_user,
                     history=payload.get("messages") or [],
                 )

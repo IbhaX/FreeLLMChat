@@ -42,16 +42,22 @@ async function loadModels(silent){
 }
 
 // --- State ----------------------------------------------------------------
-const state={model:MODELS[0],conversations:[],current:null,streaming:false,abort:null,agent:null,group:null,groupMode:false,researchMode:false,researchDepth:'auto'};
+const state={model:MODELS[0],conversations:[],current:null,streaming:false,abort:null,agent:null,group:null,groupMode:false,pipelineMode:false,researchMode:false,depth:'auto'};
 try{state.rpChar=JSON.parse(localStorage.getItem('nova_rp_char')||'null')||null;}catch(_){state.rpChar=null;}
 window.__chatState=state; // wizard.js reads agent
 const STORE_KEY='nova_chat_state_v1';
+let pendingMode=null;
 function saveState(){
   try{
     if(state.current)state.current.t=Date.now();
     const cur=state.current?state.current.id:null;
     localStorage.setItem(STORE_KEY,JSON.stringify({
-      modelId:state.model.id,conversations:state.conversations,currentId:cur}));
+      modelId:state.model.id,depth:state.depth,conversations:state.conversations,currentId:cur,
+      researchMode:pendingMode?pendingMode.researchMode:!!state.researchMode,
+      agentId:pendingMode?pendingMode.agentId:(state.agent?state.agent.id:null),
+      pipelineMode:pendingMode?pendingMode.pipelineMode:!!state.pipelineMode,
+      groupMode:pendingMode?pendingMode.groupMode:!!state.groupMode,
+      groupIds:pendingMode?pendingMode.groupIds:(state.group?state.group.agents.map(a=>a.id):[])}));
   }catch(_){}
   syncToServer();
 }
@@ -108,6 +114,11 @@ function loadState(){
     const live=(prev||newest);
     if(live&&(live.t||0)>Date.now()-STALE_MS){state.current=live;}
     else{const fresh=mkConv('New conversation');state.conversations.unshift(fresh);state.current=fresh;}
+    if(['auto','quick','standard','deep'].includes(s.depth))state.depth=s.depth;
+    pendingMode={researchMode:!!s.researchMode,agentId:s.agentId||null,
+      pipelineMode:!!s.pipelineMode,
+      groupMode:!!s.groupMode,groupIds:Array.isArray(s.groupIds)?s.groupIds:[]};
+    paintDepth();paintModeChips();
     const m=MODELS.find(x=>x.id===s.modelId);
     if(m){state.model=m;$('#modelName').textContent=m.name;$('#modelIcon').style.background=m.color;}
     return true;
@@ -564,7 +575,7 @@ async function streamAPIReply(c,live){
   const lastContent=messages[messages.length-1].content;
   const payload=isAgent
     ?{message:lastContent,history:messages.slice(0,-1),stream:true}
-    :{model:state.model.id,messages,stream:true,builtin_tools:['*'],conversation_id:c.id};
+    :{model:state.model.id,messages,stream:true,builtin_tools:['*'],conversation_id:c.id,depth:state.depth};
   const doFetch=live
     ?()=>fetch(API_BASE+'/v1/conversations/'+c.id+'/live/stream',{headers:apiHeaders(),signal:ctrl.signal})
     :()=>fetch(url,{method:'POST',headers:apiHeaders(),signal:ctrl.signal,body:JSON.stringify(payload)});
@@ -735,6 +746,22 @@ async function loadAgents(){
     const data=(await r.json()).data||[];
     state._agents=data;
     renderAgentMenu(data);
+    if(pendingMode){
+      const pm=pendingMode;pendingMode=null;
+      if(pm.researchMode){
+        state.researchMode=true;paintResearchBtn();
+        $('#chatStatus').textContent=`research mode · depth ${state.depth} · multi-step, slower`;
+      }else if(pm.groupMode&&pm.groupIds.length){
+        state.groupMode=true;
+        state.pipelineMode=!!pm.pipelineMode;
+        state.group={agents:pm.groupIds.map(id=>data.find(a=>a.id===id)).filter(Boolean)};
+        if(state.group.agents.length)renderGroupBar();
+        else{state.groupMode=false;state.group=null;}
+      }else if(pm.agentId){
+        const a=data.find(x=>x.id===pm.agentId);
+        if(a)selectAgent(a);
+      }
+    }
     // ?agent=<name> deep link from the Agents directory
     if(!state.agent){
       const want=new URLSearchParams(location.search).get('agent');
@@ -747,7 +774,7 @@ function renderAgentMenu(agents){
   const list=$('#agentList');
   const gm=state.groupMode;
   if(!agents.length){list.innerHTML='<div style="padding:10px;color:var(--text-3);font-size:12.5px">No agents yet. Click ＋ to create one.</div>';return;}
-  const head=gm?`<div class="mi-head">Pick the group's agents — click to add/remove</div>`:'';
+  const head=gm?`<div class="mi-head">${state.pipelineMode?'Pick pipeline agents — click order = chain order':'Pick the group agents — click to add/remove'}</div>`:'';
   list.innerHTML=head+agents.map(a=>{
     const inGroup=state.group&&state.group.agents.some(x=>x.id===a.id);
     return `<div class="mi agent-opt ${!gm&&state.agent&&state.agent.id===a.id?'sel':''}" data-id="${a.id}">
@@ -773,6 +800,7 @@ function toggleGroupAgent(a){
   if(!state.group)state.group={agents:[]};
   const i=state.group.agents.findIndex(x=>x.id===a.id);
   if(i>=0)state.group.agents.splice(i,1);else state.group.agents.push(a);
+  saveState();
 }
 function renderGroupBar(){
   paintModeChips();
@@ -782,9 +810,10 @@ function renderGroupBar(){
   bar.innerHTML='<span id="gNow" class="gnow"></span>'+
     `<details class="gdrop" id="gDrop"><summary>👥 ${g.agents.length} agent${g.agents.length>1?'s':''} ▾</summary>`+
     '<div class="glist">'+
-    g.agents.map((a,i)=>`<span class="gagent" data-name="${esc(a.name)}" style="--gc:${GCOLORS[i%GCOLORS.length]}">
+    g.agents.map((a,i)=>`<span class="gagent" data-name="${esc(a.name)}" style="--gc:${GCOLORS[i%GCOLORS.length]}${state.pipelineMode?';cursor:grab':''}">
+      ${state.pipelineMode?`<span class="gord">${i+1}</span>`:''}
       <span class="gav">${esc(a.name[0].toUpperCase())}</span><span class="gname">${esc(a.name)}</span>
-      <button class="grm" title="Remove from group">✕</button></span>`).join('')+
+      <button class="grm" title="Remove">✕</button></span>`).join('')+
     '</div></details>'+
     `<span class="gctl t-xs tx-3">
        <button class="ui-btn ui-btn-ghost t-xs" id="gExit">exit</button></span>`;
@@ -795,12 +824,34 @@ function renderGroupBar(){
     renderGroupBar();renderAgentMenu(state._agents||[]);
   });
   bar.querySelector('#gExit').onclick=()=>{exitGroupMode();};
+  if(state.pipelineMode){
+    // Drag & drop reorder — array order IS the pipeline order.
+    bar.querySelectorAll('.gagent').forEach(el=>{
+      el.draggable=true;
+      el.ondragstart=e=>{e.dataTransfer.setData('text/plain',el.dataset.name);el.classList.add('dragging');};
+      el.ondragend=()=>el.classList.remove('dragging');
+      el.ondragover=e=>{e.preventDefault();el.classList.add('dragover');};
+      el.ondragleave=()=>el.classList.remove('dragover');
+      el.ondrop=e=>{
+        e.preventDefault();el.classList.remove('dragover');
+        const nm=e.dataTransfer.getData('text/plain');
+        const from=state.group.agents.findIndex(a=>a.name===nm);
+        const to=state.group.agents.findIndex(a=>a.name===el.dataset.name);
+        if(from>=0&&to>=0&&from!==to){
+          const m=state.group.agents.splice(from,1)[0];
+          state.group.agents.splice(to,0,m);
+          renderGroupBar();saveState();
+        }
+      };
+    });
+  }
 }
 function exitGroupMode(){
-  state.groupMode=false;state.group=null;
+  state.groupMode=false;state.group=null;state.pipelineMode=false;
   $('#groupStage').style.display='none';
   renderAgentMenu(state._agents||[]);
   selectAgent(null);
+  saveState();
 }
 function setStageLive(name,done){
   const now=document.querySelector('#groupStage .gnow');
@@ -821,7 +872,8 @@ async function streamGroupReply(c){
     .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||'Nova'),content:m.text}));
   const last=messages[messages.length-1];
   const payload={message:last.content,history:messages.slice(0,-1),
-    agent_ids:state.group.agents.map(a=>a.id),conversation_id:c.id};
+    agent_ids:state.group.agents.map(a=>a.id),conversation_id:c.id,
+    mode:state.pipelineMode?'pipeline':'parallel'};
   const ctrl=new AbortController();
   state.abort={get stop(){return ctrl.signal.aborted},set stop(v){if(v)ctrl.abort()}};
   // per-speaker typing row + activity list
@@ -913,31 +965,43 @@ async function streamGroupReply(c){
 // Full pipeline: route -> plan -> parallel researchers -> gap check ->
 // verifier -> synthesizer. Stage events stream into the activity list; the
 // terminal `research_answer` chunk carries the final markdown.
-const RESEARCH_DEPTHS=['auto','quick','standard','deep'];
+const DEPTHS=['auto','quick','standard','deep'];
+function setDepth(v){
+  if(!DEPTHS.includes(v))v='auto';
+  state.depth=v;paintDepth();paintResearchBtn();saveState();
+  toast('Depth: '+v);
+}
 function cycleResearchDepth(){
-  const i=RESEARCH_DEPTHS.indexOf(state.researchDepth);
-  state.researchDepth=RESEARCH_DEPTHS[(i+1)%RESEARCH_DEPTHS.length];
-  paintResearchBtn();toast('Research depth: '+state.researchDepth);
+  const i=DEPTHS.indexOf(state.depth);
+  setDepth(DEPTHS[(i+1)%DEPTHS.length]);
+}
+function paintDepth(){
+  const v=$('#pmDepthVal');if(v)v.textContent=state.depth;
+  document.querySelectorAll('#depthSub .depth-opt').forEach(o=>{
+    const chk=o.querySelector('.dchk');if(chk)chk.textContent=o.dataset.d===state.depth?'✓':'';
+    o.style.color=o.dataset.d===state.depth?'var(--accent)':'';
+  });
 }
 function paintResearchBtn(){
   const b=$('#researchBtn');if(!b)return;
   b.classList.toggle('on',!!state.researchMode);
-  b.innerHTML='🔬<span class="tb-tx"> Deep research</span> <span style="opacity:.7;font-size:10px">'+esc(state.researchDepth)+'</span>';
-  const d=$('#pmDepth');
-  if(d)d.innerHTML='↻<span class="tb-tx"> Depth: '+esc(state.researchDepth)+'</span>';
+  b.innerHTML='🔬<span class="tb-tx"> Deep research</span> <span style="opacity:.7;font-size:10px">'+esc(state.depth)+'</span>';
+  paintDepth();
   paintModeChips();
 }
 function paintModeChips(){
   const host=$('#modeChips');if(!host)return;
   const chips=[];
   if(state.groupMode&&state.group&&state.group.agents.length)
-    chips.push({ico:'👥',tx:`Group · ${state.group.agents.length}`,off:exitGroupMode});
+    chips.push({ico:state.pipelineMode?'🔗':'👥',tx:(state.pipelineMode?'Pipeline · ':'Group · ')+state.group.agents.length,off:exitGroupMode});
   else if(state.agent)
     chips.push({ico:'🤖',tx:state.agent.name,off:()=>selectAgent(null)});
   if(state.rpChar)
     chips.push({ico:'🎭',tx:state.rpChar.name,off:rpExit});
   if(state.researchMode)
-    chips.push({ico:'🔬',tx:'Research · '+state.researchDepth,off:toggleResearchMode});
+    chips.push({ico:'🔬',tx:'Research · '+state.depth,off:toggleResearchMode});
+  else if(state.depth!=='auto')
+    chips.push({ico:'◷',tx:'Depth · '+state.depth,off:()=>setDepth('auto')});
   host.innerHTML='';
   chips.forEach(c=>{
     const el=document.createElement('span');el.className='mode-chip';
@@ -951,11 +1015,12 @@ function toggleResearchMode(){
   if(state.researchMode){exitGroupModeKeepAgent();selectAgent(null);}
   paintResearchBtn();
   $('#chatStatus').textContent=state.researchMode
-    ?`research mode · depth ${state.researchDepth} · multi-step, slower`
+    ?`research mode · depth ${state.depth} · multi-step, slower`
     :'connected · replies stream in real time';
   toast(state.researchMode?'Research mode on':'Research mode off');
+  saveState();
 }
-function exitGroupModeKeepAgent(){state.groupMode=false;state.group=null;$('#groupStage').style.display='none';}
+function exitGroupModeKeepAgent(){state.groupMode=false;state.group=null;state.pipelineMode=false;$('#groupStage').style.display='none';}
 async function streamResearchReply(c){
   state.streaming=true;setSend(true);
   const inner=$('#chatInner'),scroller=$('#chatScroll');
@@ -964,7 +1029,7 @@ async function streamResearchReply(c){
     .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||'Nova'),content:m.text}));
   const last=messages[messages.length-1];
   const payload={message:last.content,history:messages.slice(0,-1),model:state.model.id,
-    depth:state.researchDepth==='auto'?null:state.researchDepth,conversation_id:c.id,save:true};
+    depth:state.depth==='auto'?null:state.depth,conversation_id:c.id,save:true};
   const ctrl=new AbortController();
   state.abort={get stop(){return ctrl.signal.aborted},set stop(v){if(v)ctrl.abort()}};
   let trow=null,acts=null,actLbl=null,actList=null,actLog=null,answer=null,meta=null;
@@ -1075,6 +1140,7 @@ window.selectAgent=function(a){
     $('#agentDelBtn').style.display='none';
   }
   paintModeChips();
+  saveState();
 };
 $('#agentBtn').onclick=e=>{e.stopPropagation();
   $('#agentMenu').style.display=$('#agentMenu').style.display==='block'?'none':'block';};
@@ -1085,7 +1151,7 @@ $('#agentNoneBtn').onclick=()=>{
   toast('Raw model mode');
 };
 $('#agentGroupBtn').onclick=()=>{
-  state.groupMode=true;
+  state.groupMode=true;state.pipelineMode=false;
   if(!state.group)state.group={agents:[]};
   renderAgentMenu(state._agents||[]);
   renderGroupBar();
@@ -1174,6 +1240,11 @@ function rpOpenModal(i){
   $('#rpModal').dataset.edit=String((i==null||i<0)?-1:i);
   $('#rpModal').style.display='flex';
 }
+$('#pipelineBtn').onclick=e=>{e.stopPropagation();
+  state.groupMode=true;state.pipelineMode=true;
+  if(!state.group)state.group={agents:[]};
+  renderAgentMenu(state._agents||[]);$('#agentMenu').style.display='block';renderGroupBar();
+  toast('Pipeline: pick agents — click order = chain order');};
 $('#rpBtn').onclick=()=>{renderRpMenu();const m=$('#rpMenu');m.style.display=(m.style.display==='none')?'block':'none';};
 $('#rpStarterBtn').onclick=async()=>{
   try{
@@ -1206,7 +1277,11 @@ $('#researchBtn').ondblclick=e=>{e.preventDefault();cycleResearchDepth();};
 // "+" composer menu (Manus-style): all tools/modes in one popover.
 $('#plusBtn').onclick=e=>{e.stopPropagation();
   const m=$('#plusMenu');m.style.display=m.style.display==='block'?'none':'block';};
-$('#pmDepth').onclick=e=>{e.preventDefault();cycleResearchDepth();};
+$('#pmDepth').onclick=e=>{e.preventDefault();
+  const s=$('#depthSub');if(s)s.style.display=s.style.display==='none'?'block':'none';};
+document.querySelectorAll('#depthSub .depth-opt').forEach(o=>{
+  o.onclick=e=>{e.preventDefault();setDepth(o.dataset.d);$('#depthSub').style.display='none';};
+});
 document.addEventListener('click',e=>{
   const m=$('#plusMenu');
   if(m&&m.style.display==='block'&&!e.target.closest('#plusMenu')&&!e.target.closest('#plusBtn'))
@@ -1220,6 +1295,7 @@ $('#plusMenu').addEventListener('click',e=>{
     $('#plusMenu').style.display='none';
 },true);
 paintModeChips();
+paintDepth();
 paintResearchBtn();
 $('#shareBtn').onclick=async()=>{
   const c=state.current;
