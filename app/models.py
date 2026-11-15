@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -432,3 +434,325 @@ class AgentEvent(Base):
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     run: Mapped[AgentRun] = relationship(back_populates="events")
+
+
+# ---------------------------------------------------------------------------
+# Nova v2 research subsystem
+#
+# Relational data lives in SQLite (matching the rest of the app). Vector
+# embeddings for evidence recall live in Astra DB (see
+# ``app.services.evidence_store``); ``Evidence.vector_ref`` holds the Astra
+# document id. All v2 ids are hex UUID strings.
+# ---------------------------------------------------------------------------
+
+
+def _uid() -> str:
+    return uuid.uuid4().hex
+
+
+class ResearchRunV2(Base):
+    """A v2 research run — state machine owned by the durable job runner."""
+
+    __tablename__ = "research_runs_v2"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    conversation_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True)
+    question: Mapped[str] = mapped_column(Text)
+    depth: Mapped[str] = mapped_column(String(16), default="standard")
+    state: Mapped[str] = mapped_column(String(32), default="created", index=True)
+    options: Mapped[dict] = mapped_column(JSON, default=dict)
+    budget: Mapped[dict] = mapped_column(JSON, default=dict)
+    spent: Mapped[dict] = mapped_column(JSON, default=dict)
+    plan_version: Mapped[int] = mapped_column(Integer, default=0)
+    degraded: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    result_ref: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RunStage(Base):
+    """Per-stage execution record; ``checkpoint`` holds resume data."""
+
+    __tablename__ = "run_stages"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), index=True
+    )
+    stage: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
+    checkpoint: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    __table_args__ = (UniqueConstraint("run_id", "stage", "attempt"),)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RunEvent(Base):
+    """Monotonic event stream per run — basis for SSE replay/resume."""
+
+    __tablename__ = "run_events"
+
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), primary_key=True
+    )
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    type: Mapped[str] = mapped_column(String(48))
+    actor: Mapped[str] = mapped_column(String(64), default="system")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class SteerMessage(Base):
+    __tablename__ = "steer_messages"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), index=True
+    )
+    text: Mapped[str] = mapped_column(Text)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Question(Base):
+    """A node in the run's question tree."""
+
+    __tablename__ = "questions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), index=True
+    )
+    parent_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("questions.id", ondelete="SET NULL"), nullable=True
+    )
+    text: Mapped[str] = mapped_column(Text)
+    aspect: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=5)
+    coverage: Mapped[float] = mapped_column(Float, default=0.0)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(64), default="planner")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class Source(Base):
+    """A fetched web/academic/file source. Shared across runs."""
+
+    __tablename__ = "sources"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    url: Mapped[str] = mapped_column(Text)
+    canonical_url: Mapped[str] = mapped_column(Text)
+    domain: Mapped[str] = mapped_column(String(255), index=True)
+    title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    author: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    content_type: Mapped[str] = mapped_column(String(32), default="html")
+    content_hash: Mapped[str] = mapped_column(String(64))
+    snapshot_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    text_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_class: Mapped[str] = mapped_column(String(32), default="unknown")
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    score_detail: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    __table_args__ = (UniqueConstraint("canonical_url", "content_hash"),)
+
+
+class Evidence(Base):
+    """Quote-level evidence bound to a source span. ``vector_ref`` is the
+    Astra DB document id used for similarity recall (embedding lives there)."""
+
+    __tablename__ = "evidence"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), index=True
+    )
+    question_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("questions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_id: Mapped[str] = mapped_column(
+        ForeignKey("sources.id", ondelete="CASCADE"), index=True
+    )
+    quote: Mapped[str] = mapped_column(Text)
+    span_start: Mapped[int] = mapped_column(Integer, default=0)
+    span_end: Mapped[int] = mapped_column(Integer, default=0)
+    context: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    vector_ref: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    extracted_by: Mapped[str] = mapped_column(String(64), default="worker")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Claim(Base):
+    """An atomic, self-contained factual statement produced by a run."""
+
+    __tablename__ = "claims"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), index=True
+    )
+    question_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("questions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    text: Mapped[str] = mapped_column(Text)
+    is_key: Mapped[bool] = mapped_column(Boolean, default=False)
+    verdict: Mapped[str] = mapped_column(String(32), default="unchecked")
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    independent_sources: Mapped[int] = mapped_column(Integer, default=0)
+    verifier_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ClaimEvidence(Base):
+    """Link between a claim and the evidence supporting/refuting it."""
+
+    __tablename__ = "claim_evidence"
+
+    claim_id: Mapped[str] = mapped_column(
+        ForeignKey("claims.id", ondelete="CASCADE"), primary_key=True
+    )
+    evidence_id: Mapped[str] = mapped_column(
+        ForeignKey("evidence.id", ondelete="CASCADE"), primary_key=True
+    )
+    relation: Mapped[str] = mapped_column(String(16), default="supports")
+
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    outline: Mapped[dict] = mapped_column(JSON, default=dict)
+    markdown: Mapped[str] = mapped_column(Text, default="")
+    components: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    quality: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReportCitation(Base):
+    __tablename__ = "report_citations"
+
+    report_id: Mapped[str] = mapped_column(
+        ForeignKey("reports.id", ondelete="CASCADE"), primary_key=True
+    )
+    n: Mapped[int] = mapped_column(Integer, primary_key=True)
+    evidence_id: Mapped[str] = mapped_column(
+        ForeignKey("evidence.id", ondelete="CASCADE")
+    )
+
+
+class Artifact(Base):
+    __tablename__ = "artifacts"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16))
+    name: Mapped[str] = mapped_column(String(255))
+    storage_ref: Mapped[str] = mapped_column(Text)
+    bytes: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LlmCall(Base):
+    __tablename__ = "llm_calls"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    run_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    actor: Mapped[str] = mapped_column(String(64))
+    role: Mapped[str] = mapped_column(String(32))
+    provider: Mapped[str] = mapped_column(String(64), default="")
+    model: Mapped[str] = mapped_column(String(255), default="")
+    tier: Mapped[str] = mapped_column(String(32), default="worker")
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ToolCall(Base):
+    __tablename__ = "tool_calls"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    run_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("research_runs_v2.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    actor: Mapped[str] = mapped_column(String(64), default="")
+    tool: Mapped[str] = mapped_column(String(48))
+    args: Mapped[dict] = mapped_column(JSON, default=dict)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    cache_hit: Mapped[bool] = mapped_column(Boolean, default=False)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    result_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class FetchCache(Base):
+    """Cross-run fetch cache: canonical URL → stored source, TTL by class."""
+
+    __tablename__ = "fetch_cache"
+
+    canonical_url: Mapped[str] = mapped_column(Text, primary_key=True)
+    source_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("sources.id", ondelete="SET NULL"), nullable=True
+    )
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ttl_s: Mapped[int] = mapped_column(Integer, default=86400)
+    etag: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+
+class Job(Base):
+    """SQLite-backed durable job queue entry.
+
+    A worker claims a job by setting ``status='running'`` plus a lease; if
+    the lease expires without completion the job is reclaimed by another
+    worker. ``cancel_requested`` is polled between steps by handlers.
+    """
+
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
+    kind: Mapped[str] = mapped_column(String(48), index=True)
+    run_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=5)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    lease_owner: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    run_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

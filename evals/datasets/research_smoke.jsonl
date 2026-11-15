@@ -1,0 +1,10 @@
+{"id": "q01", "question": "What is the capital of Australia and why is it not Sydney?", "depth": "quick", "required_facts": ["Canberra", "compromise"], "tags": ["factual"]}
+{"id": "q02", "question": "Compare SQLite and PostgreSQL for an embedded analytics workload", "depth": "standard", "required_facts": ["concurrent", "write", "single-file|embedded"], "tags": ["synthesis", "comparison"]}
+{"id": "q03", "question": "What is Retrieval-Augmented Generation and what are its main failure modes?", "depth": "standard", "required_facts": ["retriev", "context", "hallucinat|faithful"], "tags": ["synthesis"]}
+{"id": "q04", "question": "Who won the most recent FIFA World Cup and who scored in the final?", "depth": "standard", "required_facts": ["Argentina", "Messi"], "tags": ["factual", "recent"], "time_sensitive": true}
+{"id": "q05", "question": "Summarize the transformer architecture from 'Attention Is All You Need': key mechanism, parameter count, and result on WMT translation", "depth": "deep", "required_facts": ["attention", "WMT|BLEU"], "tags": ["academic", "multi-hop"]}
+{"id": "q06", "question": "What is 17% of 84,500, and what is that figure in scientific notation?", "depth": "quick", "required_facts": ["14365|14,365", "1.4365e4|1.4365"], "tags": ["numeric"]}
+{"id": "q07", "question": "Explain the difference between TCP and UDP and when each is preferred", "depth": "standard", "required_facts": ["connection", "reliab|ordered", "latency|overhead"], "tags": ["synthesis"]}
+{"id": "q08", "question": "What are the main criticisms of the megaproject 'The Line' in Saudi Arabia?", "depth": "deep", "required_facts": ["NEOM", "cost|budget", "human rights|labor|displacement"], "tags": ["synthesis", "conflict"]}
+{"id": "q09", "question": "What does the CAP theorem state and what is a common misconception about it?", "depth": "standard", "required_facts": ["consistency", "availability", "partition"], "tags": ["factual", "conceptual"]}
+{"id": "q10", "question": "How does the HTTP/3 protocol differ from HTTP/2 at the transport layer?", "depth": "standard", "required_facts": ["QUIC", "UDP", "head-of-line"], "tags": ["factual", "technical"]}

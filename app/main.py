@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from app.api.knowledge_routes import router as knowledge_router
 from app.api.openai_routes import router as openai_router
 from app.api.person_routes import router as person_router
 from app.api.research_routes import router as research_router
+from app.api.research_v2_routes import router as research_v2_router
 from app.api.roleplay_routes import router as roleplay_router
 from app.api.skill_routes import router as skill_router
 from app.config import BASE_DIR, get_settings
@@ -68,7 +70,25 @@ async def lifespan(app: FastAPI):
 
         await load_custom_skills(session)
     app.state.gateway = Gateway()
+    # Nova v2: durable research runner + evidence vector index.
+    from app.services import evidence_store as _ev
+    from app.services import research_v2 as _rv2
+    from app.services.jobqueue import JobRunner
+
+    _ev.ensure_vector_collection()
+    _rv2.configure(app.state.gateway)
+    runner = JobRunner(get_session_factory())
+    runner_task = None
+    if settings.research_worker_enabled:
+        runner_task = asyncio.ensure_future(runner.run_forever())
     yield
+    runner.stop()
+    if runner_task is not None:
+        runner_task.cancel()
+        try:
+            await runner_task
+        except (asyncio.CancelledError, Exception):
+            pass
     await app.state.gateway.close()
     await close_db()
 
@@ -96,6 +116,7 @@ app.include_router(agent_admin_router)
 app.include_router(agent_chat_router)
 app.include_router(group_router)
 app.include_router(research_router)
+app.include_router(research_v2_router)
 app.include_router(roleplay_router)
 app.include_router(knowledge_router)
 app.include_router(skill_router)

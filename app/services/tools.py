@@ -9,16 +9,17 @@ from __future__ import annotations
 
 import ast
 import asyncio
-import ipaddress
 import operator
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 from html import unescape
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import unquote, urljoin
 
 import httpx
+
+from app.services.netutil import ssrf_blocked as _ssrf_blocked
 
 
 @dataclass
@@ -95,38 +96,6 @@ async def _calculator(expression: str) -> str:
 async def _get_datetime() -> str:
     now = datetime.now(timezone.utc)
     return f"{now.strftime('%A, %B %d, %Y %H:%M:%S')} UTC"
-
-
-_BLOCKED_HOST_RE = re.compile(
-    r"^(localhost|127\.|0\.0\.0\.0|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1|metadata\.google|internal|.*\.local)$",
-    re.IGNORECASE,
-)
-
-
-def _ssrf_blocked(url: str) -> bool:
-    """True if the URL targets a private/internal address."""
-    try:
-        host = (urlparse(url).hostname or "").lower()
-    except Exception:
-        return True
-    if not host or _BLOCKED_HOST_RE.match(host) or "%" in host:
-        return True
-    try:
-        address = ipaddress.ip_address(host)
-        return not address.is_global
-    except ValueError:
-        pass
-    # Reject hostnames resolving to any non-public address before connecting.
-    # Redirects are revalidated at every hop; DNS pinning is still best handled
-    # by an outbound proxy/firewall in production to prevent rebinding races.
-    try:
-        import socket
-        for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM):
-            if not ipaddress.ip_address(info[4][0].split("%", 1)[0]).is_global:
-                return True
-    except (OSError, ValueError):
-        return True
-    return False
 
 
 async def _http_get(url: str, max_chars: int = 4000) -> str:

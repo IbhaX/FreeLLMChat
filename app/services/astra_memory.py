@@ -42,6 +42,13 @@ def _db():
         return None
 
 
+def astra_db() -> Any | None:
+    """Public accessor for the shared Astra database handle (None when
+    unconfigured/unreachable). Other vector stores (e.g. the v2 evidence
+    index) share this connection."""
+    return _db()
+
+
 def enabled() -> bool:
     return _db() is not None
 

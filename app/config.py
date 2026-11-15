@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -52,11 +53,27 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Astra DB vector memory (optional — memory is off when unset).
-    astra_db_application_token: Optional[str] = None
-    astra_db_api_endpoint: Optional[str] = None
-    astra_db_keyspace: Optional[str] = None
+    astra_db_application_token: Optional[str] = os.getenv("ASTRA_DB_APPLICATION_TOKEN")
+    astra_db_api_endpoint: Optional[str] = os.getenv("ASTRA_DB_API_ENDPOINT")
+    astra_db_keyspace: Optional[str] = os.getenv("ASTRA_DB_KEYSPACE")
     memory_short_limit: int = 6
     memory_long_limit: int = 6
+
+    # ---- Nova v2 research subsystem ----
+    # Astra collection holding evidence embeddings (vectorize-enabled).
+    astra_evidence_collection: str = "evidence"
+    # Optional search provider keys; DuckDuckGo lite is the free fallback.
+    brave_search_api_key: Optional[str] = None
+    tavily_api_key: Optional[str] = None
+    # Fetched-page caps and on-disk snapshot location (under the data dir).
+    research_fetch_max_bytes: int = 1_000_000
+    research_snapshot_dir: str = "research"          # under <data_dir>/
+    research_fetch_ttl_default_s: int = 86_400       # 24 h for unclassified pages
+    research_worker_enabled: bool = True             # in-process job worker
+    research_worker_poll_s: float = 1.0
+    research_job_lease_s: int = 30                   # worker lease / heartbeat
+    research_sandbox_timeout_s: int = 30
+    research_sandbox_mem_mb: int = 512
 
 
 @lru_cache

@@ -18,6 +18,10 @@ dependencies = [
     "pydantic-ai>=1.0",
     "python-dateutil>=2.9",
     "edge-tts>=7.0",
+    "astrapy>=2.0",
+    "pypdf>=5.0",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
 ]
 
 [project.scripts]
