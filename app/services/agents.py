@@ -372,6 +372,42 @@ async def _chat_with_tools(
                                    max_rounds=max_rounds, call_timeout=timeout_s)
 
 
+_TOOLISH_KEYS = {
+    "query", "queries", "q", "search", "max_results", "tool", "tool_name",
+    "arguments", "args", "input", "url", "expression", "code",
+}
+
+
+def _looks_like_tool_blob(text: str) -> bool:
+    """True when the whole reply is a bare JSON tool call, e.g.
+    ``{"query": "...", "max_results": 5}`` — weak models emit the call as
+    text instead of invoking the tool. Structured response envelopes and
+    component objects are legit JSON and are excluded."""
+    t = (text or "").strip()
+    if not (t.startswith("{") and t.endswith("}")):
+        return False
+    try:
+        obj = json.loads(t)
+    except Exception:
+        return False
+    if not isinstance(obj, dict) or not obj or len(obj) > 6:
+        return False
+    if "response_type" in obj or ("type" in obj and "data" in obj):
+        return False
+    return bool(set(obj) & _TOOLISH_KEYS)
+
+
+_TOOL_BLOB_RETRY = (
+    "Your previous reply was a raw tool-call JSON object, not an answer. "
+    "Write the actual answer for the user now as normal prose/components — "
+    "never output a bare JSON object."
+)
+_TOOL_BLOB_FALLBACK = (
+    "*(could not produce an answer — the model emitted a tool call instead "
+    "of text)*"
+)
+
+
 async def run_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
     *, custom_instructions: str = "", conversation_id: str | None = None,
@@ -385,8 +421,27 @@ async def run_agent(
         result = await asyncio.wait_for(
             _chat_with_tools(gateway, agent_cfg, messages, conversation_id), timeout=timeout_s
         )
-        choice = (result.get("choices") or [{}])[0]
-        content = (choice.get("message") or {}).get("content") or ""
+        content = ((result.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        if _looks_like_tool_blob(content):
+            # One clean retry with the leaked call visible for context.
+            try:
+                retry = await asyncio.wait_for(
+                    _chat_with_tools(
+                        gateway, agent_cfg,
+                        messages + [
+                            {"role": "assistant", "content": content},
+                            {"role": "user", "content": _TOOL_BLOB_RETRY},
+                        ],
+                        conversation_id,
+                    ),
+                    timeout=timeout_s,
+                )
+                content = ((retry.get("choices") or [{}])[0]
+                           .get("message") or {}).get("content") or ""
+            except Exception:
+                content = ""
+            if not content.strip() or _looks_like_tool_blob(content):
+                content = _TOOL_BLOB_FALLBACK
         return _maybe_structured(agent_cfg, content)
     memory = await get_memory_text(str(message), conversation_id)
     agent = _build_agent(agent_cfg, gateway, custom_instructions + ("\n\n" + memory if memory else ""))
@@ -396,7 +451,8 @@ async def run_agent(
     out = result.output
     if isinstance(out, ResponseEnvelope):
         return envelope_to_fence(out)
-    return out if isinstance(out, str) else ""
+    text = out if isinstance(out, str) else ""
+    return _TOOL_BLOB_FALLBACK if _looks_like_tool_blob(text) else text
 
 
 def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
