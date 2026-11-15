@@ -117,6 +117,25 @@ async def group_stream(
                                "type": "not_found"}},
         )
     gw = _gateway(request)
+    conv_id = str(body.conversation_id) if body.conversation_id else None
+
+    # Detached (refresh-resilient) execution: the run is registered as a
+    # conversation chat-job, identical to /v1/research/stream and the chat
+    # endpoint. Re-attach instead of duplicating work when the client
+    # resubmits for an in-flight run.
+    if conv_id:
+        from app.services import chat_jobs
+
+        running = chat_jobs.get_running(conv_id)
+        if running is not None:
+            return StreamingResponse(
+                running.stream(), media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache"})
+        # The job outlives the HTTP request → it needs its own session;
+        # the pump closes it in `finally`.
+        from app.db import get_session_factory
+
+        session = get_session_factory()()
 
     # Orchestrator is built-in (not a user agent): wipe any stale row so it
     # never shows up in the agents list/dropdown, then use an in-memory config.
@@ -142,7 +161,6 @@ async def group_stream(
     from app.services.settings_store import get_custom_instructions
 
     custom = await get_custom_instructions(session)
-    conv_id = str(body.conversation_id) if body.conversation_id else None
     # astrapy calls are synchronous HTTP — never block the loop on them.
     asyncio.ensure_future(asyncio.to_thread(astra_memory.ensure_collections))
     if conv_id:
@@ -481,6 +499,14 @@ async def group_stream(
             yield _meta({"event": "error", "text": f"group error: {e}"})
             yield b"data: [DONE]\n\n"
 
+    if conv_id:
+        from app.services import chat_jobs
+
+        # Detached job owns `session` — the pump closes it in `finally`.
+        job = chat_jobs.start(conv_id, gen(), session)
+        return StreamingResponse(
+            job.stream(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"})
     return StreamingResponse(
         gen(), media_type="text/event-stream",
         headers={"Cache-Control": "no-cache"},

@@ -503,6 +503,7 @@ function resumeLive(c){
   const last=c.msgs[c.msgs.length-1];
   if(last&&last.role==='assistant'&&!last.text)c.msgs.pop();
   toast('Re-attaching to the reply in progress…');
+  if(state.groupMode&&state.group&&state.group.agents.length){streamGroupReply(c,true);return;}
   streamAPIReply(c,true);
 }
 async function streamAPIReply(c,live){
@@ -613,6 +614,12 @@ async function streamAPIReply(c,live){
             if(ev.event==='replace_content'){acc=ev.content||'';msg.text=collapseRepeats(acc);
               if(sr)sr.setText(acc);else if(bubble){bubble.innerHTML=md(acc)+'<span class="cursor"></span>';scrollBottom();}
               continue;}
+            // Terminal content frames (re-attached research/agent jobs carry
+            // their answer here rather than as delta chunks).
+            if(ev.event==='research_answer'||ev.event==='agent_message'){
+              acc=ev.answer||ev.content||acc;msg.text=collapseRepeats(acc);
+              if(sr)sr.setText(acc);else if(bubble){bubble.innerHTML=md(acc)+'<span class="cursor"></span>';scrollBottom();}
+            }
             addAct(ev);continue;}
           if(j.error){acc+=`\n\n_${errText(j.error)}_`;continue;}
           const delta=j.choices?.[0]?.delta||{};
@@ -864,7 +871,7 @@ function setStageLive(name,done){
   });
   if(now&&!name)now.innerHTML='';
 }
-async function streamGroupReply(c){
+async function streamGroupReply(c,live){
   state.streaming=true;setSend(true);
   const inner=$('#chatInner'),scroller=$('#chatScroll');
   const messages=c.msgs
@@ -913,7 +920,9 @@ async function streamGroupReply(c){
     renderAll();state.streaming=false;state.abort=null;setSend(false);setStageLive(null);
   };
   try{
-    const doFetch=()=>fetch(API_BASE+'/v1/groupchat/stream',{method:'POST',headers:apiHeaders(),signal:ctrl.signal,body:JSON.stringify(payload)});
+    const doFetch=live
+      ?()=>fetch(API_BASE+'/v1/conversations/'+c.id+'/live/stream',{headers:apiHeaders(),signal:ctrl.signal})
+      :()=>fetch(API_BASE+'/v1/groupchat/stream',{method:'POST',headers:apiHeaders(),signal:ctrl.signal,body:JSON.stringify(payload)});
     let resp=await doFetch();
     if(resp.status===401){localStorage.removeItem('gateway_key');API_KEY='';
       if(askGatewayKey())resp=await doFetch();}
@@ -1480,8 +1489,10 @@ function collapseRepeats(text){
 }
 // --- Init --------------------------------------------------------------------
 if(!loadState())seed();
-renderModels();renderAll();loadModels();loadAgents();refreshTokenMeter();
+renderModels();renderAll();loadModels();refreshTokenMeter();
+// checkLive runs after loadAgents resolves: the restored agent/group mode
+// decides which reader re-attaches to a running job.
+loadAgents().finally(()=>checkLive(state.current));
 fetchServerConversations().then(()=>renderAll());
-checkLive(state.current);
 window.refreshAgents=loadAgents;
 })();
