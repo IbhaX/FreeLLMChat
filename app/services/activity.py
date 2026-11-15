@@ -89,6 +89,21 @@ _WAIT_EVENT = {"try", "retry", "wait", "rate_limited"}
 _VERBOSE_EVENT = {"routing", "try", "skip", "next", "fail"}
 
 
+_KEY_ARGS: tuple[str, ...] = ("query", "q", "url", "path", "expression", "code", "prompt", "text")
+_KEY_ARG_RE: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(r"""(?:^|[,{\s])"?""" + k + r""""?\s*[=:]\s*(['"])(.*?)\1""") for k in _KEY_ARGS
+)
+
+
+def pretty_args(targs: str) -> str:
+    """``"max_results='5', query='x'"`` → ``"x"`` — the argument a human cares about."""
+    for rx in _KEY_ARG_RE:
+        m = rx.search(targs or "")
+        if m:
+            return m.group(2)
+    return targs or ""
+
+
 def _clip(text: Any, n: int = 160) -> str:
     s = re.sub(r"\s+", " ", str(text or "")).strip()
     return s if len(s) <= n else s[: n - 1].rstrip() + "…"
@@ -150,7 +165,7 @@ def normalize(
     elif event == "tool":
         tname, targs = _tool_fields(ev)
         kind, verb = _TOOL_KIND.get(tname, ("run", f"Running {tname or 'tool'}"))
-        title = f"{verb}: {_clip(targs, 90)}" if targs else verb
+        title = f"{verb}: {_clip(pretty_args(targs), 90)}" if targs else verb
         ok = ev.get("ok")
         out_err = _ERR_TEXT.match(str(ev.get("result") or ""))
         status = "failed" if ok is False or out_err else "done"

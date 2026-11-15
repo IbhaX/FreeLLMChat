@@ -67,6 +67,18 @@
     run: 'Details', think: 'Thinking', wait: 'Waiting on',
   };
 
+  /* "max_results='5', query='x'" → "x": show the one argument a human
+     cares about; fall back to the raw string. */
+  const KEY_ARGS = ['query', 'q', 'url', 'path', 'expression', 'code', 'prompt', 'text'];
+  function prettyArgs(targs) {
+    const s = String(targs || '');
+    for (const k of KEY_ARGS) {
+      const m = s.match(new RegExp('(?:^|[,{\\s])"?' + k + '"?\\s*[=:]\\s*([\'"])(.*?)\\1'));
+      if (m) return m[2];
+    }
+    return s;
+  }
+
   function clip(s, n) {
     s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
     return s.length <= (n || 160) ? s : s.slice(0, (n || 160) - 1).trim() + '…';
@@ -108,7 +120,7 @@
       }
       const tk = TOOL_KIND[tname] || ['run', 'Running ' + (tname || 'tool')];
       kind = tk[0];
-      title = targs ? tk[1] + ': ' + clip(targs, 90) : tk[1];
+      title = targs ? tk[1] + ': ' + clip(prettyArgs(targs), 90) : tk[1];
       status = (ev.ok === false || ERR_RE.test(String(ev.result || ''))) ? 'failed' : 'done';
       meta.tool = tname; meta.args = targs;
       if (ev.result) meta.result_preview = clip(ev.result, 400);
@@ -203,6 +215,9 @@
     return s >= 60 ? Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')
                    : s + 's';
   }
+  function fmtMs(ms) {
+    return ms < 1000 ? Math.round(ms) + 'ms' : (ms / 1000).toFixed(1) + 's';
+  }
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -226,6 +241,16 @@
         '<span class="alog-count" aria-hidden="true"></span>' +
         '<button type="button" class="alog-gear" title="Filters" aria-label="Filter steps">⚙</button>' +
       '</div>' +
+      '<section class="alog-dash" aria-label="Run metrics">' +
+        '<div class="alog-dm" data-m="elapsed"><span class="alog-dk">Elapsed</span><span class="alog-dv">0s</span></div>' +
+        '<div class="alog-dm" data-m="steps"><span class="alog-dk">Steps</span><span class="alog-dv">0</span></div>' +
+        '<div class="alog-dm" data-m="tools"><span class="alog-dk">Tools</span><span class="alog-dv">0</span></div>' +
+        '<div class="alog-dm" data-m="calls"><span class="alog-dk">Model calls</span><span class="alog-dv">0</span></div>' +
+        '<div class="alog-dm" data-m="tokens"><span class="alog-dk">Tokens</span><span class="alog-dv">0</span></div>' +
+        '<div class="alog-dm" data-m="cost"><span class="alog-dk">Cost</span><span class="alog-dv">$0</span></div>' +
+        '<div class="alog-dm w" data-m="model"><span class="alog-dk">Model</span><span class="alog-dv">—</span></div>' +
+        '<div class="alog-dm w" data-m="latency"><span class="alog-dk">Avg latency</span><span class="alog-dv">—</span></div>' +
+      '</section>' +
       '<div class="alog-tools" hidden>' +
         '<select class="alog-fkind" aria-label="Filter by step type"><option value="">all types</option></select>' +
         '<select class="alog-fstatus" aria-label="Filter by status"><option value="">any status</option></select>' +
@@ -264,6 +289,73 @@
     let t0 = Date.now();
     const tickFns = new Set();
     const ticker = setInterval(() => tickFns.forEach(f => f()), 500);
+
+    /* ---------- live run metrics (the pinned dashboard card) ---------- */
+    const stats = {
+      calls: 0, tin: 0, tout: 0, cost: 0, costKnown: false, currency: '',
+      latency: 0, latencyN: 0, models: new Map(), lastModel: '', lastProvider: '',
+      tools: 0, toolsFailed: 0, failed: 0,
+    };
+    const dashEl = root.querySelector('.alog-dash');
+    const dv = k => dashEl.querySelector('[data-m="' + k + '"] .alog-dv');
+
+    function fmtCost(c) {
+      if (!stats.costKnown) return '—';
+      const cur = stats.currency && stats.currency !== 'USD' ? stats.currency + ' ' : '$';
+      if (c === 0) return cur + '0';
+      return c < 0.0001 ? '<' + cur + '0.0001' : cur + c.toFixed(c < 0.01 ? 4 : 3);
+    }
+
+    function trackUsage(d) {
+      const m = d.meta || {};
+      stats.calls++;
+      stats.tin += Number(m.tokens_in) || 0;
+      stats.tout += Number(m.tokens_out) || 0;
+      if (m.cost_usd != null) { stats.cost += Number(m.cost_usd) || 0; stats.costKnown = true; }
+      if (m.currency) stats.currency = m.currency;
+      if (d.duration_ms != null) { stats.latency += d.duration_ms; stats.latencyN++; }
+      if (m.model) {
+        stats.lastModel = m.model;
+        stats.models.set(m.model, (stats.models.get(m.model) || 0) + 1);
+      }
+      if (m.provider) stats.lastProvider = m.provider;
+    }
+
+    function trackStep(d, prevStatus) {
+      if (d.meta && d.meta.tool && prevStatus === undefined) stats.tools++;
+      if (d.status === 'failed' && prevStatus !== 'failed') {
+        stats.failed++;
+        if (d.meta && d.meta.tool) stats.toolsFailed++;
+      }
+    }
+
+    function paintDash() {
+      dv('elapsed').textContent = fmtElapsed((finished ? finishedAt : Date.now()) - t0);
+      dv('steps').textContent = doneCount + '/' + total +
+        (stats.failed ? ' · ' + stats.failed + ' failed' : '');
+      dv('tools').textContent = stats.tools +
+        (stats.toolsFailed ? ' · ' + stats.toolsFailed + ' failed' : '');
+      dv('calls').textContent = String(stats.calls);
+      const tot = stats.tin + stats.tout;
+      dv('tokens').textContent = tot.toLocaleString();
+      dv('tokens').title = stats.tin.toLocaleString() + ' in · ' +
+        stats.tout.toLocaleString() + ' out';
+      dv('cost').textContent = fmtCost(stats.cost);
+      const others = stats.models.size - 1;
+      dv('model').textContent = stats.lastModel
+        ? stats.lastModel + (stats.lastProvider ? ' · ' + stats.lastProvider : '') +
+          (others > 0 ? '  +' + others + ' more' : '')
+        : '—';
+      dv('model').title = [...stats.models].map(([k, v]) => k + ' ×' + v).join('\n');
+      dv('latency').textContent = stats.latencyN
+        ? fmtMs(stats.latency / stats.latencyN) + ' over ' + stats.latencyN + ' call' +
+          (stats.latencyN > 1 ? 's' : '') + ' · ' + stats.tin.toLocaleString() + ' in / ' +
+          stats.tout.toLocaleString() + ' out'
+        : '—';
+      dashEl.classList.toggle('live', !finished);
+    }
+    let finishedAt = 0;
+    tickFns.add(paintDash);
 
     /* ---------- DOM helpers ---------- */
 
@@ -306,7 +398,8 @@
         const dur = st.duration_ms != null ? st.duration_ms
                   : rec.startedAt ? Date.now() - rec.startedAt : 0;
         rec.time.textContent = dur >= 1000 ? fmtElapsed(dur) : '';
-        if ((status === 'done' || status === 'skipped') && !rec.counted) {
+        if ((status === 'done' || status === 'skipped') && !rec.counted &&
+            st.kind !== 'usage') {
           rec.counted = true;
           doneCount++;
         }
@@ -445,7 +538,7 @@
           applyStatus(openGroup, 'done');
         openGroup = data.status === 'running' ? rec : openGroup;
       }
-      total++;
+      if (data.kind !== 'usage') total++;
       paintHeader();
       maybeScroll();
       return rec;
@@ -471,7 +564,7 @@
     function paintHeader() {
       const cur = currentRunning();
       const elapsed = fmtElapsed(Date.now() - t0);
-      countEl.textContent = doneCount + '/' + total + ' · ' + elapsed;
+      countEl.textContent = finished ? elapsed : '';
       if (finished) {
         nowEl.textContent = root.dataset.final || 'Done';
         stateEl.className = 'alog-state s-' + (root.dataset.finalStatus || 'done');
@@ -537,8 +630,14 @@
           const data = ev.kind ? mergeData(ev) : normalize(ev);
           const id = ev.id || ('s' + (++counter));
           const existing = steps.get(id);
+          if (data.kind === 'usage') {   // folded into the pinned metrics card
+            trackUsage(data);
+            data.level = 'verbose';
+          }
           if (existing) {            // same step updated in place (lifecycle)
+            const prev = existing.data.status;
             Object.assign(existing.data, data);
+            trackStep(existing.data, prev);
             existing.el.querySelector('.alog-title').textContent = existing.data.title;
             applyStatus(existing, data.status);
             renderDetail(existing);
@@ -551,6 +650,8 @@
             parentRec = openGroup;
           const rec = addStep(parentRec, data, id);
           rec.el._rec = rec;
+          if (data.kind !== 'usage') trackStep(data, undefined);
+          paintDash();
         } catch (_) { /* activity must never break the stream */ }
       },
       finish(label, ok) {
@@ -562,6 +663,8 @@
         });
         root.dataset.final = label || 'Done in ' + fmtElapsed(Date.now() - t0);
         root.dataset.finalStatus = ok === false ? 'failed' : 'done';
+        finishedAt = Date.now();
+        paintDash();
         paintHeader();
         jumpEl.hidden = true;
       },
@@ -570,6 +673,12 @@
         api.finish(text || 'Failed', false);
       },
       count() { return total; },
+      stats() {
+        return { calls: stats.calls, tokens_in: stats.tin, tokens_out: stats.tout,
+                 cost_usd: stats.costKnown ? stats.cost : null, tools: stats.tools,
+                 failed: stats.failed, steps: total, done: doneCount,
+                 models: Object.fromEntries(stats.models) };
+      },
       destroy() {
         clearInterval(ticker);
         root.remove();

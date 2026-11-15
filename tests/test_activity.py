@@ -114,6 +114,14 @@ class TestNormalize:
         assert a["kind"] == "plan" and a["status"] == "done"
         assert a["detail"].startswith("1. who")
 
+    def test_tool_title_shows_key_argument(self):
+        a = n({"event": "tool", "tool": "web_search",
+               "args": "max_results='5', query='Albin Anthony'"})
+        assert a["title"] == "Searching the web: Albin Anthony"
+        assert a["meta"]["args"].startswith("max_results")   # raw kept for detail
+        assert activity.pretty_args("url='https://x.y/z', max_chars='4000'") == "https://x.y/z"
+        assert activity.pretty_args("2+2") == "2+2"
+
     def test_structured_detail_serialized_as_json(self):
         a = n({"event": "plan", "detail": {"sub_questions": ["who", "what"]}})
         assert '"sub_questions"' in a["detail"] and "who" in a["detail"]

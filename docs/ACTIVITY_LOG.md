@@ -65,11 +65,12 @@ Explicit status override: `status:"fail|failed|error"` forces `failed`
 ## 2. Component structure
 
 `app/static/js/render/ActivityLog.js` exposes
-`Nova.ActivityLog.create(host, opts)` → `{ingest, finish, fail, count, destroy}`.
+`Nova.ActivityLog.create(host, opts)` → `{ingest, finish, fail, count, stats, destroy}`.
 
 ```
 .alog
-├─ .alog-head      state dot · current-step title · "done/total · mm:ss" · ⚙
+├─ .alog-head      state dot · current-step title · total time (once finished) · ⚙
+├─ .alog-dash      pinned live-metrics card (never scrolls with the feed)
 ├─ .alog-tools     kind filter · status filter · text search · verbose toggle
 ├─ .alog-steps     scrollable feed (max ~340px)
 │   └─ .alog-step  [rail+node] [expander ›] [title+elapsed] [detail] [kids]
@@ -85,14 +86,23 @@ Explicit status override: `status:"fail|failed|error"` forces `failed`
   `parent` key or the "currently open running group" heuristic. When a
   new group opens, the previous running group auto-resolves to done.
 - **Progressive detail**: one-line title by default; the `›` expander
-  reveals `detail` + meta (tool name, inputs, output preview, actor, ts).
-- **Model card**: `usage` steps render an always-visible `.alog-usage`
-  grid under the title — model, provider · key, tokens in/out/total,
-  latency, and cost when `provider.pricing` is configured
-  (`input_per_mtok`/`output_per_mtok` + `model_overrides`). Raw payload
-  stays available via the `›` expander. Emitted by `Gateway.chat` /
-  `chat_stream` (`_usage_event`) on every successful upstream call that
-  has an `on_event` wired — one card per tool-loop round too.
+  reveals the step's *next level* — the plan, queries, claims, tool
+  input/output — never timestamps. A `plan` event's detail is also
+  surfaced on its enclosing "Planning…" group. Groups stay open while
+  running and auto-collapse when done (unless the user toggled them).
+- **Tool titles** show the one argument a human cares about
+  (`query`, `url`, `path`, …) via `pretty_args` / `prettyArgs`; the raw
+  argument string stays in the expander.
+- **Live metrics card** (`.alog-dash`): pinned under the header and
+  updated on every event + a 500 ms tick — elapsed (pulsing while live),
+  steps done/total/failed, tool calls/failed, model calls, total tokens
+  (hover: in/out), cumulative cost, latest model · provider (+N others,
+  hover lists each ×count), and average latency with in/out totals.
+  `usage` events (from `Gateway.chat` / `chat_stream` `_usage_event`)
+  feed this card and are demoted to `verbose` rows, so the timeline isn't
+  interleaved with per-call cards. Cost appears when `provider.pricing`
+  is configured (`input_per_mtok`/`output_per_mtok` + `model_overrides`),
+  otherwise `—`. `api.stats()` returns the same aggregates.
 - **Live**: running steps show a live `m:ss` timer (500 ms tick); new
   steps animate in; `prefers-reduced-motion` disables animations.
 - **Auto-scroll**: follows new steps until the user scrolls up >28px;
