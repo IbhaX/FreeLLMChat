@@ -6,9 +6,18 @@
   window.API_KEY=localStorage.getItem('gateway_key')||'';
   window.ADMIN_TOKEN=sessionStorage.getItem('admin_token')||'';
 
+  window.USER_TOKEN=localStorage.getItem('nova_user_token')||'';
   window.apiHeaders=(admin)=>admin
     ?{'X-Admin-Token':ADMIN_TOKEN,'Content-Type':'application/json'}
-    :{'Authorization':'Bearer '+API_KEY,'Content-Type':'application/json'};
+    :{'Authorization':'Bearer '+API_KEY,'X-User-Token':USER_TOKEN,'Content-Type':'application/json'};
+
+  window.v1Api=async(path,opts={})=>{
+    const r=await fetch(API_BASE+path,{...opts,headers:{...apiHeaders(false),...(opts.headers||{})}});
+    if(r.status===204)return null;
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw Object.assign(new Error(j.detail?.error?.message||j.detail||j.error?.message||('HTTP '+r.status)),{status:r.status,body:j});
+    return j;
+  };
 
   window.adminApi=async(path,opts={})=>{
     const r=await fetch(API_BASE+path,{...opts,headers:apiHeaders(true)});

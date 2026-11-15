@@ -28,15 +28,20 @@ from typing import Any
 
 from app.response_protocol import (
     RESPONSE_FENCE_TAG,
+    ResponseType,
     is_valid_envelope,
 )
+
+_VALID_RT = {r.value for r in ResponseType}
 
 log = logging.getLogger("freellm.components")
 
 # Same detection rules as the frontend ResponseClassifier, so backend and
 # frontend agree on what counts as a structured reply.
-_FENCE_RE = re.compile(r"```nova-response\s*\n([\s\S]*?)\n```")
-_FENCE_OPEN_RE = re.compile(r"```nova-response\s*\n([\s\S]*)$")
+# The tag tolerates model splits: "nova response", "nova_response",
+# "nova\n-response" all parse as the envelope fence.
+_FENCE_RE = re.compile(r"```\s*nova[\s\-_]*response\s*\n([\s\S]*?)\n```")
+_FENCE_OPEN_RE = re.compile(r"```\s*nova[\s\-_]*response\s*\n([\s\S]*)$")
 _JSON_FENCE_RE = re.compile(r"```json\s*\n([\s\S]*?)\n```")
 _JSON_FENCE_OPEN_RE = re.compile(r"```json\s*\n([\s\S]*)$")
 
@@ -99,6 +104,10 @@ def _try_json(inner: str) -> dict[str, Any] | None:
         return None
     if not isinstance(obj, dict) or "response_type" not in obj:
         return None
+    # Models invent response types ("definition", "answer") — coerce to
+    # `general` instead of rejecting an otherwise valid envelope.
+    if str(obj.get("response_type")) not in _VALID_RT:
+        obj["response_type"] = "general"
     return obj if is_valid_envelope(obj) else None
 
 

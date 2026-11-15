@@ -14,12 +14,16 @@ from fastapi.staticfiles import StaticFiles
 from app.api.admin_routes import router as admin_router
 from app.api.agent_routes import admin_router as agent_admin_router
 from app.api.agent_routes import chat_router as agent_chat_router
+from app.api.auth_routes import router as auth_router
 from app.api.character_routes import router as character_router
 from app.api.group_routes import public_router as share_public_router
 from app.api.group_routes import router as group_router
+from app.api.knowledge_routes import router as knowledge_router
 from app.api.openai_routes import router as openai_router
 from app.api.person_routes import router as person_router
 from app.api.research_routes import router as research_router
+from app.api.roleplay_routes import router as roleplay_router
+from app.api.skill_routes import router as skill_router
 from app.config import BASE_DIR, get_settings
 from app.db import close_db, get_session_factory, init_db
 from app.gateway import Gateway
@@ -47,8 +51,22 @@ async def lifespan(app: FastAPI):
     async with get_session_factory()() as session:
         await seed_providers(session)
         from app.services.characters import seed_if_empty
+        from app.services.ollama import auto_scan_ollama
 
         await seed_if_empty(session)
+        await auto_scan_ollama(session)
+        from app.services.experts import seed_experts
+
+        seeded = await seed_experts(session)
+        if seeded:
+            import logging as _log
+
+            _log.getLogger("freellm").info(
+                "Seeded/refreshed %d built-in expert agents", seeded
+            )
+        from app.services.skills import load_custom_skills
+
+        await load_custom_skills(session)
     app.state.gateway = Gateway()
     yield
     await app.state.gateway.close()
@@ -71,13 +89,34 @@ app.add_middleware(
 
 app.include_router(openai_router)
 app.include_router(admin_router)
+app.include_router(auth_router)
 app.include_router(character_router)
 app.include_router(person_router)
 app.include_router(agent_admin_router)
 app.include_router(agent_chat_router)
 app.include_router(group_router)
 app.include_router(research_router)
+app.include_router(roleplay_router)
+app.include_router(knowledge_router)
+app.include_router(skill_router)
 app.include_router(share_public_router)
+
+
+# Inbound rate limiting — per client key/IP, generous defaults.
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address,
+                  default_limits=["300/minute"], enabled=True)
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limited(request, exc):
+    return JSONResponse(status_code=429, content={
+        "error": {"message": "Rate limit exceeded — slow down and retry",
+                  "type": "rate_limit_error"}})
 
 static_dir = BASE_DIR / "app" / "static"
 static_dir.mkdir(parents=True, exist_ok=True)
@@ -133,6 +172,31 @@ async def keys_page():
 @app.get("/settings", include_in_schema=False)
 async def settings_page():
     return FileResponse(static_dir / "settings.html")
+
+
+@app.get("/research", include_in_schema=False)
+async def research_page():
+    return FileResponse(static_dir / "research.html")
+
+
+@app.get("/roleplay", include_in_schema=False)
+async def roleplay_page():
+    return FileResponse(static_dir / "roleplay.html")
+
+
+@app.get("/agents", include_in_schema=False)
+async def agents_page():
+    return FileResponse(static_dir / "agents.html")
+
+
+@app.get("/skills", include_in_schema=False)
+async def skills_page():
+    return FileResponse(static_dir / "skills.html")
+
+
+@app.get("/library", include_in_schema=False)
+async def library_page():
+    return FileResponse(static_dir / "library.html")
 
 
 @app.get("/share/{share_id}", include_in_schema=False)

@@ -100,6 +100,7 @@ async def list_providers(session: AsyncSession = Depends(get_session)) -> list[P
             base_url=p.base_url, enabled=p.enabled,
             rotation_strategy=p.rotation_strategy, fallback_chain=p.fallback_chain,
             auto_route_tags=p.auto_route_tags, limits=p.limits,
+            pricing=p.pricing or {},
             default_models=p.default_models, requires_card=p.requires_card,
             commercial_ok=p.commercial_ok, docs_url=p.docs_url, notes=p.notes,
             verified_on=p.verified_on, key_count=len(p.keys),
@@ -125,6 +126,7 @@ async def create_provider(
         base_url=p.base_url, enabled=p.enabled,
         rotation_strategy=p.rotation_strategy, fallback_chain=p.fallback_chain,
         auto_route_tags=p.auto_route_tags, limits=p.limits,
+            pricing=p.pricing or {},
         default_models=p.default_models, requires_card=p.requires_card,
         commercial_ok=p.commercial_ok, docs_url=p.docs_url, notes=p.notes,
         verified_on=p.verified_on,
@@ -144,6 +146,7 @@ async def update_provider(
         base_url=p.base_url, enabled=p.enabled,
         rotation_strategy=p.rotation_strategy, fallback_chain=p.fallback_chain,
         auto_route_tags=p.auto_route_tags, limits=p.limits,
+            pricing=p.pricing or {},
         default_models=p.default_models, requires_card=p.requires_card,
         commercial_ok=p.commercial_ok, docs_url=p.docs_url, notes=p.notes,
         verified_on=p.verified_on, key_count=len(p.keys),
@@ -174,6 +177,51 @@ async def refresh_models(
         session, p, decrypt_key(key.encrypted_key)
     )
     return {"models": models, "count": len(models)}
+
+
+@router.post("/ollama/scan")
+async def ollama_scan(session: AsyncSession = Depends(get_session)) -> dict:
+    """Auto-detect running Ollama servers and sync the ollama provider.
+
+    Probes OLLAMA_HOST, then localhost:11434 and 127.0.0.1:11434. The first
+    reachable host becomes the provider's base_url and its pulled models
+    (/api/tags) are written to the model cache. If nothing responds, the
+    provider is disabled so routing skips it.
+    """
+    from app.services import ollama as ollama_svc
+
+    scans = await ollama_svc.scan_ollama_hosts()
+    reachable = next((s for s in scans if s.reachable), None)
+    synced: dict | None = None
+    if reachable is not None:
+        provider = await ollama_svc.sync_ollama_provider(session, reachable)
+        synced = {"provider": provider.name, "base_url": provider.base_url,
+                  "enabled": provider.enabled}
+    else:
+        provider = (
+            await session.execute(
+                select(Provider).where(Provider.name == ollama_svc.OLLAMA_PROVIDER_NAME)
+            )
+        ).scalar_one_or_none()
+        if provider is not None and provider.enabled:
+            provider.enabled = False
+            await session.commit()
+    return {
+        "reachable": reachable.host if reachable else None,
+        "version": reachable.version if reachable else "",
+        "models": [
+            {
+                "name": m.name,
+                "size_bytes": m.size_bytes,
+                "modified_at": m.modified_at,
+                "parameter_size": m.parameter_size,
+                "quantization": m.quantization,
+            }
+            for m in (reachable.models if reachable else ())
+        ],
+        "scanned": [{"host": s.host, "reachable": s.reachable} for s in scans],
+        "synced": synced,
+    }
 
 
 # ---------- keys ----------

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Research — Nova</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<link rel="stylesheet" href="/static/css/render.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  .rs-grid{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
+  @media(max-width:900px){.rs-grid{grid-template-columns:1fr}}
+  .rs-run{padding:10px 12px;border-radius:var(--r-md);cursor:pointer;border:1px solid transparent}
+  .rs-run:hover{background:var(--surface-2)}
+  .rs-run.active{border-color:var(--accent-line);background:var(--accent-soft)}
+  .rs-run .q{font-size:var(--t-sm);font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .rs-run .m{font-size:var(--t-xs);color:var(--text-3);margin-top:4px;display:flex;gap:8px}
+  .rs-stage{display:flex;gap:10px;padding:6px 0;font-size:var(--t-sm);color:var(--text-2);align-items:baseline}
+  .rs-stage .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none;align-self:center}
+  .rs-report{font-size:var(--t-md);line-height:1.65}
+  .rs-report h2{margin:1.4em 0 .5em;font-size:var(--t-xl)}
+  .rs-report h3{margin:1.2em 0 .4em;font-size:var(--t-lg)}
+</style>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page" style="max-width:1200px">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
+      <div>
+        <h1>Research Center</h1>
+        <div class="sub">Deep multi-agent investigation with verified sources</div>
+      </div>
+      <div class="acts">
+        <button class="ui-btn ui-btn-sm" id="printBtn" disabled>⎙ Print/PDF</button>
+        <button class="ui-btn ui-btn-sm" id="exportBtn" disabled>↓ Export MD</button>
+      </div>
+    </div>
+
+    <div class="ui-card ui-card-pad" style="margin-bottom:16px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input id="q" class="ui-input" style="flex:1;min-width:260px"
+          placeholder="Research anything… e.g. 'Compare solid-state battery approaches for EVs'">
+        <select id="mode" class="ui-select" style="width:130px">
+          <option value="">General</option>
+          <option value="academic">Academic</option>
+          <option value="technical">Technical</option>
+          <option value="market">Market</option>
+        </select>
+        <select id="depth" class="ui-select" style="width:130px">
+          <option value="">Auto depth</option>
+          <option value="quick">Quick</option>
+          <option value="standard" selected>Standard</option>
+          <option value="deep">Deep</option>
+        </select>
+        <select id="model" class="ui-select" style="width:190px"><option value="auto">auto (smart route)</option></select>
+        <button id="runBtn" class="ui-btn ui-btn-primary">Run research</button>
+      </div>
+      <div id="stages" style="margin-top:12px"></div>
+    </div>
+
+    <div class="rs-grid">
+      <div>
+        <div class="sec-title">Research history</div>
+        <div class="ui-card" id="runs" style="padding:6px"></div>
+      </div>
+      <div>
+        <div class="sec-title">Report</div>
+        <div class="ui-card ui-card-pad">
+          <div id="report" class="rs-report">
+            <p class="tx-3" style="text-align:center;padding:48px 0">Run a research query or open a saved report.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/render/ns.js"></script>
+<script src="/static/js/render/ComponentRegistry.js"></script>
+<script src="/static/js/render/ResponseClassifier.js"></script>
+<script src="/static/js/render/MarkdownRenderer.js"></script>
+<script src="/static/js/render/CodeRenderer.js"></script>
+<script src="/static/js/render/TableRenderer.js"></script>
+<script src="/static/js/render/ListRenderer.js"></script>
+<script src="/static/js/render/PersonCard.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="/static/js/render/ChartRenderer.js"></script>
+<script src="/static/js/render/Cards.js"></script>
+<script src="/static/js/render/JsonViewer.js"></script>
+<script src="/static/js/render/StatusRenderers.js"></script>
+<script src="/static/js/render/MediaRenderer.js"></script>
+<script src="/static/js/render/InteractiveRenderer.js"></script>
+<script src="/static/js/render/Visuals.js"></script>
+<script src="/static/js/render/DiagramRenderer.js"></script>
+<script src="/static/js/render/SuggestedPrompts.js"></script>
+<script src="/static/js/render/MessageActions.js"></script>
+<script src="/static/js/render/ResponseRenderer.js"></script>
+<script src="/static/js/research.js"></script>
+</body>
+</html>

@@ -654,6 +654,10 @@ def _sanitize_final_text(text: str) -> str:
     t = _TOOL_TAIL_RE.sub("", t)          # unclosed <tool_call>… tail
     t = _ARG_TAG_RE.sub("", t)
     t = _ARG_OPEN_RE.sub("", t)
+    # Repair the envelope fence tag when a model/stream splits it —
+    # ```nova\n-response, ```nova response, ```nova_response all normalize
+    # to ```nova-response so the envelope parser (and UI) can read it.
+    t = re.sub(r"```\s*nova[\s\-_]*response\b", "```nova-response", t)
     # Collapse runs of 4+ identical lines (degenerate model loops).
     if "response_type" not in t:
         lines = t.split("\n")

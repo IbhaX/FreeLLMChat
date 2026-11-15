@@ -21,6 +21,7 @@ class ProviderCreate(BaseModel):
     default_env_key: Optional[str] = None
     default_models: list[str] = Field(default_factory=list)
     limits: dict[str, int] = Field(default_factory=dict)
+    pricing: dict[str, Any] = Field(default_factory=dict)
     daily_reset_tz: Optional[str] = None
     requires_card: bool = False
     commercial_ok: bool = True
@@ -42,6 +43,7 @@ class ProviderUpdate(BaseModel):
     fallback_chain: Optional[list[str]] = None
     auto_route_tags: Optional[list[str]] = None
     limits: Optional[dict[str, int]] = None
+    pricing: Optional[dict[str, Any]] = None
     default_models: Optional[list[str]] = None
     extra_headers: Optional[dict[str, str]] = None
     notes: Optional[str] = None
@@ -59,6 +61,7 @@ class ProviderOut(BaseModel):
     fallback_chain: list[str]
     auto_route_tags: list[str]
     limits: dict[str, Any]
+    pricing: dict[str, Any] = {}
     default_models: list[str]
     requires_card: bool
     commercial_ok: bool
@@ -268,6 +271,16 @@ class CharacterIn(BaseModel):
     personality: str = ""
     style: str = ""
     greeting: str = ""
+    background: str = ""
+    knowledge_domain: str = ""
+    motivations: str = ""
+    boundaries: str = ""
+    example_dialogue: str = ""
+    speaking_style: str = ""
+    category: str = "custom"
+    tags: list[str] = Field(default_factory=list)
+    visibility: str = "public"
+    avatar_url: str = ""
 
 
 class CharacterOut(BaseModel):
@@ -281,6 +294,17 @@ class CharacterOut(BaseModel):
     personality: str
     style: str
     greeting: str
+    background: str = ""
+    knowledge_domain: str = ""
+    motivations: str = ""
+    boundaries: str = ""
+    example_dialogue: str = ""
+    speaking_style: str = ""
+    category: str = "custom"
+    tags: list[str] = Field(default_factory=list)
+    visibility: str = "public"
+    avatar_url: str = ""
+    creator_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

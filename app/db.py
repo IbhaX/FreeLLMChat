@@ -81,6 +81,37 @@ async def init_db() -> None:
         if rr_cols and "conversation_id" not in rr_cols:
             await conn.exec_driver_sql(
                 "ALTER TABLE research_runs ADD COLUMN conversation_id VARCHAR(64)")
+        p_cols = {
+            r[1]
+            for r in (await conn.exec_driver_sql(
+                "PRAGMA table_info(providers)")).fetchall()
+        }
+        if p_cols and "pricing" not in p_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE providers ADD COLUMN pricing JSON")
+        # Extended character columns for the roleplay studio.
+        c_cols = {
+            r[1]
+            for r in (await conn.exec_driver_sql(
+                "PRAGMA table_info(characters)")).fetchall()
+        }
+        char_adds = {
+            "background": "TEXT DEFAULT ''",
+            "knowledge_domain": "TEXT DEFAULT ''",
+            "motivations": "TEXT DEFAULT ''",
+            "boundaries": "TEXT DEFAULT ''",
+            "example_dialogue": "TEXT DEFAULT ''",
+            "speaking_style": "TEXT DEFAULT ''",
+            "category": "VARCHAR(64) DEFAULT 'custom'",
+            "tags": "JSON",
+            "visibility": "VARCHAR(16) DEFAULT 'public'",
+            "creator_id": "INTEGER",
+            "avatar_url": "VARCHAR(512) DEFAULT ''",
+        }
+        for col, ddl in char_adds.items():
+            if c_cols and col not in c_cols:
+                await conn.exec_driver_sql(
+                    f"ALTER TABLE characters ADD COLUMN {col} {ddl}")
 
 
 async def close_db() -> None:

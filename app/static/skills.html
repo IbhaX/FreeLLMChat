@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Skills — Nova</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page" style="max-width:1000px">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
+      <div><h1>Skills</h1><div class="sub">Reusable capabilities agents can invoke</div></div>
+      <div class="acts"><button class="ui-btn ui-btn-primary ui-btn-sm" id="newBtn">+ New skill</button></div>
+    </div>
+    <div class="sec-title">Built-in</div>
+    <div class="ui-table-scroll"><table class="ui-table" id="builtin"><thead><tr>
+      <th>Name</th><th>Version</th><th>Description</th><th>Tools</th></tr></thead><tbody></tbody></table></div>
+    <div class="sec-title">Custom</div>
+    <div class="ui-table-scroll"><table class="ui-table" id="custom"><thead><tr>
+      <th>Name</th><th>v</th><th>Description</th><th>Tools</th><th>Enabled</th><th style="text-align:right">Actions</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</main>
+<div class="ui-modal" id="modal" style="display:none">
+  <div class="ui-modal-card" style="width:560px;max-width:calc(100vw - 24px);padding:24px">
+    <h3 id="mtitle" style="margin:0 0 14px">New skill</h3>
+    <div class="rp-field" style="margin-bottom:10px"><label style="font-size:var(--t-xs);color:var(--text-3)">Name (snake_case)</label><input id="sk_name" class="ui-input" placeholder="pdf_extract"></div>
+    <div class="rp-field" style="margin-bottom:10px"><label style="font-size:var(--t-xs);color:var(--text-3)">Description</label><input id="sk_desc" class="ui-input"></div>
+    <div class="rp-field" style="margin-bottom:10px"><label style="font-size:var(--t-xs);color:var(--text-3)">Instructions (injected into agent prompt)</label><textarea id="sk_ins" class="ui-input" rows="5"></textarea></div>
+    <div class="rp-field" style="margin-bottom:14px"><label style="font-size:var(--t-xs);color:var(--text-3)">Required tools (comma separated)</label><input id="sk_tools" class="ui-input" placeholder="web_search, http_get"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="ui-btn" onclick="document.getElementById('modal').style.display='none'">Cancel</button>
+      <button class="ui-btn ui-btn-primary" id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/skills.js"></script>
+</body>
+</html>

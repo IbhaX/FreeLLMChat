@@ -30,6 +30,31 @@
     </div>
 
     <div class="ui-card ui-card-pad set-card">
+      <h3>Account</h3>
+      <div class="desc">Your plan, usage, and sign-in (optional on local installs)</div>
+      <div id="acctLoggedOut">
+        <div class="set-grid">
+          <div><label class="label">Username</label><input id="au_name" class="ui-input" style="width:100%"></div>
+          <div><label class="label">Password</label><input id="au_pass" type="password" class="ui-input" style="width:100%"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="ui-btn ui-btn-primary ui-btn-sm" id="loginBtn">Sign in</button>
+          <button class="ui-btn ui-btn-sm" id="regBtn">Create account</button>
+          <span id="au_err" class="t-xs" style="color:var(--error);align-self:center"></span>
+        </div>
+      </div>
+      <div id="acctLoggedIn" style="display:none">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+          <div class="avatar" style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:var(--on-accent);font-weight:700" id="au_avatar">?</div>
+          <div><div style="font-weight:700" id="au_disp"></div>
+          <div class="t-xs tx-3"><span id="au_plan"></span> plan · <span id="au_role"></span></div></div>
+          <button class="ui-btn ui-btn-sm" id="logoutBtn" style="margin-left:auto">Sign out</button>
+        </div>
+        <div id="au_usage" class="t-sm tx-2" style="display:flex;gap:16px;flex-wrap:wrap"></div>
+      </div>
+    </div>
+
+    <div class="ui-card ui-card-pad set-card">
       <h3>Appearance</h3>
       <div class="desc">Theme preference is saved in this browser</div>
       <div class="ui-seg" id="themeSeg">

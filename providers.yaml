@@ -7,6 +7,27 @@
 # - Verify docs_url and account dashboard before production use.
 
 providers:
+  - name: ollama
+    display_name: Ollama (local)
+    adapter: ollama
+    base_url: http://localhost:11434/v1
+    auth_style: none
+    rotation_strategy: round_robin
+    default_models: []
+    limits: {concurrency: 2, request_timeout_s: 180}
+    requires_card: false
+    commercial_ok: true
+    auto_route_tags: [local, self-hosted]
+    docs_url: https://github.com/ollama/ollama/blob/main/docs/api.md
+    notes: >-
+      Local Ollama server; no API key needed. The host is auto-detected at
+      startup and via POST /admin/ollama/scan (OLLAMA_HOST is honored, then
+      localhost:11434 / 127.0.0.1:11434). Models pulled on the host
+      (/api/tags) are discovered and become routable automatically; request
+      them as ollama/<model> or by model name.
+    verified_on: "2026-11-15"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "local — free, no key"}
+
   - name: gemini
     display_name: Google Gemini API (AI Studio)
     adapter: openai_compat
@@ -27,6 +48,7 @@ providers:
     docs_url: https://ai.google.dev/gemini-api/docs/models
     notes: Free tier via AI Studio; models auto-discovered via /models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: groq
     display_name: GroqCloud
@@ -47,6 +69,7 @@ providers:
     docs_url: https://console.groq.com/docs/rate-limits
     notes: Free plan; per-model caps. Models auto-discovered.
     verified_on: "2026-11-09"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: openrouter
     display_name: OpenRouter (dynamic free-model routing)
@@ -67,6 +90,7 @@ providers:
     docs_url: https://openrouter.ai/docs/api-reference/limits
     notes: openrouter/free is a meta-router across the changing free catalog.
     verified_on: "2026-11-09"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: cloudflare
     display_name: Cloudflare Workers AI
@@ -88,6 +112,7 @@ providers:
     docs_url: https://developers.cloudflare.com/workers-ai/models/
     notes: Free 10K Neurons/day. Models auto-discovered.
     verified_on: "2026-11-09"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: cohere
     display_name: Cohere (trial/evaluation)
@@ -106,6 +131,7 @@ providers:
     docs_url: https://docs.cohere.com/v2/docs/rate-limits
     notes: Free trial 1,000 calls/month. Models auto-discovered.
     verified_on: "2026-11-09"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: mistral
     display_name: Mistral AI (La Plateforme)
@@ -124,6 +150,7 @@ providers:
     docs_url: https://docs.mistral.ai
     notes: Free Experiment tier — rate-limited access to all models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: nvidia
     display_name: NVIDIA NIM
@@ -144,6 +171,7 @@ providers:
     docs_url: https://build.nvidia.com
     notes: Free dev access ~40 RPM, 70+ models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: cerebras
     display_name: Cerebras Inference
@@ -162,6 +190,7 @@ providers:
     docs_url: https://inference-docs.cerebras.ai
     notes: Free tier with generous rate limits (card on file).
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: sambanova
     display_name: SambaNova Cloud
@@ -181,6 +210,7 @@ providers:
     docs_url: https://docs.sambanova.ai
     notes: $5 free credits on signup.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: deepseek
     display_name: DeepSeek
@@ -200,6 +230,11 @@ providers:
     docs_url: https://api-docs.deepseek.com
     notes: 5M free tokens on signup.
     verified_on: "2026-11-10"
+    pricing:
+      input_per_mtok: 0.27
+      output_per_mtok: 1.10
+      currency: USD
+      note: "paid API — deepseek-chat list price (cache miss); signup grants 5M free tokens"
 
   - name: huggingface
     display_name: HuggingFace Inference Providers
@@ -219,6 +254,7 @@ providers:
     docs_url: https://huggingface.co/docs/api-inference
     notes: Free inference tier via HF router (per-model provider routing).
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: siliconflow
     display_name: SiliconFlow
@@ -237,6 +273,7 @@ providers:
     docs_url: https://docs.siliconflow.cn
     notes: Free $0 models + signup credits.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: modelscope
     display_name: ModelScope (Alibaba)
@@ -256,6 +293,7 @@ providers:
     docs_url: https://modelscope.cn/docs
     notes: Free API-inference tier.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: novita
     display_name: Novita AI
@@ -275,6 +313,7 @@ providers:
     docs_url: https://novita.ai/docs
     notes: Trial credits on signup.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: nebius
     display_name: Nebius AI Studio
@@ -293,6 +332,7 @@ providers:
     docs_url: https://studio.nebius.com
     notes: Trial credits on signup.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: deepinfra
     display_name: DeepInfra
@@ -312,6 +352,7 @@ providers:
     docs_url: https://deepinfra.com/docs
     notes: Free signup credits.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: hyperbolic
     display_name: Hyperbolic
@@ -332,6 +373,7 @@ providers:
     docs_url: https://docs.hyperbolic.xyz
     notes: Trial credits on signup.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: fireworks
     display_name: Fireworks AI
@@ -349,6 +391,7 @@ providers:
     docs_url: https://docs.fireworks.ai
     notes: Free starter credits.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: requesty
     display_name: Requesty Router
@@ -367,6 +410,7 @@ providers:
     docs_url: https://docs.requesty.ai
     notes: Free tier ~200 requests/day across 300+ models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: inception
     display_name: Inception Labs (Mercury)
@@ -385,6 +429,7 @@ providers:
     docs_url: https://docs.inceptionlabs.ai
     notes: 10M free tokens on signup; diffusion-LLM speed.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: nous-research
     display_name: Nous Research
@@ -404,6 +449,7 @@ providers:
     docs_url: https://portal.nousresearch.com
     notes: Free tier 50 RPM / 500K TPM.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: typhoon
     display_name: Typhoon (SCB 10X)
@@ -421,6 +467,7 @@ providers:
     docs_url: https://opentyphoon.ai
     notes: Free API key, 5 req/s.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: zhipu
     display_name: Zhipu / Z.AI (GLM)
@@ -439,6 +486,7 @@ providers:
     docs_url: https://docs.z.ai
     notes: Free GLM-Flash models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: stepfun
     display_name: StepFun
@@ -457,6 +505,7 @@ providers:
     docs_url: https://platform.stepfun.com
     notes: Free Step models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: baichuan
     display_name: Baichuan AI
@@ -475,6 +524,7 @@ providers:
     docs_url: https://platform.baichuan-ai.com
     notes: Free Baichuan models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: hunyuan
     display_name: Tencent Hunyuan
@@ -492,6 +542,7 @@ providers:
     docs_url: https://cloud.tencent.com/product/hunyuan
     notes: Free Hunyuan Lite models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: doubao
     display_name: Doubao / Volcengine Ark
@@ -510,6 +561,7 @@ providers:
     docs_url: https://www.volcengine.com/docs/82379
     notes: Free Doubao models; uses Ark endpoint IDs via /models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: friendliai
     display_name: FriendliAI Serverless
@@ -528,6 +580,7 @@ providers:
     docs_url: https://docs.friendli.ai
     notes: Free serverless tier.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: sealion
     display_name: SEA-LION (AI Singapore)
@@ -545,6 +598,7 @@ providers:
     docs_url: https://sea-lion.ai
     notes: Permanently free at 10 RPM.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
   - name: ollama-cloud
     display_name: Ollama Cloud
@@ -564,8 +618,9 @@ providers:
     docs_url: https://docs.ollama.com/cloud
     notes: Free cloud-hosted open models.
     verified_on: "2026-11-10"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
 fallback:
-  auto: [groq, mistral, nvidia, gemini, cerebras, sambanova, openrouter, deepseek, huggingface, siliconflow, requesty, modelscope, zhipu, inception, nous-research, deepinfra, hyperbolic, fireworks, nebius, cloudflare, typhoon, stepfun, baichuan, hunyuan, doubao, novita, friendliai, sealion, ollama-cloud, cohere]
-  "auto:coding": [groq, mistral, nvidia, cerebras, deepseek, gemini, sambanova, siliconflow, openrouter, zhipu, inception, requesty, cloudflare, cohere]
-  "auto:fast": [groq, nvidia, cerebras, inception, gemini, cloudflare, mistral, fireworks, openrouter, cohere]
+  auto: [groq, openrouter, mistral, nvidia, gemini, cerebras, sambanova, deepseek, huggingface, siliconflow, requesty, modelscope, zhipu, inception, nous-research, deepinfra, hyperbolic, fireworks, nebius, cloudflare, typhoon, stepfun, baichuan, hunyuan, doubao, novita, friendliai, sealion, ollama-cloud, cohere, ollama]
+  "auto:coding": [groq, openrouter, mistral, nvidia, cerebras, deepseek, gemini, sambanova, siliconflow, zhipu, inception, requesty, cloudflare, cohere, ollama]
+  "auto:fast": [groq, openrouter, nvidia, cerebras, inception, gemini, cloudflare, mistral, fireworks, cohere, ollama]

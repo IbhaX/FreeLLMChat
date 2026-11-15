@@ -40,6 +40,8 @@ class Provider(Base):
     default_env_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     default_models: Mapped[list] = mapped_column(JSON, default=list)
     limits: Mapped[dict] = mapped_column(JSON, default=dict)
+    # {input_per_mtok, output_per_mtok, currency, note, model_overrides}
+    pricing: Mapped[dict] = mapped_column(JSON, default=dict)
     daily_reset_tz: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requires_card: Mapped[bool] = mapped_column(Boolean, default=False)
     commercial_ok: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -248,7 +250,146 @@ class Character(Base):
     personality: Mapped[str] = mapped_column(Text, default="")
     style: Mapped[str] = mapped_column(Text, default="")
     greeting: Mapped[str] = mapped_column(Text, default="")
+    # Extended roleplay fields
+    background: Mapped[str] = mapped_column(Text, default="")
+    knowledge_domain: Mapped[str] = mapped_column(Text, default="")
+    motivations: Mapped[str] = mapped_column(Text, default="")
+    boundaries: Mapped[str] = mapped_column(Text, default="")
+    example_dialogue: Mapped[str] = mapped_column(Text, default="")
+    speaking_style: Mapped[str] = mapped_column(Text, default="")
+    category: Mapped[str] = mapped_column(String(64), default="custom", index=True)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    visibility: Mapped[str] = mapped_column(String(16), default="public", index=True)
+    creator_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    avatar_url: Mapped[str] = mapped_column(String(512), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class User(Base):
+    """A registered platform account (multi-tenant boundary)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(256), default="", index=True)
+    password_hash: Mapped[str] = mapped_column(String(256))
+    display_name: Mapped[str] = mapped_column(String(128), default="")
+    role: Mapped[str] = mapped_column(String(32), default="user")
+    plan: Mapped[str] = mapped_column(String(32), default="free")
+    disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuthToken(Base):
+    """Opaque bearer token for a user session (hashed at rest)."""
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Collection(Base):
+    """A named knowledge collection owned by a user."""
+
+    __tablename__ = "collections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(128), index=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Document(Base):
+    """An uploaded file inside a knowledge collection."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    collection_id: Mapped[int | None] = mapped_column(ForeignKey("collections.id", ondelete="CASCADE"), index=True, nullable=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(256), index=True)
+    mime: Mapped[str] = mapped_column(String(128), default="")
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32), default="processing", index=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan", lazy="selectin")
+
+
+class DocumentChunk(Base):
+    """A text chunk of a document, optionally embedded for retrieval."""
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True)
+    ord: Mapped[int] = mapped_column(Integer, default=0)
+    text: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    tokens: Mapped[int] = mapped_column(Integer, default=0)
+
+    document: Mapped[Document] = relationship(back_populates="chunks")
+
+
+class RoleplayRoom(Base):
+    """A persistent multi-character roleplay session."""
+
+    __tablename__ = "roleplay_rooms"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(128))
+    scenario: Mapped[str] = mapped_column(Text, default="")
+    character_ids: Mapped[list] = mapped_column(JSON, default=list)
+    messages: Mapped[list] = mapped_column(JSON, default=list)
+    model: Mapped[str] = mapped_column(String(128), default="auto")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class UsageEvent(Base):
+    """Per-subject usage record for quotas, metering and stats."""
+
+    __tablename__ = "usage_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    subject: Mapped[str] = mapped_column(String(64), index=True)  # user id or 'anon'
+    kind: Mapped[str] = mapped_column(String(32), index=True)     # chat|research|agent|roleplay|embedding
+    model: Mapped[str] = mapped_column(String(128), default="")
+    provider: Mapped[str] = mapped_column(String(64), default="")
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class CustomSkill(Base):
+    """A user-defined reusable skill merged into the skill registry."""
+
+    __tablename__ = "custom_skills"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), index=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    tools: Mapped[list] = mapped_column(JSON, default=list)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow)

@@ -75,20 +75,27 @@ async def convert_to_components(
                 messages.append({"role": m["role"], "content": str(m.get("content") or "")})
         messages.append({"role": "assistant", "content": content})
         messages.append({"role": "user", "content": CONVERT_INSTRUCTION})
-        payload = {
-            "model": model or renderer_model(),
-            "messages": messages,
-            "stream": False,
-            "temperature": 0,
-            "max_tokens": 4096,
-        }
-        result, _p, _k, _m = await gateway.chat(
-            session, payload, attempt_timeout=attempt_timeout
-        )
-        text = _message_content(result or {})
-        if has_renderable_components(text):
-            return text.strip()
-        log.info("renderer produced no components (model=%s)", payload["model"])
+        from app.services.model_policy import stage_models
+
+        for cand in stage_models(model or renderer_model(), role="fast"):
+            payload = {
+                "model": cand,
+                "messages": messages,
+                "stream": False,
+                "temperature": 0,
+                "max_tokens": 4096,
+            }
+            try:
+                result, _p, _k, _m = await gateway.chat(
+                    session, payload, attempt_timeout=attempt_timeout
+                )
+            except Exception as exc:
+                log.debug("renderer call failed (model=%s): %s", cand, exc)
+                continue
+            text = _message_content(result or {})
+            if has_renderable_components(text):
+                return text.strip()
+            log.info("renderer produced no components (model=%s)", cand)
         return None
     except Exception as exc:  # rendering is best-effort; caller falls back
         log.debug("component renderer call failed: %s", exc)

@@ -233,6 +233,107 @@ async def test_sequential_failover_stops_after_first_success(session, monkeypatc
     assert third.call_count == 0
 
 
+async def test_model_fault_tries_next_model_without_cooling(session, monkeypatch):
+    """A model-level rejection (unsupported tools, oversized request, dead
+    model) retries the provider's next model and must NOT cool the key."""
+    import app.routing.fallback as fb
+
+    p1 = await _provider(session, "p1", "https://p1.example/v1",
+                         ["m-small", "m-big"])
+    k1 = await make_key(session, p1, "sk-aaa-1111", label="a")
+    monkeypatch.setattr(fb, "load_fallback_chains",
+                        lambda: {"auto": ["p1"]})
+    calls: list[str] = []
+
+    def side(request: httpx.Request) -> httpx.Response:
+        import json as _json
+        model = _json.loads(request.content)["model"]
+        calls.append(model)
+        if model == "m-small":
+            return httpx.Response(
+                400, json={"error": {"message":
+                       "model m-small does not support tools"}})
+        return httpx.Response(200, json=_ok_payload("m-big"))
+
+    with respx.mock:
+        respx.post("https://p1.example/v1/chat/completions").mock(side_effect=side)
+        gw = Gateway()
+        result, provider, key, model = await gw.chat(
+            session, {"model": "auto",
+                      "messages": [{"role": "user", "content": "hi"}]}
+        )
+        await gw.close()
+
+    assert calls == ["m-small", "m-big"]
+    assert model == "m-big"
+    assert key.id == k1.id
+    await session.refresh(k1)
+    assert k1.consecutive_failures == 0
+    assert k1.cooldown_until is None
+
+
+async def test_auto_backstops_on_local_ollama(session, monkeypatch):
+    """auto must land locally when every cloud provider fails."""
+    import app.routing.fallback as fb
+
+    p1 = await _provider(session, "p1", "https://p1.example/v1", ["m1"])
+    await make_key(session, p1, "sk-aaa-1111", label="a")
+    oll = await _provider(session, "ollama", "http://localhost:11434/v1",
+                          ["llama3.2:1b"])
+    await make_key(session, oll, "sk-local", label="local")
+    monkeypatch.setattr(fb, "load_fallback_chains",
+                        lambda: {"auto": ["p1"]})  # ollama not in chain
+
+    with respx.mock:
+        respx.post("https://p1.example/v1/chat/completions").mock(
+            return_value=httpx.Response(429, json={"error": "rate limited"})
+        )
+        respx.post("http://localhost:11434/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_ok_payload("llama3.2:1b"))
+        )
+        gw = Gateway()
+        result, provider, key, model = await gw.chat(
+            session, {"model": "auto",
+                      "messages": [{"role": "user", "content": "hi"}]}
+        )
+        await gw.close()
+
+    assert provider.name == "ollama"
+    assert model == "llama3.2:1b"
+
+
+async def test_auto_budget_scales_with_plan(session, monkeypatch):
+    """auto must try every servable provider, not stop at the global cap."""
+    import app.routing.fallback as fb
+
+    names = [f"p{i}" for i in range(5)]
+    chain = list(names)
+    for n in names:
+        p = await _provider(session, n, f"https://{n}.example/v1", ["m1"])
+        await make_key(session, p, f"sk-{n}-1", label=n)
+    # Last provider succeeds; the first four fail.
+    ok = names[-1]
+    monkeypatch.setattr(fb, "load_fallback_chains", lambda: {"auto": chain})
+
+    def side(request: httpx.Request) -> httpx.Response:
+        if ok in str(request.url):
+            return httpx.Response(200, json=_ok_payload("m1"))
+        return httpx.Response(429, json={"error": "rate limited"})
+
+    with respx.mock:
+        route = respx.post(url__regex=r"https://p\d\.example/v1/chat/completions")\
+            .mock(side_effect=side)
+        gw = Gateway()
+        result, provider, key, model = await gw.chat(
+            session, {"model": "auto",
+                      "messages": [{"role": "user", "content": "hi"}]}
+        )
+        await gw.close()
+
+    assert provider.name == ok
+    assert route.call_count == 5
+
+
 async def test_no_second_sweep_after_all_providers_fail(session, monkeypatch):
     """A failed routing pass must not repeat providers in a hidden second sweep."""
     import app.routing.fallback as fb

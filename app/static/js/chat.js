@@ -5,20 +5,29 @@ const MODELS=[
   {id:'auto',name:'auto',desc:'Gateway routes to any healthy provider',color:'linear-gradient(135deg,#faff69,#e6eb52)',tag:'Au',text:'#0a0a0a'},
 ];
 const PALETTE=['#6366f1','#ef5b6e','#34d399','#f0a04b','#8b5cf6','#059669','#e5534b','#5e6ad2'];
+function modelCost(m){
+  const p=m&&m.pricing;
+  if(!p||typeof p!=='object')return m&&m.owned_by==='gateway'?'routed':'cost n/a';
+  const i=+p.input_per_mtok||0,o=+p.output_per_mtok||0;
+  if(i===0&&o===0)return 'free';
+  const fmt=v=>v<1?'$'+v.toFixed(2):'$'+v.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+  return `${fmt(i)} in / ${fmt(o)} out per Mtok`;
+}
 async function loadModels(silent){
   try{
-    const r=await fetch(API_BASE+'/v1/models',{headers:apiHeaders()});
+    const r=await fetch(API_BASE+'/v1/models?usable=1',{headers:apiHeaders()});
     if(r.status===401){
       localStorage.removeItem('gateway_key');API_KEY='';
       if(askGatewayKey())return loadModels();
     }
     if(!r.ok)throw new Error('HTTP '+r.status);
-    const data=(await r.json()).data||[];
+    const data=((await r.json()).data||[]).filter(m=>m.usable!==false);
     if(data.length){
       MODELS.length=0;
       data.forEach((m,i)=>{
         const c=PALETTE[i%PALETTE.length];
-        MODELS.push({id:m.id,name:m.id,desc:m.owned_by||'',
+        const cost=modelCost(m);
+        MODELS.push({id:m.id,name:m.id,desc:(m.owned_by||'')+' · '+cost,cost,
           color:`linear-gradient(135deg,${c},${PALETTE[(i+3)%PALETTE.length]})`,
           tag:(m.owned_by||m.id).slice(0,2)});
       });
@@ -39,6 +48,7 @@ window.__chatState=state; // wizard.js reads agent
 const STORE_KEY='nova_chat_state_v1';
 function saveState(){
   try{
+    if(state.current)state.current.t=Date.now();
     const cur=state.current?state.current.id:null;
     localStorage.setItem(STORE_KEY,JSON.stringify({
       modelId:state.model.id,conversations:state.conversations,currentId:cur}));
@@ -90,10 +100,14 @@ function loadState(){
     const s=JSON.parse(raw);
     if(!s.conversations||!s.conversations.length)return false;
     state.conversations=s.conversations;
-    // Always open a fresh chat on load; history stays in the sidebar.
-    const fresh=mkConv('New conversation');
-    state.conversations.unshift(fresh);
-    state.current=fresh;
+    // Resume the session the user was in — only fall back to a fresh chat
+    // when the stored session is gone or the state is stale (>30 days).
+    const STALE_MS=30*24*3600*1000;
+    const prev=s.currentId&&state.conversations.find(c=>c.id===s.currentId);
+    const newest=[...state.conversations].sort((a,b)=>(b.t||0)-(a.t||0))[0];
+    const live=(prev||newest);
+    if(live&&(live.t||0)>Date.now()-STALE_MS){state.current=live;}
+    else{const fresh=mkConv('New conversation');state.conversations.unshift(fresh);state.current=fresh;}
     const m=MODELS.find(x=>x.id===s.modelId);
     if(m){state.model=m;$('#modelName').textContent=m.name;$('#modelIcon').style.background=m.color;}
     return true;
@@ -641,6 +655,12 @@ async function loadAgents(){
     const data=(await r.json()).data||[];
     state._agents=data;
     renderAgentMenu(data);
+    // ?agent=<name> deep link from the Agents directory
+    if(!state.agent){
+      const want=new URLSearchParams(location.search).get('agent');
+      if(want){const a=data.find(x=>x.name.toLowerCase()===want.toLowerCase());
+        if(a)selectAgent(a);}
+    }
   }catch(_){}
 }
 function renderAgentMenu(agents){

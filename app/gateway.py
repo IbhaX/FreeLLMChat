@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -355,30 +356,20 @@ class Gateway:
                             "no_route", None, 0, error="no provider serves model")
             raise GatewayExhausted(f"No provider can serve model '{requested}'", 404)
 
-        # Preserve configured priority, but never probe providers that have
-        # no currently usable key. Each candidate is attempted sequentially;
-        # the next provider is contacted only after the current one fails.
-        by_provider: list[tuple[Provider, str]] = []
-        seen: set[str] = set()
-        for p, m in candidates:
-            if p.name in seen:
-                continue
-            seen.add(p.name)
-            if not await self.rotator.healthy_keys(session, p):
-                continue
-            by_provider.append((p, m))
-        if not by_provider:
+        plan = await self._plan_attempts(session, requested, candidates)
+        if not plan:
             raise GatewayExhausted("No providers have an enabled, available API key", 503)
         emit({"event": "routing",
-              "text": f"Sequential fallback: {len(by_provider)} configured provider(s)"})
-        await self._sticky_first(session, requested, by_provider)
+              "text": f"Sequential fallback: {len(plan)} provider(s) with a live key"})
+        await self._sticky_first(session, requested, plan)
 
         last_err: ProviderError | None = None
-        tried: set[int] = set()
+        tried: set[tuple[int, str]] = set()
         attempts = 0
+        budget = self._attempt_budget(requested, plan)
         inner = await self._chat_sweep(
-            session, request_id, t0, payload, by_provider,
-            emit, tried, attempts, attempt_timeout=attempt_timeout,
+            session, request_id, t0, payload, plan,
+            emit, tried, attempts, budget, attempt_timeout=attempt_timeout,
         )
         if inner is not None:
             await self._sticky_set(session, requested, inner[1], inner[3])
@@ -395,9 +386,116 @@ class Gateway:
             else "All providers exhausted", status or 503
         )
 
+    _MODEL_REJECT = re.compile(
+        r"request too large|context (?:length|window)|does not support|"
+        r"no such model|unknown model|cannot be loaded|"
+        r"model .{0,40}(not found|does not exist|unavailable|decommissioned|removed)",
+        re.I,
+    )
+
+    @classmethod
+    def _is_model_fault(cls, err: ProviderError) -> bool:
+        """True when the upstream rejected the *model*, not the key.
+
+        Model faults (dead model, unsupported tools, request too large for
+        that model's context/TPM) must not cool the key — the key is fine
+        and can serve the provider's next model.
+        """
+        msg = err.message or ""
+        if err.status_code == 404 and "model" in msg.lower():
+            return True
+        return bool(cls._MODEL_REJECT.search(msg))
+
+    _AUTO_MODEL_ALTERNATES = 3
+    _AUTO_MAX_ATTEMPTS = 24
+
+    async def _plan_attempts(
+        self,
+        session: AsyncSession,
+        requested: str,
+        candidates: list[tuple[Provider, str]],
+    ) -> list[tuple[Provider, list[str]]]:
+        """Build the ordered attempt plan: ``[(provider, [model, ...])]``.
+
+        - Providers keep their configured chain order, but each is scored
+          by key health so providers whose keys already failed sink.
+        - Only providers with >= 1 currently usable key are included.
+        - Each provider carries up to 3 model alternates (curated
+          ``default_models`` first) so a model-level rejection retries the
+          next model instead of abandoning the provider.
+        - On ``auto*`` the local ``ollama`` provider is appended last as a
+          backstop, so requests still land when every cloud provider fails.
+        """
+        is_auto = requested.startswith("auto")
+        groups: dict[str, tuple[Provider, list[str]]] = {}
+        for p, m in candidates:
+            entry = groups.setdefault(p.name, (p, []))
+            if m not in entry[1]:
+                entry[1].append(m)
+
+        scored: list[tuple[int, int, Provider, list[str]]] = []
+        for chain_idx, (p, models) in enumerate(groups.values()):
+            healthy = await self.rotator.healthy_keys(session, p)
+            if not healthy:
+                continue
+            min_fail = min(k.consecutive_failures or 0 for k in healthy)
+            scored.append((min_fail, chain_idx, p, models))
+        # Strict chain order — the configured fallback order is the policy
+        # (e.g. groq -> openrouter -> ... -> ollama last resort). Providers
+        # with no live key are already filtered above; consecutive-failure
+        # counts only decide which key within a provider is tried first.
+        scored.sort(key=lambda t: t[1])
+
+        plan: list[tuple[Provider, list[str]]] = []
+        ollama_entry: tuple[Provider, list[str]] | None = None
+        for _f, _i, p, models in scored:
+            entry = (p, self._order_models(p, models))
+            if is_auto and p.name == "ollama":
+                ollama_entry = entry
+                continue
+            plan.append(entry)
+
+        if is_auto and ollama_entry is None:
+            # Local backstop not in the fallback chain — add it if alive.
+            catalog = await self.provider_catalog(session)
+            if "ollama" in catalog:
+                p, models = catalog["ollama"]
+                if models and await self.rotator.healthy_keys(session, p):
+                    ollama_entry = (p, self._order_models(p, list(models)))
+        if ollama_entry is not None:
+            plan.append(ollama_entry)
+        return plan
+
+    def _order_models(
+        self, provider: Provider, models: list[str]
+    ) -> list[str]:
+        """Curated ``default_models`` first, capped at the alternate count."""
+        defaults = provider.default_models or []
+        dset = set(defaults)
+        in_set = set(models)
+        ordered = [m for m in defaults if m in in_set]
+        ordered += [m for m in models if m not in dset]
+        return ordered[: self._AUTO_MODEL_ALTERNATES]
+
+    def _attempt_budget(
+        self, requested: str, plan: list[tuple[Provider, list[str]]]
+    ) -> int:
+        """Upstream-call budget for one request.
+
+        Explicit model picks keep the configured cap. ``auto*`` scales the
+        budget to the plan so every servable provider gets ~2 upstream
+        calls before giving up.
+        """
+        if not requested.startswith("auto"):
+            return self.settings.max_retries_per_request
+        return min(
+            max(2 * len(plan), self.settings.max_retries_per_request),
+            self._AUTO_MAX_ATTEMPTS,
+        )
+
     async def _sticky_first(
         self, session: AsyncSession, requested: str,
-        by_provider: list[tuple[Provider, str]],
+        plan: list[tuple[Provider, list[str]]],
     ) -> None:
         """Move the last working (provider, model) to the front."""
         sticky = (
@@ -407,9 +505,14 @@ class Gateway:
         ).scalar_one_or_none()
         if not sticky:
             return
-        for i, (p, m) in enumerate(by_provider):
-            if p.name == sticky.provider_name and m == sticky.model:
-                by_provider.insert(0, by_provider.pop(i))
+        if requested.startswith("auto") and sticky.provider_name == "ollama":
+            # Local backstop is last resort only — never let it stick.
+            return
+        for i, (p, models) in enumerate(plan):
+            if p.name == sticky.provider_name and sticky.model in models:
+                models.remove(sticky.model)
+                models.insert(0, sticky.model)
+                plan.insert(0, plan.pop(i))
                 return
 
     async def _sticky_set(
@@ -450,12 +553,15 @@ class Gateway:
             k.last_error = None
         await session.commit()
 
-    async def _emit_skip_reason(self, session, provider, attempts, prov_attempts, emit):
+    async def _emit_skip_reason(
+        self, session, provider, attempts, prov_attempts, emit,
+        budget: int | None = None,
+    ) -> None:
         """When a provider was skipped without a single attempt, say why so
         the activity list does not show a bare 'Trying' line."""
         if attempts != prov_attempts:
             return
-        if attempts >= self.settings.max_retries_per_request:
+        if attempts >= (budget or self.settings.max_retries_per_request):
             emit({"event": "skip",
                   "text": f"{provider.name} — retry budget reached, skipping"})
             return
@@ -468,86 +574,109 @@ class Gateway:
                        if n else f"{provider.name} — no key configured, skipping")})
 
     async def _chat_sweep(
-        self, session, request_id, t0, payload, by_provider, emit, tried, attempts,
+        self, session, request_id, t0, payload,
+        plan: list[tuple[Provider, list[str]]], emit,
+        tried: set[tuple[int, str]], attempts: int, budget: int,
         attempt_timeout: float | None = None,
     ):
-        """One pass over providers. Returns (result, provider, key, model)
-        on success or None when the sweep is exhausted. Stashes
-        _last_err/_last_attempts for the caller."""
+        """One sequential pass over the plan. Returns
+        (result, provider, key, model) on success or None when the sweep
+        is exhausted. Stashes _last_err/_last_attempts for the caller.
+
+        Failure classes decide the next move:
+        - model fault  → next model of the same provider (key not cooled)
+        - key fault    → cool key, next key; none left → next provider
+        - non-retryable → next provider
+        """
         last_err: ProviderError | None = None
         attempt_timeout = attempt_timeout or self.settings.attempt_timeout_s
-        for provider, model in by_provider:
+        for provider, models in plan:
+            if attempts >= budget:
+                break
             if not self.breaker.allow(provider.name):
                 continue
-            emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
-            body = dict(payload)
-            body["model"] = model
-            body["stream"] = False
-            body.setdefault("max_tokens", 4096)
+            prov_timeout = float(
+                (provider.limits or {}).get("request_timeout_s") or attempt_timeout
+            )
             prov_attempts = attempts
-            while attempts < self.settings.max_retries_per_request:
-                key = await self.rotator.pick(session, provider, exclude_ids=tried)
-                if key is None:
+            provider_done = False
+            for model in models:
+                if provider_done or attempts >= budget:
                     break
-                tried.add(key.id)
-                if key.id in self._undecryptable:
-                    continue
-                attempts += 1
-                try:
-                    raw = self._decrypt_key(key)
-                    adapter = build_adapter(provider)
+                emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
+                body = dict(payload)
+                body["model"] = model
+                body["stream"] = False
+                body.setdefault("max_tokens", 4096)
+                while attempts < budget:
+                    # Keys already probed for THIS model are skipped; a key
+                    # stays eligible for the provider's other models (a model
+                    # fault does not implicate the key).
+                    excl = {kid for kid, mdl in tried if mdl == model}
+                    key = await self.rotator.pick(
+                        session, provider, exclude_ids=excl)
+                    if key is None:
+                        break
+                    tried.add((key.id, model))
+                    if key.id in self._undecryptable:
+                        continue
+                    attempts += 1
                     try:
-                        result = await asyncio.wait_for(
-                            adapter.chat_completion(self.client, raw, body),
-                            timeout=attempt_timeout,
-                        )
-                    except asyncio.TimeoutError:
-                        raise ProviderError(
-                            f"no response in {attempt_timeout:.0f}s",
-                            retryable=True,
-                        )
-                except KeyUndecryptable as e:
-                    # Local key problem: skip without cooldown, surface a
-                    # clear message instead of a provider error.
-                    last_err = ProviderError(str(e), retryable=False)
-                    emit({"event": "fail", "text": str(e)[:120]})
-                    continue
-                except ProviderError as e:
-                    last_err = e
-                    if e.status_code == 404 and "model" in e.message.lower():
-                        # Dead model: the key is fine — don't cool it or
-                        # trip the provider breaker.
-                        await self._mark_model_dead(session, provider, model)
+                        raw = self._decrypt_key(key)
+                        adapter = build_adapter(provider)
+                        try:
+                            result = await asyncio.wait_for(
+                                adapter.chat_completion(self.client, raw, body),
+                                timeout=prov_timeout,
+                            )
+                        except asyncio.TimeoutError:
+                            raise ProviderError(
+                                f"no response in {prov_timeout:.0f}s",
+                                retryable=True,
+                            )
+                    except KeyUndecryptable as e:
+                        # Local key problem: skip without cooldown, surface a
+                        # clear message instead of a provider error.
+                        last_err = ProviderError(str(e), retryable=False)
+                        emit({"event": "fail", "text": str(e)[:120]})
+                        continue
+                    except ProviderError as e:
+                        last_err = e
+                        if self._is_model_fault(e):
+                            if e.status_code == 404 and "model" in e.message.lower():
+                                await self._mark_model_dead(
+                                    session, provider, model)
+                            emit({"event": "fail",
+                                  "text": f"{provider.name} · {model} rejected: "
+                                          f"{e.message[:70]} — next model"})
+                            break
+                        await self._record_failure(session, key, provider, e)
                         emit({"event": "fail",
                               "text": f"{provider.name} failed: {e.message[:80]}"})
-                        emit({"event": "next",
-                              "text": "Model unavailable — next provider"})
-                        break
-                    await self._record_failure(session, key, provider, e)
-                    emit({"event": "fail",
-                          "text": f"{provider.name} failed: {e.message[:80]}"})
-                    if not e.retryable:
-                        break
-                    emit({"event": "next", "text": "Retrying with next key"})
-                    continue
-                except Exception as e:
-                    last_err = ProviderError(str(e), retryable=True)
-                    await self._record_failure(session, key, provider, last_err)
-                    emit({"event": "fail",
-                          "text": f"{provider.name} error: {str(e)[:80]}"})
-                    continue
-                usage = result.get("usage") or {}
-                tin = usage.get("prompt_tokens", 0)
-                tout = usage.get("completion_tokens", 0)
-                await self._record_success(session, key, provider, tin, tout)
-                await self._log(
-                    session, request_id, payload["model"], model, provider,
-                    key, "ok", 200, (time.monotonic() - t0) * 1000, tin, tout,
-                    request_input=_payload_input(payload),
-                    response_text=_result_text(result))
-                self._last_err, self._last_attempts = last_err, attempts
-                return result, provider, key, model
-            await self._emit_skip_reason(session, provider, attempts, prov_attempts, emit)
+                        if not e.retryable:
+                            provider_done = True
+                            break
+                        emit({"event": "next", "text": "Retrying with next key"})
+                        continue
+                    except Exception as e:
+                        last_err = ProviderError(str(e), retryable=True)
+                        await self._record_failure(session, key, provider, last_err)
+                        emit({"event": "fail",
+                              "text": f"{provider.name} error: {str(e)[:80]}"})
+                        continue
+                    usage = result.get("usage") or {}
+                    tin = usage.get("prompt_tokens", 0)
+                    tout = usage.get("completion_tokens", 0)
+                    await self._record_success(session, key, provider, tin, tout)
+                    await self._log(
+                        session, request_id, payload["model"], model, provider,
+                        key, "ok", 200, (time.monotonic() - t0) * 1000, tin, tout,
+                        request_input=_payload_input(payload),
+                        response_text=_result_text(result))
+                    self._last_err, self._last_attempts = last_err, attempts
+                    return result, provider, key, model
+            await self._emit_skip_reason(
+                session, provider, attempts, prov_attempts, emit, budget)
         self._last_err, self._last_attempts = last_err, attempts
         return None
 
@@ -572,42 +701,48 @@ class Gateway:
                 f"No provider can serve model '{requested}'", 404
             )
 
-        by_provider: list[tuple[Provider, str]] = []
-        seen: set[str] = set()
-        for p, m in candidates:
-            if p.name not in seen:
-                seen.add(p.name)
-                by_provider.append((p, m))
-        available: list[tuple[Provider, str]] = []
-        for p, m in by_provider:
-            if await self.rotator.pick(session, p) is not None:
-                available.append((p, m))
-        by_provider = available
-        if not by_provider:
+        plan = await self._plan_attempts(session, requested, candidates)
+        if not plan:
             raise GatewayExhausted("No providers have an enabled, available API key", 503)
-        emit({"event": "routing", "text": f"Sequential fallback: {len(by_provider)} configured provider(s)"})
-        await self._sticky_first(session, requested, by_provider)
+        emit({"event": "routing",
+              "text": f"Sequential fallback: {len(plan)} provider(s) with a live key"})
+        await self._sticky_first(session, requested, plan)
 
         last_err: ProviderError | None = None
-        tried: set[int] = set()
+        tried: set[tuple[int, str]] = set()
         attempts = 0
-        # One ordered pass only. A provider is attempted once per eligible
-        # key; the next provider is reached only after a real upstream failure.
-        for provider, model in by_provider:
-                if not self.breaker.allow(provider.name):
-                    continue
+        budget = self._attempt_budget(requested, plan)
+        # One ordered pass over the plan. A provider is probed once per
+        # key per model; the next provider is reached only after a real
+        # upstream failure. Model faults move to the provider's next model
+        # without cooling the key.
+        for provider, models in plan:
+            if attempts >= budget:
+                break
+            if not self.breaker.allow(provider.name):
+                continue
+            prov_attempts = attempts
+            provider_done = False
+            for model in models:
+                if provider_done or attempts >= budget:
+                    break
                 emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
                 body = dict(payload)
                 body["model"] = model
                 body["stream"] = True
                 body.setdefault("max_tokens", 4096)
                 body.setdefault("stream_options", {"include_usage": True})
-                prov_attempts = attempts
-                while attempts < self.settings.max_retries_per_request:
-                    key = await self.rotator.pick(session, provider, exclude_ids=tried)
+                first_to = float(
+                    (provider.limits or {}).get("request_timeout_s")
+                    or self.settings.first_chunk_timeout_s
+                )
+                while attempts < budget:
+                    excl = {kid for kid, mdl in tried if mdl == model}
+                    key = await self.rotator.pick(
+                        session, provider, exclude_ids=excl)
                     if key is None:
                         break
-                    tried.add(key.id)
+                    tried.add((key.id, model))
                     if key.id in self._undecryptable:
                         continue
                     attempts += 1
@@ -622,11 +757,11 @@ class Gateway:
                     try:
                         first = await asyncio.wait_for(
                             anext(stream),  # wait for first SSE chunk
-                            timeout=self.settings.first_chunk_timeout_s,
+                            timeout=first_to,
                         )
                     except (asyncio.TimeoutError, TimeoutError):
                         last_err = ProviderError(
-                            f"no response in {self.settings.first_chunk_timeout_s:.0f}s",
+                            f"no response in {first_to:.0f}s",
                             retryable=True,
                         )
                         await self._record_failure(session, key, provider, last_err)
@@ -639,15 +774,18 @@ class Gateway:
                         continue
                     except ProviderError as e:
                         last_err = e
-                        if e.status_code == 404 and "model" in e.message.lower():
-                            # Dead model: don't cool the key.
-                            await self._mark_model_dead(session, provider, model)
+                        if self._is_model_fault(e):
+                            if e.status_code == 404 and "model" in e.message.lower():
+                                await self._mark_model_dead(
+                                    session, provider, model)
                             emit({"event": "retry",
-                                  "text": f"{provider.name} · {key.label} — model unavailable, next provider"})
+                                  "text": f"{provider.name} · {model} rejected "
+                                          f"({e.status_code or 'err'}) — next model"})
                             break
                         await self._record_failure(session, key, provider, e)
                         emit({"event": "retry", "text": f"{provider.name} · {key.label} failed ({e.status_code or 'error'})"})
                         if not e.retryable:
+                            provider_done = True
                             break
                         continue
                     except Exception as e:
@@ -665,7 +803,8 @@ class Gateway:
                         key,
                         model,
                     )
-                await self._emit_skip_reason(session, provider, attempts, prov_attempts, emit)
+            await self._emit_skip_reason(
+                session, provider, attempts, prov_attempts, emit, budget)
         raise GatewayExhausted(
             _clean_exhaustion_msg(last_err.message) if last_err
             else "All providers exhausted",
@@ -687,7 +826,10 @@ class Gateway:
         t0 = time.monotonic()
         tin = tout = 0
         resp_parts: list[str] = []
-        idle_s = self.settings.stream_idle_timeout_s
+        idle_s = float(
+            (provider.limits or {}).get("request_timeout_s")
+            or self.settings.stream_idle_timeout_s
+        )
         yield first
         try:
             while True:

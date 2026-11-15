@@ -40,3 +40,36 @@ async def require_admin(request: Request) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid admin token",
         )
+
+
+async def optional_user(request: Request) -> "User | None":
+    """Resolve a user bearer token. Returns None when absent — endpoints
+    stay usable in single-tenant local mode."""
+    from app.db import get_session_factory
+    from app.services.auth import bearer_token, resolve_token
+
+    token = request.headers.get("x-user-token") or \
+        bearer_token(request.headers.get("authorization"))
+    if not token:
+        return None
+    factory = get_session_factory()
+    async with factory() as session:
+        return await resolve_token(session, token)
+
+
+async def require_user(request: Request) -> "User":
+    """Like optional_user but 401s when auth is required and no valid
+    token is present."""
+    from app.services.auth import AUTH_REQUIRED
+    user = await optional_user(request)
+    if user is None and AUTH_REQUIRED:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    return user
+
+
+def subject_for(user: "User | None") -> str:
+    """Metering subject string for a (possibly anonymous) request."""
+    return f"u{user.id}" if user else "anon"

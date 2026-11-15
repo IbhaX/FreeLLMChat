@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from typing import Any
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +15,7 @@ from app.api.deps import require_gateway_key
 from app.db import get_session
 from app.gateway import Gateway, GatewayExhausted
 from app.logging_config import new_request_id
+from app.models import ApiKey
 from app.response_protocol import protocol_descriptor, structured_system_prompt
 from app.schemas import ChatCompletionRequest
 
@@ -21,20 +26,77 @@ def _gateway(request: Request) -> Gateway:
     return request.app.state.gateway
 
 
+def _model_pricing(provider: Any, model: str) -> dict[str, Any] | None:
+    """Per-model pricing: provider.pricing base + optional model_overrides."""
+    base = dict(provider.pricing or {})
+    overrides = base.pop("model_overrides", None) or {}
+    base.update(overrides.get(model) or {})
+    return base or None
+
+
+async def _keyed_provider_ids(session: AsyncSession) -> set[int]:
+    """Providers with ≥1 enabled key."""
+    rows = (
+        await session.execute(
+            select(ApiKey.provider_id).where(ApiKey.enabled.is_(True)).distinct()
+        )
+    ).scalars().all()
+    return set(rows)
+
+
+async def _servable_provider_ids(session: AsyncSession) -> set[int]:
+    """Providers with ≥1 enabled key that is not currently on cooldown —
+    i.e. can actually serve a request right now."""
+    now = datetime.now(timezone.utc)
+    rows = (
+        await session.execute(
+            select(ApiKey.provider_id, ApiKey.cooldown_until).where(
+                ApiKey.enabled.is_(True)
+            )
+        )
+    ).all()
+    out: set[int] = set()
+    for provider_id, cooldown in rows:
+        if cooldown is None:
+            out.add(provider_id)
+            continue
+        cd = cooldown.replace(tzinfo=cooldown.tzinfo or timezone.utc)
+        if cd <= now:
+            out.add(provider_id)
+    return out
+
+
+def _truthy(v: Any) -> bool:
+    return str(v or "").lower() in ("1", "true", "yes", "on")
+
+
 @router.get("/models")
 async def list_models(
-    request: Request, session: AsyncSession = Depends(get_session)
+    request: Request, session: AsyncSession = Depends(get_session),
+    usable: str | None = None,
 ) -> dict:
+    """Model catalog. ``usable=1`` keeps only models whose provider can serve
+    right now (≥1 enabled key, not on cooldown), plus the gateway aliases."""
     gateway = _gateway(request)
     catalog = await gateway.provider_catalog(session)
-    data = [
-        {"id": f"{pname}/{m}", "object": "model", "created": 0,
-         "owned_by": pname}
-        for pname, (_, models) in catalog.items()
-        for m in models
-    ]
+    keyed_ids = await _keyed_provider_ids(session)
+    servable_ids = await _servable_provider_ids(session)
+    only_usable = _truthy(usable)
+    data = []
+    for pname, (p, models) in catalog.items():
+        servable = p.id in servable_ids
+        if only_usable and not servable:
+            continue
+        for m in models:
+            data.append({
+                "id": f"{pname}/{m}", "object": "model", "created": 0,
+                "owned_by": pname, "usable": servable,
+                "keyed": p.id in keyed_ids,
+                "pricing": _model_pricing(p, m),
+            })
     data += [
-        {"id": alias, "object": "model", "created": 0, "owned_by": "gateway"}
+        {"id": alias, "object": "model", "created": 0, "owned_by": "gateway",
+         "usable": True, "keyed": True, "pricing": None}
         for alias in ("auto", "auto:coding", "auto:fast")
     ]
     return {"object": "list", "data": data}
@@ -64,14 +126,19 @@ async def get_model(
 ) -> dict:
     gateway = _gateway(request)
     catalog = await gateway.provider_catalog(session)
+    keyed_ids = await _keyed_provider_ids(session)
+    servable_ids = await _servable_provider_ids(session)
     mid = model_id.lstrip("/")
     if mid in ("auto", "auto:coding", "auto:fast"):
-        return {"id": mid, "object": "model", "created": 0, "owned_by": "gateway"}
-    for pname, (_, models) in catalog.items():
+        return {"id": mid, "object": "model", "created": 0, "owned_by": "gateway",
+                "usable": True, "keyed": True, "pricing": None}
+    for pname, (p, models) in catalog.items():
         for m in models:
             if f"{pname}/{m}" == mid or m == mid:
                 return {"id": f"{pname}/{m}", "object": "model", "created": 0,
-                        "owned_by": pname}
+                        "owned_by": pname, "usable": p.id in servable_ids,
+                        "keyed": p.id in keyed_ids,
+                        "pricing": _model_pricing(p, m)}
     return JSONResponse(
         status_code=404,
         content={"error": {"message": f"model '{mid}' not found", "type": "not_found"}},
@@ -112,6 +179,91 @@ async def embeddings(
         content={"error": {"message": "no provider serves this embedding model",
                            "type": "gateway_exhausted"}},
     )
+
+
+@router.get("/experts")
+async def list_experts():
+    """Expert agent registry — the specialists the orchestrator delegates to."""
+    from app.services.experts import all_experts
+
+    return {
+        "experts": [
+            {
+                "name": e.name,
+                "title": e.title,
+                "domain": e.domain,
+                "summary": e.summary,
+                "capabilities": list(e.capabilities),
+                "tools": list(e.tools),
+                "skills": list(e.skills),
+                "model_hint": e.model_hint,
+            }
+            for e in all_experts()
+        ]
+    }
+
+
+@router.get("/skills")
+async def list_skills():
+    """Skill registry — reusable capability modules agents can attach."""
+    from app.services.skills import all_skills
+
+    return {
+        "skills": [
+            {
+                "name": s.name,
+                "version": s.version,
+                "description": s.description,
+                "requires_tools": list(s.requires_tools),
+                "domains": list(s.domains),
+            }
+            for s in all_skills()
+        ]
+    }
+
+
+class OrchestrateRequest(BaseModel):
+    message: str
+    history: list[dict[str, Any]] | None = None
+    model: str = "auto"
+
+
+@router.post("/orchestrate")
+async def orchestrate_endpoint(
+    body: OrchestrateRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Run the multi-agent orchestrator for a message. Non-streaming.
+
+    Returns the final answer plus the execution trace, step results and
+    degradation flags — always a controlled terminal state, never 5xx
+    for pipeline failures.
+    """
+    from app.services.orchestrator import run_orchestrated
+
+    gateway = _gateway(request)
+    events: list[dict] = []
+    res = await run_orchestrated(
+        gateway, session, body.message,
+        history=body.history or [],
+        emit=events.append,
+    )
+    return {
+        "answer": res.answer,
+        "intent": res.intent,
+        "strategy": res.strategy,
+        "degraded": res.degraded,
+        "model": res.model,
+        "steps": [
+            {"step_id": s.step_id, "expert": s.expert, "ok": s.ok,
+             "duration_ms": s.duration_ms, "attempts": s.attempts,
+             "error": s.error}
+            for s in res.steps
+        ],
+        "trace": res.trace,
+        "meta": res.meta,
+    }
 
 
 _REPLAY_DELAY_S = 0.012
@@ -190,6 +342,16 @@ async def chat_completions(
         "",
     )
     conv_id = payload.pop("conversation_id", None)
+    # Usage metering + plan quota (single-tenant mode => 'anon'/free).
+    from app.api.deps import optional_user, subject_for
+    from app.services import usage as _usage
+    _user = await optional_user(request)
+    ok, reason = await _usage.check_quota(
+        session, subject_for(_user), "chat", _user.plan if _user else "free")
+    if not ok:
+        raise HTTPException(status_code=429, detail=reason)
+    await _usage.record(session, subject_for(_user), "chat",
+                        model=str(payload.get("model") or ""))
     try:
         from app.services import astra_memory
         from app.services.agents import get_memory_text
@@ -308,8 +470,23 @@ async def chat_completions(
             except Exception as e:
                 return e
 
+        async def _orch_run():
+            from app.services.orchestrator import run_orchestrated
+
+            try:
+                return await run_orchestrated(
+                    gateway, session, last_user or "",
+                    payload=payload,
+                    history=payload.get("messages") or [],
+                    emit=events.put_nowait,
+                )
+            except Exception as e:
+                return e
+
         if route == "research":
             task = asyncio.create_task(_research_run())
+        elif route == "orchestrate":
+            task = asyncio.create_task(_orch_run())
         elif route == "tools":
             task = asyncio.create_task(_tool_run())
         else:
@@ -332,10 +509,48 @@ async def chat_completions(
                     continue
                 yield _meta(ev)
             res = task.result()
+            if route == "orchestrate":
+                from app.services.reliable import last_resort_answer
+
+                if isinstance(res, Exception) or res is None:
+                    answer = last_resort_answer(
+                        last_user, failures=[str(res)[:200]])
+                    trace: list[dict] = []
+                else:
+                    answer = getattr(res, "answer", "") or last_resort_answer(
+                        last_user,
+                        failures=[str(f) for f in
+                                  getattr(res, "meta", {}).get("failures", [])])
+                    trace = getattr(res, "trace", [])
+                yield _meta({"event": "orchestration_done",
+                             "text": f"Orchestration complete "
+                                     f"({getattr(res, 'intent', '?')})",
+                             "trace": trace,
+                             "steps": [{"expert": s.expert, "ok": s.ok}
+                                       for s in getattr(res, "steps", [])]})
+                if last_user:
+                    _remember(gateway, conv_id, last_user, answer)
+                for piece in _stream_pieces(answer):
+                    chunk = {"choices": [{"index": 0, "delta": {"content": piece}}]}
+                    yield f"data: {_json.dumps(chunk)}\n\n".encode()
+                    await asyncio.sleep(_REPLAY_DELAY_S)
+                chunk = {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+                yield f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
+                return
             if route == "research":
                 if isinstance(res, Exception) or res is None:
-                    err = {"error": {"message": str(res), "type": "research_failed", "code": 503}}
-                    yield f"data: {_json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
+                    from app.services.reliable import last_resort_answer
+
+                    answer = last_resort_answer(
+                        last_user, failures=[str(res)[:200]])
+                    yield _meta({"event": "research_done",
+                                 "text": "Research failed — partial answer"})
+                    for piece in _stream_pieces(answer):
+                        chunk = {"choices": [{"index": 0, "delta": {"content": piece}}]}
+                        yield f"data: {_json.dumps(chunk)}\n\n".encode()
+                        await asyncio.sleep(_REPLAY_DELAY_S)
+                    chunk = {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+                    yield f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
                     return
                 answer = getattr(res, "answer", None) or ""
                 if payload.get("nova_structured", True) and answer:
@@ -362,8 +577,18 @@ async def chat_completions(
                 return
             if route == "tools":
                 if isinstance(res, Exception) or not isinstance(res, dict):
-                    err = {"error": {"message": str(res), "type": "gateway_exhausted", "code": 503}}
-                    yield f"data: {_json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
+                    from app.services.reliable import last_resort_answer
+
+                    answer = last_resort_answer(
+                        last_user, failures=[str(res)[:200]])
+                    yield _meta({"event": "warn",
+                                 "text": "Tool run failed — partial answer"})
+                    for piece in _stream_pieces(answer):
+                        chunk = {"choices": [{"index": 0, "delta": {"content": piece}}]}
+                        yield f"data: {_json.dumps(chunk)}\n\n".encode()
+                        await asyncio.sleep(_REPLAY_DELAY_S)
+                    chunk = {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+                    yield f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
                     return
                 if payload.get("nova_structured", True):
                     from app.services.component_enforce import enforce_components

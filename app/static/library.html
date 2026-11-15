@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Library — Nova</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  .lb-grid{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
+  @media(max-width:860px){.lb-grid{grid-template-columns:1fr}}
+  .lb-hit{border-left:3px solid var(--accent-line);padding:8px 12px;margin-bottom:8px;background:var(--surface-2);border-radius:0 var(--r-md) var(--r-md) 0}
+</style>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page" style="max-width:1150px">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
+      <div><h1>Knowledge Library</h1><div class="sub">Collections, documents and retrieval</div></div>
+    </div>
+
+    <div class="ui-card ui-card-pad" style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap">
+      <input id="sq" class="ui-input" style="flex:1;min-width:240px" placeholder="Search your documents…">
+      <select id="scol" class="ui-select" style="width:180px"><option value="">All collections</option></select>
+      <button class="ui-btn ui-btn-primary" id="searchBtn">Search</button>
+    </div>
+    <div id="hits"></div>
+
+    <div class="lb-grid">
+      <div>
+        <div class="sec-title">Collections</div>
+        <div class="ui-card ui-card-pad" style="margin-bottom:10px;display:flex;gap:8px">
+          <input id="cname" class="ui-input" placeholder="New collection" style="flex:1">
+          <button class="ui-btn ui-btn-primary ui-btn-sm" id="addCol">Add</button>
+        </div>
+        <div class="ui-card" id="cols" style="padding:6px"></div>
+      </div>
+      <div>
+        <div class="sec-title">Documents</div>
+        <div class="ui-card ui-card-pad" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="file" id="file" class="ui-input" style="flex:1;min-width:200px"
+            accept=".txt,.md,.markdown,.csv,.json,.html,.htm,.pdf,.docx">
+          <select id="dcol" class="ui-select" style="width:170px"><option value="">No collection</option></select>
+          <button class="ui-btn ui-btn-primary ui-btn-sm" id="upBtn">Upload</button>
+        </div>
+        <div class="ui-table-scroll"><table class="ui-table" id="docs"><thead><tr>
+          <th>Name</th><th>Type</th><th>Size</th><th>Chunks</th><th>Status</th><th style="text-align:right"></th>
+        </tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/library.js"></script>
+</body>
+</html>

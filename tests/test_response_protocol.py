@@ -247,6 +247,7 @@ def test_flowchart_is_allowlisted_and_prompt_teaches_when_to_use_it():
         }],
     })
     assert env.components[0].type == ComponentType.FLOWCHART
+    from app.response_protocol import structured_system_prompt
     prompt = structured_system_prompt()
     assert "architecture_diagram" in prompt
     assert "flowchart" in prompt

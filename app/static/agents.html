@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Agents — Nova</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  .ag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+  .ag-domain{font-size:10px;padding:2px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-line);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .ag-skill{font-size:10px;padding:2px 7px;border-radius:99px;background:var(--surface-3);color:var(--text-3)}
+</style>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page" style="max-width:1150px">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
+      <div><h1>Agent Directory</h1><div class="sub">Specialist experts you can delegate work to</div></div>
+      <div class="acts">
+        <input id="filter" class="ui-input" placeholder="Filter…" style="width:180px">
+      </div>
+    </div>
+    <div class="ag-grid" id="grid"></div>
+  </div>
+</main>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/agents.js"></script>
+</body>
+</html>

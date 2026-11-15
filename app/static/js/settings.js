@@ -162,3 +162,42 @@ async function delMem(id){
 
 window.addEventListener('admin-ready',()=>{loadProviders();loadSys();loadMem();loadCI();});
 if(innerWidth<=820)document.getElementById('menuBtn').style.display='grid';
+
+/* ---- Account (user auth + plan + usage) ---- */
+function _auShow(logged){
+  document.getElementById('acctLoggedOut').style.display=logged?'none':'';
+  document.getElementById('acctLoggedIn').style.display=logged?'':'none';
+}
+async function loadAccount(){
+  try{
+    const d=await v1Api('/v1/auth/me');
+    if(!d.user){_auShow(false);return;}
+    _auShow(true);
+    document.getElementById('au_disp').textContent=d.user.display_name||d.user.username;
+    document.getElementById('au_avatar').textContent=(d.user.username||'?')[0].toUpperCase();
+    document.getElementById('au_plan').textContent=d.plan;
+    document.getElementById('au_role').textContent=d.user.role;
+    const u=await v1Api('/v1/auth/usage');
+    const bk=u.by_kind||{};
+    document.getElementById('au_usage').innerHTML=Object.entries(bk).map(([k,v])=>
+      `<span><b>${v.events}</b> ${k} · ${v.tokens_in+v.tokens_out} tok</span>`).join('')
+      ||'<span class="tx-3">No usage yet</span>';
+  }catch(_){_auShow(false);}
+}
+async function _auth(path){
+  const body={username:document.getElementById('au_name').value.trim(),
+              password:document.getElementById('au_pass').value};
+  try{
+    const d=await v1Api(path,{method:'POST',body:JSON.stringify(body)});
+    USER_TOKEN=d.token;localStorage.setItem('nova_user_token',d.token);
+    document.getElementById('au_err').textContent='';
+    toast('Signed in as '+d.user.username,'ok');loadAccount();
+  }catch(e){document.getElementById('au_err').textContent=e.message;}
+}
+document.getElementById('loginBtn').onclick=()=>_auth('/v1/auth/login');
+document.getElementById('regBtn').onclick=()=>_auth('/v1/auth/register');
+document.getElementById('logoutBtn').onclick=async()=>{
+  try{await v1Api('/v1/auth/logout',{method:'POST'});}catch(_){}
+  USER_TOKEN='';localStorage.removeItem('nova_user_token');loadAccount();toast('Signed out');
+};
+loadAccount();

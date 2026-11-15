@@ -40,6 +40,7 @@ class ResponseType(str, Enum):
     """Top-level response categories the frontend knows how to render."""
 
     GENERAL = "general"
+    DEFINITION = "definition"
     CODE = "code"
     TABLE = "table"
     LIST = "list"

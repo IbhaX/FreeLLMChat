@@ -28,7 +28,10 @@ def test_convert_success_uses_fast_model_without_tools():
     out = asyncio.run(renderer.convert_to_components(gw, None, MD))
     assert out == ENV
     sent = gw.calls[0]
-    assert sent["model"] == renderer.renderer_model()
+    # first try uses the first fast-role candidate, never bare "auto"
+    from app.services.model_policy import stage_models
+    assert sent["model"] == stage_models("auto:fast", role="fast")[0]
+    assert not sent["model"].startswith("auto")
     assert sent["stream"] is False and sent["temperature"] == 0
     assert "tools" not in sent
     # conversation shape: system, assistant original, user instruction last

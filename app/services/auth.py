@@ -1,0 +1,144 @@
+"""User authentication: accounts, opaque session tokens, plan context.
+
+Optional by design — when ``NOVA_AUTH_REQUIRED`` is false (the default for
+local installs) every request resolves to an anonymous local context and all
+existing single-tenant behavior is preserved. When enabled, protected
+endpoints require a bearer token issued by ``/v1/auth/login``.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
+
+from sqlalchemy import select
+
+from app.models import AuthToken, User
+
+TOKEN_TTL_DAYS = int(os.environ.get("NOVA_TOKEN_TTL_DAYS", "30"))
+AUTH_REQUIRED = os.environ.get("NOVA_AUTH_REQUIRED", "").lower() in ("1", "true", "yes")
+
+MIN_USERNAME = 3
+MIN_PASSWORD = 8
+
+def _prehash(password: str) -> bytes:
+    """SHA-256 pre-hash: bcrypt's 72-byte cap + uniform input length."""
+    return hashlib.sha256(password.encode("utf-8")).digest()
+
+
+def hash_password(password: str) -> str:
+    import bcrypt
+    return bcrypt.hashpw(_prehash(password), bcrypt.gensalt()).decode("ascii")
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    import bcrypt
+    try:
+        return bool(bcrypt.checkpw(_prehash(password), hashed.encode("ascii")))
+    except Exception:
+        return False
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def create_user(session: Any, username: str, password: str,
+                      email: str = "", display_name: str = "") -> User:
+    username = (username or "").strip().lower()
+    if len(username) < MIN_USERNAME:
+        raise ValueError(f"username must be at least {MIN_USERNAME} characters")
+    if len(password or "") < MIN_PASSWORD:
+        raise ValueError(f"password must be at least {MIN_PASSWORD} characters")
+    existing = (await session.execute(
+        select(User).where(User.username == username))).scalar_one_or_none()
+    if existing:
+        raise ValueError("username is already taken")
+    # First account becomes admin of the install.
+    first = (await session.execute(
+        select(User.id).limit(1))).scalar_one_or_none() is None
+    user = User(
+        username=username, email=(email or "").strip(),
+        password_hash=hash_password(password),
+        display_name=(display_name or "").strip() or username,
+        role="admin" if first else "user",
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
+async def authenticate(session: Any, username: str, password: str) -> Optional[User]:
+    user = (await session.execute(
+        select(User).where(
+            User.username == (username or "").strip().lower())
+    )).scalar_one_or_none()
+    if not user or user.disabled or not verify_password(password, user.password_hash):
+        return None
+    return user
+
+
+async def issue_token(session: Any, user: User) -> str:
+    token = secrets.token_urlsafe(32)
+    session.add(AuthToken(
+        user_id=user.id, token_hash=_hash_token(token),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=TOKEN_TTL_DAYS)))
+    await session.flush()
+    return token
+
+
+async def resolve_token(session: Any, token: str) -> Optional[User]:
+    if not token:
+        return None
+    row = (await session.execute(
+        select(AuthToken).where(AuthToken.token_hash == _hash_token(token)))
+    ).scalar_one_or_none()
+    if not row or row.revoked:
+        return None
+    now = datetime.now(timezone.utc)
+    exp = row.expires_at
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < now:
+        return None
+    row.last_used_at = now
+    user = await session.get(User, row.user_id)
+    if not user or user.disabled:
+        return None
+    return user
+
+
+async def revoke_token(session: Any, token: str) -> None:
+    row = (await session.execute(
+        select(AuthToken).where(AuthToken.token_hash == _hash_token(token)))
+    ).scalar_one_or_none()
+    if row:
+        row.revoked = True
+
+
+def bearer_token(authorization: str | None) -> str:
+    if not authorization:
+        return ""
+    parts = authorization.split(None, 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip()
+    return ""
+
+
+# ---------------------------------------------------------------- plans
+
+PLAN_LIMITS: dict[str, dict[str, int]] = {
+    "free": {"requests_per_day": 100, "research_per_day": 5,
+             "documents": 20, "rooms": 5, "collections": 3},
+    "pro": {"requests_per_day": 1000, "research_per_day": 50,
+            "documents": 200, "rooms": 50, "collections": 25},
+    "team": {"requests_per_day": 5000, "research_per_day": 200,
+             "documents": 1000, "rooms": 200, "collections": 100},
+}
+
+
+def plan_limits(plan: str) -> dict[str, int]:
+    return PLAN_LIMITS.get(plan or "free", PLAN_LIMITS["free"])

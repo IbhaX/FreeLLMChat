@@ -28,7 +28,9 @@ TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 _DEEP_RE = re.compile(
     r"\b(compare|comparison|vs\.?|versus|review|survey|analy[sz]e|deep|thoroughly|"
     r"comprehensive|landscape|state of|market|literature|history of|"
-    r"pros and cons|trade-?offs|best \w+ for)\b",
+    r"pros and cons|trade-?offs|best \w+ for|profile|complete|detailed|"
+    r"everything about|all about|deep ?dive|dossier|full picture|"
+    r"tell me (all |everything )?about)\b",
     re.IGNORECASE,
 )
 _EXPLAIN_RE = re.compile(
@@ -40,31 +42,36 @@ _CURRENT_RE = re.compile(
     r"who is|who's|ceo|president|version|rank|forecast|stock|weather)\b",
     re.IGNORECASE,
 )
+# Tiny factual lookups — the ONLY questions allowed to stay "quick" in
+# research mode. Everything else gets real multi-worker coverage.
+_LOOKUP_RE = re.compile(
+    r"\b(price|cost|weather|temperature|time ?zone|capital of|population of|"
+    r"how old|when (was|is|did|does)|who won|convert|exchange rate|"
+    r"score|result of|stock price|release date)\b",
+    re.IGNORECASE,
+)
 
 
 def classify_depth(question: str, history: list[dict[str, Any]] | None = None) -> str:
     """Cheap rule-based router — no extra LLM call (saves a full round trip).
 
-    ``quick``: one fact/definition; ``standard``: focused question needing a
-    few sources; ``deep``: comparisons, reviews, multi-part or current-state
-    questions that need a fan-out.
+    ``quick`` is reserved for tiny factual lookups (a price, a date, a
+    capital). Everything else in research mode gets at least ``standard``
+    multi-worker coverage; ``deep`` for comparisons, profiles, reviews and
+    broad open-ended questions.
     """
     q = (question or "").strip()
     words = len(q.split())
     if history and re.search(r"\b(it|that|this|they|he|she|above|previous)\b", q, re.I):
         # Follow-up: reuse prior depth when it refers to earlier turns.
         return "standard"
-    expl = bool(_EXPLAIN_RE.search(q))
-    if words <= 6 and not _DEEP_RE.search(q) and not _CURRENT_RE.search(q) \
-            and not expl:
-        return "quick"
     if _DEEP_RE.search(q) or words >= 25:
         return "deep"
     if _CURRENT_RE.search(q):
         return "standard"
-    if words > 12 or expl:
-        return "standard"
-    return "quick"
+    if _LOOKUP_RE.search(q) and words <= 12:
+        return "quick"
+    return "standard"
 
 
 # ---------------------------------------------------------------- agents
@@ -99,10 +106,23 @@ Turn the user's question into a research plan. Output JSON only:
 }}
 
 Principles:
-- 3-6 sub-questions for deep, 1-3 for standard. Each must be independently answerable.
-- Cover multiple angles: the mainstream view, the strongest dissent, quantitative evidence, recency.
-- Include one sub-question that looks for counter-evidence or what could make the leading answer wrong.
-- Anything about the current state of the world (roles, prices, laws, versions, rankings) must be searched, however familiar it feels.
+- Spawn one worker per ASPECT of the topic — as many as needed for a
+  complete picture (each is independently answerable). Examples:
+  person -> identity & background, education, career history, current
+    role & employer, projects & technical work, public presence &
+    profiles, publications/talks/patents, news mentions, community &
+    open-source activity, any controversies;
+  product/company -> what it is, history & founders, how it works,
+    business model & pricing, competitors, reception & reviews,
+    controversies, recent news, outlook;
+  topic/event -> definition & context, timeline, key actors, evidence &
+    data, mainstream view, strongest dissent, consequences, outlook.
+- Cover multiple angles: the mainstream view, the strongest dissent,
+  quantitative evidence, recency.
+- Include one sub-question that looks for counter-evidence or what could
+  make the leading answer wrong.
+- Anything about the current state of the world (roles, prices, laws,
+  versions, rankings) must be searched, however familiar it feels.
 - Do not write the answer. Plan only.
 """
 
@@ -172,8 +192,21 @@ Use ONLY the findings. Do not add facts from memory that lack a source.
 ## Answer first
 Open with the direct answer in 1-3 sentences. Then support it. No preamble, no restating the question.
 
+## Depth mandate
+Write the MOST COMPLETE account the evidence supports — a full report,
+not a summary. Cover every aspect that produced findings, each in its
+own section. For a person or broad topic the report should be thorough
+and dense: aim for 1,000+ words when the findings support it. Do not
+compress distinct findings into one line; give each fact its place.
+
 ## Format
-Choose what fits the content: short prose for a simple question; a report with Summary, Key findings, Evidence and analysis, Disagreements and uncertainty, What to watch for a broad topic; a comparison table for options; a timeline for history; a chart component for numbers or trends.
+Always a structured report for researched questions: `## Summary`,
+`## Background`, one `##` section per aspect (career, projects,
+presence, news — whatever the findings cover), `## Disagreements and
+uncertainty`, `## What to watch`. Use tables for attribute/fact lists,
+a markdown timeline for dated events, a comparison table for options,
+bullet lists for enumerations. Only fall back to plain prose when
+there is genuinely little to say.
 
 ## Evidence standards
 - Every factual claim gets a citation [n] where n is the position (1-based) of its source in the source list below.
@@ -191,9 +224,54 @@ Choose what fits the content: short prose for a simple question; a report with S
 - Paraphrase sources. At most one short quote (under 15 words) per source.
 
 ## End
-Finish with: **Confidence**: high/medium/low and why; **Limits**: what was not covered or could not be confirmed; **Follow-ups**: 2-3 specific questions the user is likely to want next.
+Finish the markdown with: **Confidence**: high/medium/low and why; **Limits**: what was not covered or could not be confirmed.
 
-Output format: write the answer as normal text/markdown. Do NOT wrap it in a code fence or JSON — the UI renders markdown directly.
+## Structured metadata block
+After the markdown, append exactly one fenced block tagged `nova-response`
+carrying a JSON object. The markdown above stays the displayed answer —
+this block only feeds the UI's rich components:
+
+```nova-response
+{{
+  "response_type": "search_results",
+  "components": [
+    {{"type": "person_card", "data": {{"name": "...", "description": "role · org · location", "extract": "1-2 sentence bio", "url": "primary profile URL"}}}},
+    {{"type": "keyvalue", "data": {{"title": "At a glance", "pairs": [{{"key": "Role", "value": "..."}}]}}}},
+    {{"type": "callout", "data": {{"variant": "info", "title": "Confidence", "message": "..."}}}}
+  ],
+  "sources": [{{"title": "...", "url": "...", "source": "publisher"}}],
+  "suggested_prompts": ["follow-up question", "another follow-up"]
+}}
+```
+
+Component rules:
+- 1-4 components, only types the UI can render. Pick what fits the answer:
+  person/entity -> person_card + keyvalue; history/milestones -> timeline
+  {{"type":"timeline","data":{{"events":[{{"date":"","title":"","description":""}}]}}}};
+  numbers/trends -> chart
+  {{"type":"chart","data":{{"chart_type":"bar|line|pie","title":"","data":[{{"x":1,"y":2}}]}}}};
+  quick stats -> stat_grid {{"type":"stat_grid","data":{{"stats":[{{"label":"","value":""}}]}}}};
+  options side-by-side -> comparison; caveat/evidence strength -> callout.
+- sources: the top 3-6 cited sources (title + url required).
+- suggested_prompts: 2-3 specific follow-up questions (do NOT also list
+  them in the markdown — the UI renders them as chips).
+- Omit keys you have nothing for. The JSON MUST parse — if you cannot
+  emit valid JSON, omit the fence entirely. Never emit a broken block.
+"""
+
+
+SECTION_WRITER_PROMPT = f"""You are one section writer on a research team. Today's date is {TODAY}.
+
+You are given: the user's question, ONE aspect of the topic, the verified findings for that aspect, and the numbered source list.
+
+Write ONLY this section of the report:
+- Start with a `##` heading naming the aspect, then dense, detailed prose.
+- Use ONLY the findings provided. Never invent facts, numbers, dates or sources.
+- Every factual claim cites its source as [n] using the source list numbers.
+- Cover every finding fully — do not compress distinct facts into one line. Target ~900-1,200 words; use `###` sub-headings, bullet lists and small tables where they fit. Elaborate mechanisms, numbers, causes and consequences for each finding rather than listing it once.
+- Exact figures with units, dates, and "as of" qualifiers.
+- Separate fact from inference ("This suggests…"). Mark what the evidence could not confirm.
+- Do NOT write a report introduction or conclusion — only this section.
 """
 
 
@@ -263,28 +341,43 @@ def _extract_json(text: str) -> Any:
 
 
 async def _call(
-    gateway: Any, session: Any, model: str, messages: list[dict[str, Any]],
+    gateway: Any, session: Any, model: str | list[str],
+    messages: list[dict[str, Any]],
     *, system: str | None = None, json_mode: bool = False,
+    max_tokens: int | None = None,
     on_event: Emit | None = None,
 ) -> str:
-    payload: dict[str, Any] = {
-        "model": model,
-        "messages": ([{"role": "system", "content": system}] if system else []) + messages,
-        "stream": False,
-        "temperature": 0.2,
-    }
-    if json_mode:
-        payload["response_format"] = {"type": "json_object"}
+    """One LLM call across an ordered candidate list: strong concrete
+    models first, ``auto`` sweep as last resort. Returns "" when every
+    candidate fails or replies empty."""
+    candidates = [model] if isinstance(model, str) else list(model)
     emit = on_event or (lambda ev: None)
-    try:
-        result, _p, _k, _m = await asyncio.wait_for(
-            gateway.chat(session, payload, on_event=emit), timeout=180
-        )
-    except Exception as e:
-        emit({"event": "note", "text": f"research step failed: {str(e)[:120]}"})
-        return ""
-    msg = ((result.get("choices") or [{}])[0]).get("message", {})
-    return text_of(msg.get("content"))
+    for cand in candidates:
+        payload: dict[str, Any] = {
+            "model": cand,
+            "messages": ([{"role": "system", "content": system}] if system else []) + messages,
+            "stream": False,
+            "temperature": 0.2,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+        try:
+            result, _p, _k, _m = await asyncio.wait_for(
+                gateway.chat(session, payload, on_event=emit), timeout=180
+            )
+        except Exception as e:
+            emit({"event": "note",
+                  "text": f"research step failed ({cand}): {str(e)[:120]}"})
+            continue
+        msg = ((result.get("choices") or [{}])[0]).get("message", {})
+        text = text_of(msg.get("content"))
+        if text.strip():
+            return text
+        emit({"event": "note",
+              "text": f"empty reply from {cand} — trying next model"})
+    return ""
 
 
 def text_of(content: Any) -> str:
@@ -410,7 +503,7 @@ async def _plan(
     history: list[dict[str, Any]], emit: Emit,
     prior: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    n = {"quick": 1, "standard": 3, "deep": 6}[depth]
+    n = {"quick": 2, "standard": 8, "deep": 14}[depth]
     hist = "\n".join(
         f"{m.get('role')}: {str(m.get('content'))[:500]}" for m in (history or [])[-6:]
     )
@@ -443,15 +536,15 @@ async def _plan(
 
 
 async def _research_one(
-    gateway: Any, session: Any, model: str, sq: dict[str, Any], depth: str,
-    state: ResearchState, emit: Emit,
+    gateway: Any, session: Any, model: str | list[str], sq: dict[str, Any],
+    depth: str, state: ResearchState, emit: Emit,
 ) -> None:
     from app.services.tools import run_tool_loop
 
     qid = str(sq.get("id") or f"q{len(state.findings) + 1}")
     question = str(sq.get("question") or "")
     queries = _norm_queries(sq.get("search_queries")) or [question]
-    calls = {"quick": 3, "standard": 6, "deep": 8}[depth]
+    calls = {"quick": 4, "standard": 8, "deep": 12}[depth]
     system = RESEARCHER_SYSTEM.replace("{max_calls}", str(calls))
     user = (
         f"Sub-question ({qid}): {question}\n"
@@ -489,22 +582,30 @@ async def _research_one(
         factory = get_session_factory()
     except Exception:
         factory = None
-    try:
-        if factory is not None:
-            async with factory() as own:
+
+    candidates = [model] if isinstance(model, str) else list(model)
+    result: dict[str, Any] | None = None
+    for cand in candidates:
+        payload["model"] = cand
+        try:
+            if factory is not None:
+                async with factory() as own:
+                    result = await run_tool_loop(
+                        gateway, own, payload, ["web_search", "http_get"],
+                        emit=collect_emit, max_rounds=5, call_timeout=240,
+                        tool_output_hook=harvest,
+                    )
+            else:
                 result = await run_tool_loop(
-                    gateway, own, payload, ["web_search", "http_get"],
+                    gateway, session, payload, ["web_search", "http_get"],
                     emit=collect_emit, max_rounds=5, call_timeout=240,
                     tool_output_hook=harvest,
                 )
-        else:
-            result = await run_tool_loop(
-                gateway, session, payload, ["web_search", "http_get"],
-                emit=collect_emit, max_rounds=5, call_timeout=240,
-                tool_output_hook=harvest,
-            )
-    except Exception as e:
-        emit({"event": "note", "text": f"{qid} failed: {str(e)[:120]}"})
+            break
+        except Exception as e:
+            emit({"event": "note",
+                  "text": f"{qid} failed ({cand}): {str(e)[:120]}"})
+    if result is None:
         return
     text = text_of(((result.get("choices") or [{}])[0]).get("message", {}).get("content"))
     data = _extract_json(text)
@@ -597,7 +698,8 @@ async def _gap_check(
     gateway: Any, session: Any, model: str, state: ResearchState, emit: Emit,
 ) -> list[dict[str, Any]] | None:
     """Returns gaps needing a follow-up round, or None when complete."""
-    if state.depth != "deep" or state.rounds >= 2:
+    max_rounds = {"quick": 0, "standard": 1, "deep": 3}[state.depth]
+    if state.rounds >= max_rounds:
         return None
     emit({"event": "stage", "text": "Checking coverage…", "stage": "gap",
           "agent": "gap_checker"})
@@ -652,12 +754,164 @@ async def _verify(
                           if isinstance(v, dict)]
     by_id = {str(v.get("claim_id")): v for v in state.verdicts}
     bad = {"unsupported", "contradicted"}
-    for i, f in enumerate(state.findings[:40]):
+    for i, f in enumerate(state.findings[:80]):
         v = by_id.get(f"c{i}") or {}
         f.verdict = str(v.get("verdict") or "")
         f.verdict_note = str(v.get("note") or "")
         if f.verdict.lower() in bad:
             state.unverified.append(f"{f.claim[:160]} — {f.verdict}")
+
+
+def _group_findings(state: ResearchState) -> list[dict[str, Any]]:
+    """Group findings by the sub-question (worker) that produced them, in
+    plan order — each group becomes one report section."""
+    order = [str(sq.get("id")) for sq in state.plan.get("sub_questions") or []]
+    titles = {
+        str(sq.get("id")): str(sq.get("question") or sq.get("id") or "")[:80]
+        for sq in state.plan.get("sub_questions") or []
+    }
+    groups: dict[str, dict[str, Any]] = {}
+    for f in state.findings:
+        key = f.sub_question or "general"
+        g = groups.setdefault(key, {"title": titles.get(key) or key.replace("_", " "),
+                                    "findings": []})
+        g["findings"].append(f)
+    ordered = [groups[k] for k in order if k in groups]
+    ordered += [g for k, g in groups.items() if k not in order]
+    return ordered
+
+
+async def _synthesize_sections(
+    gateway: Any, session: Any, model: str | list[str], question: str,
+    state: ResearchState, groups: list[dict[str, Any]], emit: Emit,
+    custom_instructions: str = "",
+) -> str:
+    """Long-form synthesis: one parallel section writer per research aspect,
+    an executive summary, then a deterministic uncertainty/limitations
+    close. Section count × per-section depth yields a report that goes on
+    for pages instead of a compressed summary."""
+    import contextlib
+
+    from app.db import get_session_factory
+    try:
+        factory = get_session_factory()
+    except Exception:
+        factory = None
+    cands = [model] if isinstance(model, str) else list(model)
+    src_list = sorted(state.sources.values(), key=lambda s: -s.score)
+    src_json = [{"n": i + 1, "id": s.id, "title": s.title, "url": s.url,
+                 "publisher": s.publisher, "date": s.date}
+                for i, s in enumerate(src_list)]
+    section_system = SECTION_WRITER_PROMPT
+    if custom_instructions:
+        from app.services.settings_store import custom_instructions_block
+        section_system += "\n\n" + custom_instructions_block(custom_instructions)
+
+    async def write_section(g: dict[str, Any], *, expand: bool = False) -> str:
+        payload = json.dumps({
+            "question": question, "aspect": g["title"],
+            "findings": [
+                {"claim": f.claim, "evidence": f.evidence,
+                 "source_id": f.source_id, "confidence": f.confidence,
+                 "verdict": f.verdict or "unverified"}
+                for f in g["findings"]],
+            "sources": src_json,
+        }, ensure_ascii=False)[:24000]
+        if expand:
+            payload += ("\n\nThe previous draft of this section was too thin. "
+                        "Write at least 900 words: explain every finding's "
+                        "mechanism, context, numbers and implications in full "
+                        "sentences. Sub-headings and lists are fine, but each "
+                        "item must carry real explanatory depth.")
+        ctx = factory() if factory else contextlib.nullcontext(session)
+        async with ctx as s:
+            return await _call(gateway, s, cands,
+                               [{"role": "user", "content": payload}],
+                               system=section_system, max_tokens=3600)
+
+    async def write_summary() -> str:
+        brief = [{"claim": f.claim, "source_id": f.source_id,
+                  "verdict": f.verdict or "unverified"}
+                 for f in state.findings[:25]]
+        ctx = factory() if factory else contextlib.nullcontext(session)
+        async with ctx as s:
+            t = await _call(gateway, s, cands, [{"role": "user", "content": json.dumps({
+                "question": question,
+                "key_findings": brief, "sources": src_json[:15]},
+                ensure_ascii=False)[:12000]}],
+                system=("You write executive summaries for research reports. "
+                        "Answer the user's question directly in 150-250 words, "
+                        "leading with the single most important finding. Cite "
+                        "sources as [n]. No preamble, no section heading."),
+                max_tokens=800)
+        return t.strip()
+
+    emit({"event": "stage", "text": f"Writing report — {len(groups)} sections",
+          "stage": "synthesize", "agent": "synthesizer"})
+    results = await asyncio.gather(
+        write_summary(),
+        *(write_section(g) for g in groups[:12]),
+    )
+    summary, sections = results[0], [str(t).strip() for t in results[1:]]
+
+    # Bounded expansion pass: thin sections get one retry with an explicit
+    # length mandate — depth comes from findings, not filler.
+    thin = [i for i, (g, t) in enumerate(zip(groups[:12], sections))
+            if 0 < len(t.split()) < 450 and len(g["findings"]) >= 3]
+    if thin:
+        expanded = await asyncio.gather(
+            *(write_section(groups[i], expand=True) for i in thin))
+        for i, t in zip(thin, expanded):
+            if len(t.split()) > len(sections[i].split()):
+                sections[i] = t.strip()
+
+    parts: list[str] = []
+    if summary:
+        parts.append("## Executive summary\n\n" + summary)
+    parts.extend(t for t in sections if t)
+
+    # Deterministic methodology + close — built from real state, not the model.
+    types: dict[str, int] = {}
+    for s in state.sources.values():
+        t = s.type or "web"
+        types[t] = types.get(t, 0) + 1
+    type_line = ", ".join(f"{n} {t}" for t, n in
+                          sorted(types.items(), key=lambda kv: -kv[1]))
+    supported = sum(1 for f in state.findings
+                    if (f.verdict or "").lower() in
+                    ("supported", "partially supported"))
+    parts.append(
+        "## Methodology and evidence base\n\n"
+        f"This report was produced by a multi-agent research pipeline: "
+        f"{len(groups)} specialist researchers each investigated one aspect "
+        f"of the question, collecting {len(state.findings)} findings across "
+        f"{len(state.sources)} sources ({type_line or 'web sources'}) over "
+        f"{state.rounds + 1} research round(s). "
+        f"{supported} findings were corroborated by the verification pass; "
+        "claims that could not be independently confirmed are listed under "
+        "uncertainty below rather than presented as fact. Citations [n] map "
+        "to the numbered source list at the end of the report.")
+
+    close: list[str] = []
+    if state.contradictions:
+        close += [f"- {c}" for c in state.contradictions[:6]]
+    if state.unverified:
+        close += [f"- Could not verify: {u}" for u in state.unverified[:8]]
+    if close:
+        parts.append("## Disagreements and uncertainty\n\n" + "\n".join(close))
+    frac = supported / max(1, len(state.findings))
+    conf = "high" if frac >= 0.7 else "medium" if frac >= 0.4 else "low"
+    parts.append(
+        f"**Confidence**: {conf} — {supported}/{len(state.findings)} findings "
+        f"corroborated across {len(state.sources)} sources.\n\n"
+        f"**Limits**: coverage is bounded by what public sources surface; "
+        f"private or very recent information may be missing.")
+
+    report = "\n\n".join(parts).strip()
+    emit({"event": "note",
+          "text": f"report assembled — ~{len(report.split())} words, "
+                  f"{sum(1 for t in sections if t)} sections"})
+    return report
 
 
 async def _synthesize(
@@ -666,6 +920,19 @@ async def _synthesize(
 ) -> str:
     emit({"event": "stage", "text": "Writing the answer…", "stage": "synthesize",
           "agent": "synthesizer"})
+    groups = _group_findings(state)
+    if state.depth != "quick" and len(state.findings) >= 6 and len(groups) >= 3:
+        try:
+            report = await _synthesize_sections(
+                gateway, session, model, question, state, groups, emit,
+                custom_instructions=custom_instructions)
+        except Exception:
+            report = ""
+        if report.strip():
+            return _ensure_envelope(
+                _repair_envelope(_clean_answer(report, state), state), state)
+        emit({"event": "note",
+              "text": "sectioned synthesis empty — falling back to single pass"})
     src_list = sorted(state.sources.values(), key=lambda s: -s.score)
     findings = [
         {"claim": f.claim, "evidence": f.evidence, "source_id": f.source_id,
@@ -687,9 +954,217 @@ async def _synthesize(
     if custom_instructions:
         from app.services.settings_store import custom_instructions_block
         system += "\n\n" + custom_instructions_block(custom_instructions)
-    answer = await _call(gateway, session, model, msgs, system=system)
+    answer = await _call(gateway, session, model, msgs, system=system,
+                         max_tokens=8192)
     answer = _clean_answer(answer, state)
-    return answer
+    return _ensure_envelope(_repair_envelope(answer, state), state)
+
+
+_ENV_OPEN_RE = re.compile(r"```\s*(nova[\s\-_]*response|json)\s*\n")
+_ENV_CLOSE_TAIL_RE = re.compile(r"\n```\s*$")
+
+
+def _env_tag_norm(tag: str) -> str:
+    """Normalize a possibly-split fence tag for comparison."""
+    return re.sub(r"[\s\-_]", "", tag or "")
+
+
+def _state_sources(state: ResearchState, limit: int = 6) -> list[dict[str, Any]]:
+    """Top-scored sources as envelope ``sources`` entries."""
+    top = sorted(state.sources.values(), key=lambda s: -s.score)[:limit]
+    return [
+        {"title": s.title or s.url or "source", "url": s.url,
+         "source": s.publisher}
+        for s in top
+    ]
+
+
+_PERSON_Q_RE = re.compile(
+    r"(?i:who\s+(?:is|'s|was)\s+|profile\s+of\s+|about\s+)"
+    r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3})")
+
+
+def _state_components(state: ResearchState,
+                      limit: int = 6) -> list[dict[str, Any]]:
+    """Deterministic component floor for research answers.
+
+    Built from real run state only (never fabricated): a ``search_result``
+    carousel of the top sources, a ``person_card`` for who-is questions,
+    and ``callout``s for contradictions / unverified claims. Guarantees
+    research replies render rich UI even when the model ignores the
+    envelope instruction.
+    """
+    top = sorted(state.sources.values(), key=lambda s: -s.score)[:6]
+    comps: list[dict[str, Any]] = []
+
+    pm = _PERSON_Q_RE.search(state.question or "")
+    if pm and top:
+        head = top[0]
+        extract = ""
+        for f in state.findings:
+            if f.claim and f.verdict in ("supported", "partially supported"):
+                extract = f.claim[:240]
+                break
+        comps.append({"type": "person_card", "data": {
+            "name": pm.group(1),
+            "description": head.publisher or head.type or "",
+            "extract": extract,
+            "url": head.url,
+            "source": head.publisher or "research sources"}})
+
+    # Key findings list — the verified backbone of the report.
+    good = [f for f in state.findings
+            if f.claim and (f.verdict or "").lower()
+            not in ("unsupported", "contradicted")]
+    if len(good) >= 3:
+        comps.append({"type": "list", "data": {
+            "title": "Key findings",
+            "items": [f.claim[:220] for f in good[:8]]}})
+
+    # Timeline for date-bearing claims (years found in the evidence).
+    year_re = re.compile(r"\b(19|20)\d{2}\b")
+    events = []
+    for f in good:
+        m = year_re.search(f.claim)
+        if m:
+            events.append({"date": m.group(0), "title": f.claim[:160]})
+        if len(events) >= 8:
+            break
+    if len(events) >= 2:
+        comps.append({"type": "timeline", "data": {
+            "title": "Timeline", "events": events}})
+
+    if top:
+        comps.append({"type": "search_result", "data": {
+            "query": (state.question or "")[:120],
+            "results": [
+                {"title": s.title or s.url or "source", "url": s.url,
+                 "snippet": " · ".join(x for x in (s.publisher, s.date, s.type) if x)}
+                for s in top]}})
+
+    if state.contradictions:
+        comps.append({"type": "callout", "data": {
+            "variant": "warning", "title": "Conflicting sources",
+            "message": state.contradictions[0][:300]}})
+    elif state.unverified:
+        comps.append({"type": "callout", "data": {
+            "variant": "info", "title": "Not independently verified",
+            "message": "; ".join(state.unverified[:3])[:400]}})
+
+    return comps[:limit]
+
+
+def _repair_envelope(answer: str, state: ResearchState) -> str:
+    """Normalize the trailing ``nova-response`` metadata block.
+
+    - parseable envelope JSON -> fill ``response_type``/``sources``/
+      ``suggested_prompts``, drop unknown component types, rewrite as a
+      clean ``nova-response`` fence
+    - unparseable JSON / unterminated ``nova-response`` fence -> strip the
+      block so the markdown answer never shows a raw fence tail
+    - an ordinary trailing ``json`` code block (no envelope keys) is left
+      untouched
+    """
+    from app.response_protocol import ComponentType, ResponseType
+
+    text = (answer or "").rstrip()
+    opens = list(_ENV_OPEN_RE.finditer(text))
+    if not opens:
+        return text
+    last = opens[-1]
+    tag = last.group(1)
+    tail = _ENV_CLOSE_TAIL_RE.search(text)
+    inner = text[last.end():tail.start()] if tail else text[last.end():]
+    try:
+        obj = json.loads(inner.strip())
+    except Exception:
+        obj = None
+    if isinstance(obj, dict) and (
+        _env_tag_norm(tag) == "novaresponse"
+        or "response_type" in obj or "components" in obj
+    ):
+        valid_rt = {r.value for r in ResponseType}
+        rt = str(obj.get("response_type") or "general")
+        obj["response_type"] = rt if rt in valid_rt else "general"
+        valid_ct = {c.value for c in ComponentType}
+        comps = obj.get("components")
+        if isinstance(comps, list):
+            obj["components"] = [
+                c for c in comps
+                if isinstance(c, dict)
+                and str(c.get("type")) in valid_ct
+            ]
+        else:
+            obj.pop("components", None)
+        if not obj.get("components"):
+            floor = _state_components(state)
+            if floor:
+                obj["components"] = floor
+        if not obj.get("sources"):
+            srcs = _state_sources(state)
+            if srcs:
+                obj["sources"] = srcs
+        if not obj.get("suggested_prompts"):
+            prompts = _extract_followups(text[: last.start()])
+            if prompts:
+                obj["suggested_prompts"] = prompts
+        prose = text[: last.start()].rstrip()
+        body = json.dumps(obj, ensure_ascii=False, indent=1)
+        fence = f"```nova-response\n{body}\n```"
+        return f"{prose}\n\n{fence}" if prose else fence
+    if _env_tag_norm(tag) == "novaresponse":
+        # Broken envelope — drop the fence, keep the markdown answer.
+        return text[: last.start()].rstrip()
+    return text
+
+
+_FOLLOWUP_RE = re.compile(
+    r"(?:^|\n)\s*(?:#{1,4}\s*|\*\*|__)?\s*"
+    r"(?:follow[\- ]?ups?|you (?:may|might) (?:also )?(?:want to )?(?:ask|explore)"
+    r"|related questions?)"
+    r"\s*:?\s*(?:\*\*|__)?\s*:?\s*\n((?:\s*(?:[-*•]|\d+[.)])\s+.+\n?)+)",
+    re.I,
+)
+
+
+def _extract_followups(text: str) -> list[str]:
+    """Pull follow-up questions out of a markdown tail, if the model
+    still wrote one (older-style answers)."""
+    m = _FOLLOWUP_RE.search(text or "")
+    if not m:
+        return []
+    out = [
+        re.sub(r"^\s*(?:[-*•]|\d+[.)])\s+", "", line).strip().rstrip(".")
+        for line in m.group(1).strip().split("\n")
+    ]
+    return [q for q in out if len(q) > 8][:3]
+
+
+def _ensure_envelope(answer: str, state: ResearchState) -> str:
+    """Guarantee the answer carries a ``nova-response`` block. If the model
+    did not emit one, append a deterministic metadata fence built from the
+    run's real sources so research answers always get the rich UI."""
+    text = answer.rstrip()
+    if re.search(r"```\s*nova[\s\-_]*response\b", text):
+        return text
+    if re.search(r"```json\s*\n[\s\S]*response_type", text):
+        return text
+    envelope: dict[str, Any] = {"response_type": "search_results"}
+    comps = _state_components(state)
+    if comps:
+        envelope["components"] = comps
+    srcs = _state_sources(state)
+    if srcs:
+        envelope["sources"] = srcs
+    prompts = _extract_followups(text)
+    if prompts:
+        envelope["suggested_prompts"] = prompts
+    if len(envelope) == 1:
+        return text
+    return (
+        f"{text}\n\n```nova-response\n"
+        f"{json.dumps(envelope, ensure_ascii=False, indent=1)}\n```"
+    )
 
 
 _TOOL_BLOB_RE = re.compile(r"<tool_call>.*?</tool_call>", re.DOTALL)
@@ -737,9 +1212,30 @@ def _clean_answer(answer: str, state: ResearchState) -> str:
     return text
 
 
-def _stage_model(stage: str, default: str) -> str:
-    """Per-stage model override, e.g. RESEARCH_RESEARCHER_MODEL=auto:coding."""
-    return os.environ.get(f"RESEARCH_{stage.upper()}_MODEL") or default
+_STAGE_ROLES = {
+    "planner": "reasoning",
+    "researcher": "general",
+    "checker": "fast",
+    "verifier": "reasoning",
+    "synth": "reasoning",
+}
+
+
+def _stage_model(stage: str, default: str) -> list[str]:
+    """Ordered model candidates for a stage.
+
+    ``RESEARCH_<STAGE>_MODEL`` env override wins; an explicit (non-auto)
+    request model is honored verbatim; otherwise the stage's preferred
+    strong models are tried first with ``auto`` as the last-resort
+    backstop — internal stages never default to whatever ``auto`` lands
+    on (which can be a tiny local model that fabricates).
+    """
+    env = os.environ.get(f"RESEARCH_{stage.upper()}_MODEL")
+    if env:
+        return [env]
+    from app.services.model_policy import stage_models
+
+    return stage_models(default, role=_STAGE_ROLES.get(stage, "general"))
 
 
 _CITE_RE = re.compile(r"\[(\d{1,3})\]")
@@ -824,13 +1320,33 @@ async def run_research(
                 if u not in seen:
                     seen.append(u)
 
-        payload = {"model": model, "messages": messages, "stream": False}
-        res = await run_tool_loop(gateway, session, payload,
-                                  ["web_search", "http_get"], emit=emit,
-                                  max_rounds=3, call_timeout=120,
-                                  tool_output_hook=harvest)
-        state.answer = text_of(((res.get("choices") or [{}])[0]).get("message", {}).get("content"))
-        state.meta = {"depth": "quick", "sources": len(seen), "findings": 0, "rounds": 0}
+        res: dict[str, Any] | None = None
+        answer = ""
+        for cand in _stage_model("researcher", model):
+            try:
+                payload = {"model": cand, "messages": messages,
+                           "stream": False}
+                res = await run_tool_loop(gateway, session, payload,
+                                          ["web_search", "http_get"],
+                                          emit=emit, max_rounds=3,
+                                          call_timeout=120,
+                                          tool_output_hook=harvest)
+                answer = text_of(
+                    ((res.get("choices") or [{}])[0])
+                    .get("message", {}).get("content"))
+                if answer.strip():
+                    break
+            except Exception as e:
+                emit({"event": "note",
+                      "text": f"quick path failed ({cand}): {str(e)[:120]}"})
+        # Harvested URLs become first-class sources so even the quick path
+        # carries a sources block for the UI.
+        for i, u in enumerate(seen[:8]):
+            state.sources[f"q{i + 1}"] = Source(
+                id=f"q{i + 1}", url=u, title=u, type="web", score=1.0)
+        state.answer = _ensure_envelope(
+            _repair_envelope(_clean_answer(answer, state), state), state)
+        state.meta = {"depth": "quick", "sources": len(state.sources), "findings": 0, "rounds": 0}
         emit({"event": "research_done", "text": "Quick answer ready",
               **state.meta})
         return state

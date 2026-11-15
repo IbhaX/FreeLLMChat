@@ -77,8 +77,15 @@ def test_undecryptable_key_flagged():
         import asyncio
 
         async def corrupt():
+            from app.models import Provider
+
             async with get_session_factory()() as s:
-                k = (await s.execute(select(ApiKey))).scalars().first()
+                groq = (await s.execute(
+                    select(Provider).where(Provider.name == "groq")
+                )).scalar_one()
+                k = (await s.execute(
+                    select(ApiKey).where(ApiKey.provider_id == groq.id)
+                )).scalars().first()
                 k.encrypted_key = "gAAAAAB" + "x" * 100
                 await s.commit()
 

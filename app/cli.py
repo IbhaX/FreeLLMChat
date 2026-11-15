@@ -11,7 +11,7 @@ import webbrowser
 
 import uvicorn
 
-PORT = int(os.environ.get("PORT", "8000"))
+PORT = int(os.environ.get("PORT", "5000"))
 HOST = "127.0.0.1"
 
 

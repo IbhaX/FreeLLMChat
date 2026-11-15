@@ -81,3 +81,107 @@ def test_quality_check_citations():
     assert q["bad_citations"] == [2, 9]
     assert q["citations"] == 3
     assert q["urls_checked"] == 0
+
+
+class _FakeGateway:
+    def __init__(self, text: str = "## Aspect\n\n" + "word " * 600):
+        self.text = text
+        self.calls: list[str] = []
+
+    async def chat(self, session, payload, **kw):
+        self.calls.append(payload["messages"][0]["content"][:60])
+        return ({"choices": [{"message": {"content": self.text}}]},
+                "fake", None, "fake/model")
+
+
+def _state_with_findings(n_per_sq: int = 3) -> R.ResearchState:
+    st = R.ResearchState()
+    st.question = "What is photosynthesis?"
+    st.depth = "standard"
+    st.plan = {"sub_questions": [{"id": f"sq{i}", "question": f"aspect {i}?"}
+                                 for i in range(1, 4)]}
+    for sq in st.plan["sub_questions"]:
+        for j in range(n_per_sq):
+            st.findings.append(R.Finding(
+                claim=f"claim {sq['id']}-{j} " + "detail " * 30,
+                evidence="e", source_id="s1", confidence="high",
+                sub_question=str(sq["id"]), verdict="supported"))
+    st.sources["s1"] = R.Source(id="s1", title="T", url="https://x",
+                                publisher="P", date="", type="primary")
+    st.contradictions = ["a says X, b says Y"]
+    return st
+
+
+def test_classify_depth_short_questions():
+    assert R.classify_depth("what is life?") == "standard"
+    assert R.classify_depth("what is lofe?") == "standard"
+    assert R.classify_depth("who is Albin Anthony Nagarro") == "standard"
+    assert R.classify_depth("capital of france") == "quick"
+    assert R.classify_depth("find me details about albin anthony") == "standard"
+
+
+def test_group_findings_plan_order():
+    st = _state_with_findings()
+    groups = R._group_findings(st)
+    assert len(groups) == 3
+    assert [g["title"] for g in groups] == ["aspect 1?", "aspect 2?", "aspect 3?"]
+    assert all(len(g["findings"]) == 3 for g in groups)
+    # findings for unknown sub-questions land at the end, not dropped
+    st.findings.append(R.Finding(claim="x", evidence="", source_id="s1",
+                                 sub_question="other"))
+    assert len(R._group_findings(st)) == 4
+
+
+def test_synthesize_sections_assembles_report():
+    import asyncio
+    st = _state_with_findings()
+    gw = _FakeGateway()
+    report = asyncio.run(R._synthesize_sections(
+        gw, None, ["fake/model"], st.question, st,
+        R._group_findings(st), lambda ev: None))
+    assert "## Executive summary" in report
+    assert "Disagreements and uncertainty" in report
+    assert "Confidence" in report
+    # summary + 3 section writers fired in parallel; 600-word sections
+    # are above the thin threshold so no expansion pass fires
+    assert len(gw.calls) == 4
+    assert len(report.split()) > 1000
+    assert "Methodology and evidence base" in report
+
+
+def test_synthesize_sections_expands_thin_sections():
+    import asyncio
+    st = _state_with_findings()
+    gw = _FakeGateway(text="## Thin\n\n" + "word " * 120)
+    report = asyncio.run(R._synthesize_sections(
+        gw, None, ["fake/model"], st.question, st,
+        R._group_findings(st), lambda ev: None))
+    # summary + 3 sections + 3 expansion retries
+    assert len(gw.calls) == 7
+    assert "Disagreements and uncertainty" in report
+
+
+def test_synthesize_uses_sectioned_path(monkeypatch):
+    import asyncio
+    st = _state_with_findings()
+    gw = _FakeGateway()
+    out = asyncio.run(R._synthesize(
+        gw, None, ["fake/model"], st.question, st, lambda ev: None))
+    assert "## Executive summary" in out
+
+
+def test_synthesize_sectioned_empty_falls_back(monkeypatch):
+    import asyncio
+    st = _state_with_findings()
+
+    async def _empty(*a, **k):
+        return ""
+    monkeypatch.setattr(R, "_synthesize_sections", _empty)
+
+    async def _one_shot(*a, **k):
+        return "Single-shot answer body."
+    monkeypatch.setattr(R, "_call", _one_shot)
+    out = asyncio.run(R._synthesize(
+        _FakeGateway(), None, ["fake/model"], st.question, st,
+        lambda ev: None))
+    assert "Single-shot answer body." in out

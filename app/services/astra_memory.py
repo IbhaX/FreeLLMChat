@@ -192,13 +192,22 @@ async def extract_and_store(gateway, user_text: str, assistant_text: str) -> Non
         import json
 
         from app.db import get_session_factory
+        from app.services.model_policy import stage_models
 
+        result = None
         async with get_session_factory()() as s:
-            result, _p, _k, _m = await gateway.chat(s, {
-                "model": "auto",
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-            })
+            for cand in stage_models("auto", role="fast"):
+                try:
+                    result, _p, _k, _m = await gateway.chat(s, {
+                        "model": cand,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "stream": False,
+                    })
+                    break
+                except Exception:
+                    continue
+        if result is None:
+            return
         content = ""
         for c in result.get("choices", []):
             content += (c.get("message") or {}).get("content") or ""

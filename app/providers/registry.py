@@ -15,12 +15,14 @@ from app.models import Provider
 from app.providers.base import BaseAdapter
 from app.providers.cloudflare import CloudflareAdapter
 from app.providers.gemini import GeminiAdapter
+from app.providers.ollama import OllamaAdapter
 from app.providers.openai_compat import OpenAICompatAdapter
 
 ADAPTERS: dict[str, type[BaseAdapter]] = {
     "openai_compat": OpenAICompatAdapter,
     "gemini": GeminiAdapter,
     "cloudflare": CloudflareAdapter,
+    "ollama": OllamaAdapter,
 }
 
 
@@ -82,6 +84,7 @@ async def seed_providers(session: AsyncSession) -> int:
             "default_env_key": entry.get("default_env_key"),
             "default_models": entry.get("default_models", []),
             "limits": entry.get("limits", {}),
+            "pricing": entry.get("pricing", {}),
             "daily_reset_tz": entry.get("daily_reset_tz"),
             "requires_card": entry.get("requires_card", False),
             "commercial_ok": entry.get("commercial_ok", True),
@@ -107,14 +110,21 @@ async def seed_providers(session: AsyncSession) -> int:
     from app.models import ApiKey
 
     for provider in (await session.execute(select(Provider))).scalars().all():
-        if not provider.default_env_key:
-            continue
         has_keys = (
             await session.execute(
                 select(ApiKey.id).where(ApiKey.provider_id == provider.id).limit(1)
             )
         ).first()
         if has_keys:
+            continue
+        if provider.auth_style == "none":
+            # Keyless providers (e.g. local Ollama) still need a key row so
+            # rotation can pick them; the placeholder is never sent upstream.
+            await add_key(
+                session, provider, "ollama-local", label="local (no key needed)"
+            )
+            continue
+        if not provider.default_env_key:
             continue
         raw = _env_value(provider.default_env_key)
         for i, single in enumerate(k.strip() for k in raw.split(",") if k.strip()):
