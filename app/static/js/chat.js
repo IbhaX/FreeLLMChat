@@ -212,6 +212,21 @@ function reasoningEl(r){
 }
 
 // --- Rendering -------------------------------------------------------------
+/* One-line plain-text preview: structured envelopes show their prose (or
+   first component title), never the raw ```nova-response JSON. */
+function previewText(text){
+  let t=String(text||'');
+  try{
+    const plan=window.NovaRender&&NovaRender.ResponseClassifier?NovaRender.ResponseClassifier.classify(t):null;
+    if(plan&&plan.kind==='envelope'){
+      const env=plan.envelope||{};
+      const c0=(env.components||[])[0]||{};
+      const d=c0.data||c0;
+      t=(plan.prose||env.content||d.title||d.message||'').trim()||'(structured reply)';
+    }
+  }catch(_){}
+  return t.replace(/```[\s\S]*?(```|$)/g,' ').replace(/[#*_>`|]+/g,'').replace(/\s+/g,' ').trim().slice(0,60)||'(empty)';
+}
 function renderSidebar(filter=''){
   const list=$('#convoList');list.innerHTML='';
   const convs=state.conversations.filter(c=>!filter||c.name.toLowerCase().includes(filter));
@@ -224,7 +239,7 @@ function renderSidebar(filter=''){
     el.innerHTML=`<div class="conv-dot"></div>
       <div style="min-width:0;flex:1">
         <div class="conv-name">${esc(c.name)}</div>
-        <div class="conv-prev">${esc(last?last.text.slice(0,60):'Empty')}</div>
+        <div class="conv-prev">${esc(last?previewText(last.text):'Empty')}</div>
       </div>
       <span class="conv-time">${timeStr(c.t)}</span>
       <button class="conv-x" title="Delete">✕</button>`;
@@ -498,8 +513,16 @@ async function streamAPIReply(c,live){
       const it=document.createElement('div');it.className='act-item';
       it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
       actList.appendChild(it);}
-    actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
+    if(!actDone)actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
     scrollBottom();};
+  let actDone=false;
+  const closeAct=(ok)=>{
+    if(actDone)return;actDone=true;
+    if(actLog){actLog.ingest({id:'__write',kind:'write',status:ok===false?'failed':'done',title:'Writing the response'});actLog.finish(null,ok);}
+    const secs=Math.round((Date.now()-t0)/1000);
+    const dur=secs>=60?`${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`:`${secs}s`;
+    actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''} · ${dur}`;
+  };
   addAct({kind:'wait',status:'running',title:'Routing request…'});
   const actTimer=setInterval(()=>{if(stepCount()===1)actLbl.textContent=`routing · ${Math.round((Date.now()-t0)/1000)}s`;},500);
   const ctrl=new AbortController();
@@ -586,30 +609,35 @@ async function streamAPIReply(c,live){
           if(delta.content)acc+=delta.content;
         }catch(_){}
       }
-      if(!firstTok){firstTok=true;
+      if(!firstTok&&acc){firstTok=true;
         row=msgEl(msg);inner.appendChild(row);
         bubble=row.querySelector('.bubble');
         sr=(window.NovaRender&&NovaRender.StreamingRenderer)
           ?NovaRender.StreamingRenderer.create(bubble,scroller):null;
         const steps=trow.querySelector('.act-steps');
         if(stepCount()){
-          if(actLog)actLog.finish();
+          if(actLog)actLog.ingest({id:'__write',kind:'write',status:'running',title:'Writing the response…'});
           steps.removeAttribute('open');
-          actLbl.textContent=`⚡ ${stepCount()} step${stepCount()!==1?'s':''} — click to expand`;
           steps.querySelectorAll('.act-item').forEach(i=>i.classList.add('done'));
           row.querySelector('.msg-col').prepend(steps);
         }
         trow.remove();}
       if(sr){sr.setText(acc);}else if(bubble){bubble.innerHTML=md(acc)+'<span class="cursor"></span>';scrollBottom();}
     }
+    closeAct(!!acc.trim());
     msg.text=collapseRepeats(acc)||'_(empty response)_';
     msg.reasoning=reasoning||null;
-    if(!row){row=msgEl(msg);inner.appendChild(row);bubble=row.querySelector('.bubble');trow.remove();}
+    if(!row){row=msgEl(msg);inner.appendChild(row);bubble=row.querySelector('.bubble');
+      // No answer text: keep the activity (what was tried) with the message.
+      const steps=trow.querySelector('.act-steps');
+      if(steps&&stepCount()){steps.removeAttribute('open');row.querySelector('.msg-col').prepend(steps);}
+      trow.remove();}
     if(sr){sr.finish(msg.text);msg.html=bubble.innerHTML;}
     finish(msg,bubble);
     maybeAttachPerson(c,msg,bubble);
   }catch(e){
     clearInterval(actTimer);
+    closeAct(false);
     if(ctrl.signal.aborted){
       if(!isAgent)fetch(API_BASE+'/v1/conversations/'+c.id+'/live',
         {method:'DELETE',headers:apiHeaders()}).catch(()=>{});

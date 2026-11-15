@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from datetime import datetime, timezone
 
@@ -19,6 +20,7 @@ from app.models import ApiKey
 from app.response_protocol import protocol_descriptor, structured_system_prompt
 from app.schemas import ChatCompletionRequest
 
+_log = logging.getLogger("freellm.chat")
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_gateway_key)])
 
 
@@ -362,6 +364,10 @@ async def chat_completions(
         raise HTTPException(status_code=429, detail=reason)
     await _usage.record(session, subject_for(_user), "chat",
                         model=str(payload.get("model") or ""))
+    # Commit now: the flush holds SQLite's single write lock, and the
+    # memory lookup below is a network call. Holding it any longer locks
+    # out every other writer (including this request's own job session).
+    await session.commit()
     try:
         from app.services import astra_memory
         from app.services.agents import get_memory_text
@@ -433,6 +439,10 @@ async def chat_completions(
         if conv_id:
             from app.db import get_session_factory
 
+            # End the request session's transaction before switching: an
+            # open one keeps its connection (and any lock) for the life of
+            # the response, i.e. the entire detached generation.
+            await session.commit()
             session = get_session_factory()()
 
         events: asyncio.Queue[dict] = asyncio.Queue()
@@ -618,6 +628,24 @@ async def chat_completions(
                 text = ""
                 for c in res.get("choices", []):
                     text += (c.get("message") or {}).get("content") or ""
+                if not text.strip():
+                    # Free models sometimes end a tool loop with no content
+                    # (only tool calls). One plain, tool-free completion is
+                    # far better than an empty bubble.
+                    yield _meta({"event": "retry",
+                                 "text": "Model returned no answer — asking again without tools"})
+                    try:
+                        plain, *_ = await gateway.chat(
+                            session, {**payload, "stream": False},
+                            on_event=events.put_nowait)
+                        text = "".join(
+                            (c.get("message") or {}).get("content") or ""
+                            for c in plain.get("choices", []))
+                    except Exception as e:
+                        yield _meta({"event": "error",
+                                     "text": f"Retry failed: {str(e)[:120]}"})
+                    while not events.empty():
+                        yield _meta(events.get_nowait())
                 if last_user:
                     _remember(gateway, conv_id, last_user, text)
                 # The tool loop returns the answer in one piece; replay it in
@@ -630,7 +658,13 @@ async def chat_completions(
                 yield f"data: {_json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
                 return
             if not isinstance(res, tuple):
-                err = {"error": {"message": str(res), "type": "gateway_exhausted", "code": 503}}
+                from app.services.reliable import user_facing_error
+
+                _log.warning("chat stream failed to open conv=%s: %s",
+                             conv_id, type(res).__name__, exc_info=res
+                             if isinstance(res, BaseException) else None)
+                err = {"error": {"message": user_facing_error(res),
+                                 "type": "gateway_exhausted", "code": 503}}
                 yield f"data: {_json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
                 return
             stream, provider, key, model = res

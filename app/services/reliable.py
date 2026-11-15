@@ -98,6 +98,25 @@ async def reliable_call(
                       degraded=True, error=last_err)
 
 
+_INTERNAL_ERROR_MARKERS: tuple[tuple[str, str], ...] = (
+    ("database is locked", "The server was busy saving another request. Please try again."),
+    ("sqlalchemy", "A temporary storage error interrupted the request. Please try again."),
+    ("sqlite3", "A temporary storage error interrupted the request. Please try again."),
+    ("traceback", "An internal error interrupted the request. Please try again."),
+)
+
+
+def user_facing_error(err: object) -> str:
+    """Plain-language failure text: never leak SQL, stack traces or
+    internals to end users (they are logged server-side instead)."""
+    text = str(err or "").strip()
+    low = text.lower()
+    for marker, friendly in _INTERNAL_ERROR_MARKERS:
+        if marker in low:
+            return friendly
+    return text.splitlines()[0][:200] if text else "Unknown error."
+
+
 def last_resort_answer(
     question: str,
     *,
@@ -121,7 +140,7 @@ def last_resort_answer(
         parts.append("")
     if failures:
         parts.append("**What went wrong:**")
-        for f in failures[:5]:
+        for f in dict.fromkeys(user_facing_error(f) for f in failures[:5]):
             parts.append(f"- {f}")
         parts.append("")
     if missing:

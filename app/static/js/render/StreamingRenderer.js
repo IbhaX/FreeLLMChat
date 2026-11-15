@@ -122,6 +122,9 @@
       rafPending = true;
       requestAnimationFrame(() => {
         rafPending = false;
+        // A frame queued before finish()/abort() must not repaint the
+        // streaming state (with cursor) over the final render.
+        if (finished) return;
         doRender();
       });
     }
@@ -196,8 +199,9 @@
     // skeleton instead.
     function liveRender(comp, tmp) {
       const type = comp && comp.type;
-      if (!type || !comp.data || typeof comp.data !== "object" || NO_LIVE.has(type)) return false;
-      const d = comp.data;
+      if (!type || NO_LIVE.has(type)) return false;
+      const d = Nova.componentData ? Nova.componentData(comp) : comp.data;
+      if (!d || typeof d !== "object" || !Object.keys(d).length) return false;
       const empty =
         (ROWLESS.has(type) && (!Array.isArray(d.rows) || !d.rows.length)) ||
         (type === "stat_grid" ? (!Array.isArray(d.stats) || !d.stats.length) : type === "list" ? (!Array.isArray(d.items) || !d.items.length) : false);
@@ -205,7 +209,7 @@
       const fn = Nova.ComponentRegistry.getComponent(type);
       if (!fn) return false;
       try {
-        const node = fn(comp.data);
+        const node = fn(d);
         if (!node || !(node.textContent || "").trim()) return false;
         const wrap = el("div", { class: "nova-comp-slot nova-live" });
         wrap.append(node);

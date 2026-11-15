@@ -15,7 +15,18 @@
   const Nova = window.NovaRender;
   const { el, esc } = Nova;
 
+  /* Protocol shape is {type, data:{...}}, but models frequently emit the
+     fields flat ({type, title, message}). Accept both — dropping a valid
+     component because of nesting renders an empty slot. */
+  function componentData(comp) {
+    if (comp.data && typeof comp.data === "object") return comp.data;
+    const flat = {};
+    Object.keys(comp).forEach((k) => { if (k !== "type") flat[k] = comp[k]; });
+    return flat;
+  }
+
   function renderComponent(comp, host) {
+    comp = Object.assign({}, comp, { data: componentData(comp) });
     const fn = Nova.ComponentRegistry.getComponent(comp.type);
     const slot = el("div", { class: "nova-comp-slot" });
     if (!fn) {
@@ -184,5 +195,6 @@
     return host;
   }
 
+  Nova.componentData = componentData;
   Nova.ResponseRenderer = { render, renderMessage, renderComponent, renderEnvelope, renderSegments };
 })();

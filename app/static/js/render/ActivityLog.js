@@ -625,9 +625,15 @@
     const api = {
       el: root,
       ingest(ev) {
-        if (!ev || finished) return;
+        if (!ev) return;
         try {
           const data = ev.kind ? mergeData(ev) : normalize(ev);
+          // Usage for the final call lands after the run settles (the
+          // gateway reports tokens when the stream closes): count it.
+          if (finished) {
+            if (data.kind === 'usage') { trackUsage(data); paintDash(); }
+            return;
+          }
           const id = ev.id || ('s' + (++counter));
           const existing = steps.get(id);
           if (data.kind === 'usage') {   // folded into the pinned metrics card
