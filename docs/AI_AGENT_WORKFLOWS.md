@@ -257,3 +257,195 @@ Every agentic execution writes two tables:
    in the trace; verified findings still delivered.
 6. **Rate limits + quotas enforced** — slowapi middleware + per-plan
    daily counters in `usage_events`.
+
+---
+
+## 10. High-level design
+
+The platform is a **gateway + agent runtime**, not a chat wrapper:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ INTERFACE LAYER                                             │
+│ chat.html (conversations, components) · research.html       │
+│ roleplay.html · agents.html · skills.html · library.html    │
+│ → all consume the same /v1 API surface + SSE activity feed  │
+├────────────────────────────────────────────────────────────┤
+│ ROUTING LAYER                                               │
+│ orchestrator.route_message — one decision:                  │
+│ direct | tools | research | orchestrate                     │
+├────────────────────────────────────────────────────────────┤
+│ AGENT RUNTIME                                               │
+│ execution.py  — plan → dependency levels → parallel steps   │
+│ research.py  — planner → workers → verifier → sectioned     │
+│                synthesis → component envelope               │
+│ tools.py     — model↔tool loop                             │
+│ agents.py    — single-agent configs                         │
+│ roleplay.py  — persona-locked multi-character turns         │
+├────────────────────────────────────────────────────────────┤
+│ INTELLIGENCE LAYER                                          │
+│ intent.py    — classify request (intent/complexity/domains) │
+│ experts.py   — specialist registry + prompts + tools        │
+│ skills.py    — reusable instruction blocks (built-in+custom)│
+│ model_policy — per-role model selection + failover order    │
+│ reliable.py  — bounded retries + never-empty answers        │
+├────────────────────────────────────────────────────────────┤
+│ PROVIDER LAYER                                              │
+│ gateway.py — health-aware sequential failover, sticky       │
+│ routing, cooldowns; providers/*.py adapters; ollama local    │
+├────────────────────────────────────────────────────────────┤
+│ PERSISTENCE / OBSERVABILITY                                 │
+│ SQLite: providers, keys, conversations, research_runs,      │
+│ agent_configs, characters, roleplay_rooms, documents/       │
+│ chunks, users, auth_tokens, usage_events, agent_runs/       │
+│ agent_events (durable execution ledger)                     │
+└────────────────────────────────────────────────────────────┘
+```
+
+Design invariants:
+
+- **Fail-open everywhere** — routing, classification, components,
+  observability all degrade instead of erroring.
+- **Concrete models by role** — internal stages never default to `auto`;
+  candidate lists go strong→weak with `auto` last.
+- **Everything is recorded** — requests log, usage events, research
+  runs, agent run/event ledger, room transcripts.
+- **Free-first** — groq → openrouter → other free providers → ollama
+  local as the final backstop; BYOK supported throughout.
+
+---
+
+## 11. Agent pipeline in detail
+
+### 11.1 The delegation contract
+
+An "agent" in this system is **not** a process — it is a *prompt +
+permissions + model hint*, executed as one LLM call inside the
+orchestrator's engine:
+
+```
+ExpertDef(name, description, domain, prompt, capabilities, skills,
+          tools, model_hint)
+        │
+        ▼
+TaskStep(id, expert, task, depends_on)
+        │
+        ▼
+assembled prompt = expert.prompt
+                 + skills.attach_instructions(...)   (skill blocks)
+                 + tools schema (if the expert's skills need them)
+        │
+        ▼
+reliable_call → model-policy candidates → gateway.chat
+        │
+        ▼
+StepResult(ok, text, model, attempts, duration_ms, error)
+```
+
+### 11.2 Planning strategies
+
+| Strategy | When | How |
+|---|---|---|
+| `single` | simple/low-confidence intent | one expert, one call — no plan overhead |
+| `template` | research/multi-domain but shallow | deterministic step list (researcher → verifier → writer) |
+| `llm` | complex multi-domain | reasoning model emits JSON steps; unknown experts and dangling deps are sanitized; a verifier step is appended |
+
+### 11.3 Parallelism model
+
+`ExecutionPlan.levels()` topologically sorts steps into dependency
+levels. All steps in a level run via `asyncio.gather` — true
+concurrency. A step that depends on another's output only runs in a
+later level. Cycles are broken by running remaining steps together.
+
+### 11.4 Failure semantics per step
+
+1. `reliable_call` retries with exponential backoff (bounded).
+2. Model-policy candidate list iterates on empty/failed responses.
+3. A failed step becomes `StepResult(ok=False)` — the run continues.
+4. Synthesis receives only successful outputs; if all fail, the
+   last-resort responder answers honestly with the failure summary.
+5. `degraded=True` propagates to `meta` and the UI badge.
+
+### 11.5 Verification inside the pipeline
+
+Two verifier layers exist:
+
+- **Research verifier** — checks each finding's claim against its
+  cited source content (supported / partially / unverified /
+  unsupported / contradicted).
+- **Orchestration verifier step** — a template-plan expert that reviews
+  sibling steps' outputs for gaps and contradictions before synthesis.
+
+---
+
+## 12. Prompting techniques used
+
+### 12.1 System-prompt layering
+
+Prompts are composed, never overwritten — most specific wins:
+
+```
+[1] structured-output contract   (component envelope rules — FIRST,
+                                  so provider-agnostic rules aren't
+                                  diluted by persona text)
+[2] pipeline prompt              (planner/verifier/section writer)
+[3] custom user instructions     (settings-store block)
+[4] agent/expert prompt          (identity + domain expertise)
+[5] skill instruction blocks     (attach_instructions output)
+[6] conversation/tool context    (history, tool results)
+```
+
+### 12.2 Structured output contract
+
+`response_protocol.structured_system_prompt()` instructs the model to
+emit a `nova-response` fenced JSON envelope:
+
+```json
+{"response_type": "...", "content": "...",
+ "components": [{"type": "...", "data": {...}}],
+ "sources": [...], "suggested_prompts": [...]}
+```
+
+Enforcement is three-layered:
+
+1. **Prompt** — the contract itself.
+2. **Repair** — `component_enforce` tries a dedicated renderer-model
+   call to fix malformed envelopes.
+3. **Deterministic floor** — markdown→components fallback guarantees
+   *something* renders; research adds a state-derived component floor
+   (person_card, key-findings list, timeline, search_result carousel,
+   conflict callout) built only from verified run state.
+
+### 12.3 Role prompts (research pipeline)
+
+| Role | Prompt technique |
+|---|---|
+| Planner | JSON-mode output (`response_format: json_object`), strict sub-question schema, aspect decomposition guidance |
+| Researcher | tool-loop prompt + harvested-URL context + per-worker focus question |
+| Gap checker | "what's missing" framing over current findings |
+| Verifier | verdict taxonomy forced (supported/partial/unverified/unsupported/contradicted) |
+| Section writer | single-aspect scope, citation `[n]` requirement, ~900–1200 word depth mandate, no invented facts |
+| Summary writer | 150–250 word executive summary, lead with the key finding |
+
+### 12.4 Persona prompting (roleplay)
+
+`roleplay.persona_prompt()` locks identity per turn:
+
+- "You are {name}. Stay in character… never mention being an AI"
+- structured fields: role, description, background, personality,
+  motivations, knowledge domain, speaking style
+- `Boundaries (never cross)` — explicit negative constraints
+- `Example of your voice` — few-shot dialogue
+- scene + cast roster so characters react to *each other*, not generics
+
+### 12.5 Reliability prompting
+
+- `temperature` tuned per role: planners/verifiers 0.2 (deterministic),
+  roleplay 0.8 (personality), synthesis default.
+- **Never-empty guarantee** — `reliable.py` last-resort responder when
+  every candidate fails; honest degradation messages, not apologies.
+- **No fabrication clauses** — every research/section prompt states
+  "use only the findings provided; never invent facts, numbers, dates
+  or sources"; uncertainty is surfaced as a first-class section.
+
+##
