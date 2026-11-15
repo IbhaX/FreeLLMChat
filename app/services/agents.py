@@ -78,7 +78,9 @@ class GatewayModel(Model):
         text = ""
         for choice in result.get("choices", []):
             msg = choice.get("message", {})
-            text += msg.get("content", "")
+            # Some providers return {"content": null} — .get default only
+            # covers a MISSING key; a present null must not crash `+=`.
+            text += msg.get("content") or ""
         if "response_format" in payload and "```" in text:
             import re as _re
 
@@ -389,7 +391,7 @@ async def run_agent(
     out = result.output
     if isinstance(out, ResponseEnvelope):
         return envelope_to_fence(out)
-    return out
+    return out if isinstance(out, str) else ""
 
 
 def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:

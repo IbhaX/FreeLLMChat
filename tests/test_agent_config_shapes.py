@@ -64,3 +64,22 @@ def test_null_timeout_falls_back_to_default() -> None:
     execution = cfg.config.get("execution", {})
     timeout_s = max(1.0, min(float(execution.get("timeout") or 120), 600.0))
     assert timeout_s == 120.0
+
+
+def test_null_content_does_not_crash_gateway_model() -> None:
+    """Providers returning {"content": null} used to crash orchestrator
+    replies with 'can only concatenate str (not "NoneType") to str'."""
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app.services.agents import GatewayModel
+
+    gw = SimpleNamespace()
+    async def chat(session: Any, payload: dict[str, Any]) -> tuple:
+        return ({"choices": [{"message": {"content": None}}]},
+                MagicMock(), MagicMock(), "m")
+    gw.chat = chat
+    model = GatewayModel("auto", gw)
+    resp = asyncio.run(model.request([], None, MagicMock()))
+    assert resp.parts[0].content == ""
