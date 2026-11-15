@@ -463,7 +463,20 @@
             <div class="mi depth-opt" data-d="deep"><span class="dchk" style="width:14px;display:inline-block"></span><span class="tb-tx">Deep</span>
               <span style="margin-left:auto;opacity:.6;font-size:10px">thorough · more effort</span></div>
           </div>
-          <div class="mi" id="pipelineBtn">🔗<span class="tb-tx"> Pipeline (ordered)</span></div>
+          <div class="mi" id="multiBtn">🧩<span class="tb-tx"> Multi-agent</span>
+            <span style="margin-left:auto;opacity:.65;font-size:10px" id="multiVal">group</span></div>
+          <div id="multiSub" style="display:none;border-top:1px solid var(--border-1);margin-top:2px;padding-top:2px">
+            <div class="mi multi-opt" data-m="parallel"><span class="dchk" style="width:14px;display:inline-block">✓</span><span class="tb-tx">👥 Group</span>
+              <span style="margin-left:auto;opacity:.6;font-size:10px">all answer → merged</span></div>
+            <div class="mi multi-opt" data-m="pipeline"><span class="dchk" style="width:14px;display:inline-block"></span><span class="tb-tx">🔗 Pipeline</span>
+              <span style="margin-left:auto;opacity:.6;font-size:10px">staged chain</span></div>
+            <div class="mi multi-opt" data-m="debate"><span class="dchk" style="width:14px;display:inline-block"></span><span class="tb-tx">⚔️ Debate</span>
+              <span style="margin-left:auto;opacity:.6;font-size:10px">argue + verdict</span></div>
+            <div class="mi multi-opt" data-m="roundtable"><span class="dchk" style="width:14px;display:inline-block"></span><span class="tb-tx">🪑 Roundtable</span>
+              <span style="margin-left:auto;opacity:.6;font-size:10px">in turn + wrap-up</span></div>
+            <div class="mi multi-opt" data-m="brainstorm"><span class="dchk" style="width:14px;display:inline-block"></span><span class="tb-tx">💡 Brainstorm</span>
+              <span style="margin-left:auto;opacity:.6;font-size:10px">diverge → board</span></div>
+          </div>
           <div class="mi" id="rpBtn">🎭<span class="tb-tx"> Roleplay…</span></div>
         </div>
         <div class="chip-row" id="chipRow"></div>

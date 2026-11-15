@@ -38,6 +38,22 @@ def _clean_exhaustion_msg(msg: str) -> str:
     return f"All providers are unavailable right now (last error: {cleaned[:140]})"
 
 
+def _scrub_body(body: dict[str, Any]) -> dict[str, Any]:
+    """Drop explicit ``null`` values and normalize ``content: null`` in
+    messages. Strict OpenAI-compatible parsers (Ollama) reject the request
+    with a 400 on ``{"temperature": null}`` — a null carries no information
+    versus an omitted key, so removing it is safe for every provider."""
+    out = {k: v for k, v in body.items() if v is not None}
+    msgs = out.get("messages")
+    if isinstance(msgs, list):
+        out["messages"] = [
+            ({**m, "content": ""} if isinstance(m, dict)
+             and "content" in m and m["content"] is None else m)
+            for m in msgs
+        ]
+    return out
+
+
 def _payload_input(payload: dict[str, Any]) -> str | None:
     """Last user message text — the visible 'request input' for a log row."""
     for m in reversed(payload.get("messages") or []):
@@ -604,7 +620,7 @@ class Gateway:
                 if provider_done or attempts >= budget:
                     break
                 emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
-                body = dict(payload)
+                body = _scrub_body(dict(payload))
                 body["model"] = model
                 body["stream"] = False
                 body.setdefault("max_tokens", 4096)
@@ -729,7 +745,7 @@ class Gateway:
                 if provider_done or attempts >= budget:
                     break
                 emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
-                body = dict(payload)
+                body = _scrub_body(dict(payload))
                 body["model"] = model
                 body["stream"] = True
                 body.setdefault("max_tokens", 4096)

@@ -33,6 +33,16 @@ class TestUsableFilter:
             assert "nokey-prov/m-b" not in usable
             assert {"auto", "auto:coding", "auto:fast"} <= set(usable)
 
+    def test_keyless_provider_usable_without_key(self):
+        """auth_style='none' providers (e.g. Ollama) need no API key — they
+        must show as usable/keyed without one."""
+        with TestClient(app) as c:
+            _mk_provider(c, "keyless-prov", auth_style="none")
+            usable = _ids(c, "?usable=1")
+            assert "keyless-prov/m-a" in usable
+            assert usable["keyless-prov/m-a"]["usable"] is True
+            assert usable["keyless-prov/m-a"]["keyed"] is True
+
     def test_provider_appears_after_key_added(self):
         with TestClient(app) as c:
             _mk_provider(c, "keyed-later")

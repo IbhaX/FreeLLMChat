@@ -16,7 +16,7 @@ from app.api.deps import require_gateway_key
 from app.db import get_session
 from app.gateway import Gateway, GatewayExhausted
 from app.logging_config import new_request_id
-from app.models import ApiKey
+from app.models import ApiKey, Provider
 from app.response_protocol import protocol_descriptor, structured_system_prompt
 from app.schemas import ChatCompletionRequest
 
@@ -36,19 +36,32 @@ def _model_pricing(provider: Any, model: str) -> dict[str, Any] | None:
     return base or None
 
 
-async def _keyed_provider_ids(session: AsyncSession) -> set[int]:
-    """Providers with ≥1 enabled key."""
+async def _keyless_provider_ids(session: AsyncSession) -> set[int]:
+    """Providers that need no API key at all (``auth_style == 'none'``,
+    e.g. a local Ollama server) — inherently keyed and servable."""
     rows = (
         await session.execute(
-            select(ApiKey.provider_id).where(ApiKey.enabled.is_(True)).distinct()
+            select(Provider.id).where(
+                Provider.enabled.is_(True), Provider.auth_style == "none"
+            )
         )
     ).scalars().all()
     return set(rows)
 
 
+async def _keyed_provider_ids(session: AsyncSession) -> set[int]:
+    """Providers with ≥1 enabled key, plus keyless providers."""
+    rows = (
+        await session.execute(
+            select(ApiKey.provider_id).where(ApiKey.enabled.is_(True)).distinct()
+        )
+    ).scalars().all()
+    return set(rows) | await _keyless_provider_ids(session)
+
+
 async def _servable_provider_ids(session: AsyncSession) -> set[int]:
-    """Providers with ≥1 enabled key that is not currently on cooldown —
-    i.e. can actually serve a request right now."""
+    """Providers that can serve a request right now: ≥1 enabled key not on
+    cooldown, or no key required at all (``auth_style == 'none'``)."""
     now = datetime.now(timezone.utc)
     rows = (
         await session.execute(
@@ -65,7 +78,7 @@ async def _servable_provider_ids(session: AsyncSession) -> set[int]:
         cd = cooldown.replace(tzinfo=cooldown.tzinfo or timezone.utc)
         if cd <= now:
             out.add(provider_id)
-    return out
+    return out | await _keyless_provider_ids(session)
 
 
 def _truthy(v: Any) -> bool:

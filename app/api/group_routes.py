@@ -60,9 +60,16 @@ class GroupChatRequest(BaseModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
     agent_ids: list[int]
     conversation_id: str | None = None  # scopes short-term vector memory
-    # "parallel": all agents answer independently, Orchestrator merges.
-    # "pipeline": agents run in agent_ids order; each receives the previous
-    # agent's output as input; the last agent's output is the final answer.
+    # Multi-agent orchestration modes:
+    #   "parallel"   — agents answer independently, Orchestrator merges.
+    #   "pipeline"   — sequential chain in agent_ids order; each stage gets
+    #                  the previous agent's output; last output is final.
+    #   "debate"     — parallel opening statements, one sequential rebuttal
+    #                  round, Orchestrator delivers the verdict.
+    #   "roundtable" — agents speak once in agent_ids order seeing the
+    #                  running discussion; Orchestrator wraps up.
+    #   "brainstorm" — divergent ideas in parallel; Orchestrator clusters
+    #                  and ranks them into a board.
     mode: str = "parallel"
 
 
@@ -149,15 +156,22 @@ async def group_stream(
         for h in transcript[-30:]
     )
 
-    async def solo(a: AgentConfig) -> tuple[AgentConfig, str]:
-        prompt = (
-            f"Conversation so far:\n{transcript_txt}\n\n"
-            f"Answer the latest user message as {a.name}. Be thorough and well-structured: answer fully, cover the relevant substance, and use the component format for anything with more than one fact."
-        )
+    async def solo(a: AgentConfig, prompt: str | None = None) -> tuple[AgentConfig, str]:
+        if prompt is None:
+            prompt = (
+                f"Conversation so far:\n{transcript_txt}\n\n"
+                f"Answer the latest user message as {a.name}. Be thorough and well-structured: answer fully, cover the relevant substance, and use the component format for anything with more than one fact."
+            )
         try:
             return a, await run_agent(gw, a, prompt, [], custom_instructions=custom)
         except Exception as e:
             return a, f"*(error: {e})*"
+
+    async def orchestrate(prompt: str) -> str:
+        try:
+            return await run_agent(gw, orc, prompt, [], custom_instructions=custom)
+        except Exception as e:
+            return f"*(orchestrator error: {e})*"
 
     async def gen():
         try:
@@ -211,6 +225,189 @@ async def group_stream(
                     asyncio.ensure_future(
                         astra_memory.extract_and_store(gw, body.message, prev_out)
                     )
+                yield _meta({"event": "group_done", "text": "Done"})
+                yield b"data: [DONE]\n\n"
+                return
+
+            if body.mode == "debate":
+                # Debate: parallel opening statements -> one rebuttal round
+                # (each debater sees all prior turns) -> Orchestrator judges.
+                yield _meta({"event": "group_start",
+                             "text": f"Debate: {names} · judge {ORCHESTRATOR_NAME}",
+                             "agents": [a.name for a in agents] + [ORCHESTRATOR_NAME]})
+                for a in agents:
+                    yield _meta({"event": "agent_start", "agent": a.name,
+                                 "text": f"{a.name} is preparing an opening statement…"})
+                open_prompts = {
+                    a.id: (
+                        f"Debate topic (the user's message):\n{body.message}\n\n"
+                        f"Conversation so far:\n{transcript_txt}\n\n"
+                        f"Give your opening statement as {a.name}: take a clear, "
+                        "defensible position, argue it with reasoning and "
+                        "evidence, and pre-empt the strongest objections. Use "
+                        "the component format for anything with more than one "
+                        "fact."
+                    ) for a in agents}
+                pending = {
+                    asyncio.ensure_future(solo(a, open_prompts[a.id])): a
+                    for a in agents}
+                while pending:
+                    done, _ = await asyncio.wait(
+                        set(pending), return_when=asyncio.FIRST_COMPLETED)
+                    for t in done:
+                        pending.pop(t)
+                        a, text = t.result()
+                        transcript.append(
+                            {"role": "assistant", "name": a.name,
+                             "content": f"[opening] {text}"})
+                        yield _meta({"event": "agent_message",
+                                     "agent": a.name, "content": text})
+                # Rebuttal round — sequential so each debater can answer the
+                # latest arguments, not just the openings.
+                for a in agents:
+                    yield _meta({"event": "agent_start", "agent": a.name,
+                                 "text": f"{a.name} is rebutting…"})
+                    discussion = "\n".join(
+                        f"{h.get('name') or h.get('role')}: {h.get('content', '')}"
+                        for h in transcript[-30:])
+                    _, text = await solo(a, (
+                        f"Debate topic (the user's message):\n{body.message}\n\n"
+                        f"Debate so far (openings and rebuttals):\n{discussion}\n\n"
+                        f"As {a.name}, defend your position and rebut the "
+                        "strongest opposing arguments. Concede points you "
+                        "cannot defend. Use the component format for anything "
+                        "with more than one fact."))
+                    transcript.append(
+                        {"role": "assistant", "name": a.name,
+                         "content": f"[rebuttal] {text}"})
+                    yield _meta({"event": "agent_message",
+                                 "agent": a.name, "content": text})
+                yield _meta({"event": "agent_start", "agent": ORCHESTRATOR_NAME,
+                             "text": f"{ORCHESTRATOR_NAME} is judging the debate…"})
+                discussion = "\n".join(
+                    f"{h.get('name') or h.get('role')}: {h.get('content', '')}"
+                    for h in transcript[-30:])
+                final = await orchestrate(
+                    f"You are judging a debate. Topic (the user's message):\n"
+                    f"{body.message}\n\nDebate transcript:\n{discussion}\n\n"
+                    "Deliver the verdict: which positions were strongest and "
+                    "why, where the debaters agreed, what remained unresolved, "
+                    "and a balanced conclusion answering the user's message. "
+                    "Reply ONLY with the nova-response envelope defined in "
+                    "your instructions.")
+                transcript.append({"role": "assistant", "name": ORCHESTRATOR_NAME,
+                                   "content": final})
+                if conv_id:
+                    astra_memory.store_short(conv_id, "assistant", final)
+                    asyncio.ensure_future(
+                        astra_memory.extract_and_store(gw, body.message, final))
+                yield _meta({"event": "agent_message",
+                             "agent": ORCHESTRATOR_NAME, "content": final})
+                yield _meta({"event": "group_done", "text": "Done"})
+                yield b"data: [DONE]\n\n"
+                return
+
+            if body.mode == "roundtable":
+                # Roundtable: agents speak one at a time in pick order, each
+                # sees the running discussion; Orchestrator moderates a wrap-up.
+                yield _meta({"event": "group_start",
+                             "text": f"Roundtable: {names} · moderated by {ORCHESTRATOR_NAME}",
+                             "agents": [a.name for a in agents] + [ORCHESTRATOR_NAME]})
+                for a in agents:
+                    yield _meta({"event": "agent_start", "agent": a.name,
+                                 "text": f"{a.name} is speaking…"})
+                    discussion = "\n".join(
+                        f"{h.get('name') or h.get('role')}: {h.get('content', '')}"
+                        for h in transcript[-30:])
+                    _, text = await solo(a, (
+                        f"Roundtable discussion on the user's message:\n"
+                        f"{body.message}\n\n"
+                        f"Discussion so far:\n{discussion}\n\n"
+                        f"Speak next as {a.name}: give your take on the topic "
+                        "and respond to your colleagues' points — agree, push "
+                        "back, or add what they missed. Use the component "
+                        "format for anything with more than one fact."))
+                    transcript.append(
+                        {"role": "assistant", "name": a.name, "content": text})
+                    yield _meta({"event": "agent_message",
+                                 "agent": a.name, "content": text})
+                yield _meta({"event": "agent_start", "agent": ORCHESTRATOR_NAME,
+                             "text": f"{ORCHESTRATOR_NAME} is wrapping up…"})
+                discussion = "\n".join(
+                    f"{h.get('name') or h.get('role')}: {h.get('content', '')}"
+                    for h in transcript[-30:])
+                final = await orchestrate(
+                    f"You moderated a roundtable on the user's message:\n"
+                    f"{body.message}\n\nDiscussion transcript:\n{discussion}\n\n"
+                    "Wrap up the roundtable: consensus points, remaining "
+                    "disagreements, and the concrete takeaways that answer the "
+                    "user's message. Reply ONLY with the nova-response "
+                    "envelope defined in your instructions.")
+                transcript.append({"role": "assistant", "name": ORCHESTRATOR_NAME,
+                                   "content": final})
+                if conv_id:
+                    astra_memory.store_short(conv_id, "assistant", final)
+                    asyncio.ensure_future(
+                        astra_memory.extract_and_store(gw, body.message, final))
+                yield _meta({"event": "agent_message",
+                             "agent": ORCHESTRATOR_NAME, "content": final})
+                yield _meta({"event": "group_done", "text": "Done"})
+                yield b"data: [DONE]\n\n"
+                return
+
+            if body.mode == "brainstorm":
+                # Brainstorm: divergent idea generation in parallel, then the
+                # Orchestrator clusters/ranks everything into an idea board.
+                yield _meta({"event": "group_start",
+                             "text": f"Brainstorm: {names} · curated by {ORCHESTRATOR_NAME}",
+                             "agents": [a.name for a in agents] + [ORCHESTRATOR_NAME]})
+                for a in agents:
+                    yield _meta({"event": "agent_start", "agent": a.name,
+                                 "text": f"{a.name} is brainstorming…"})
+                bs_prompts = {
+                    a.id: (
+                        f"Brainstorm on the user's message:\n{body.message}\n\n"
+                        f"Conversation so far:\n{transcript_txt}\n\n"
+                        f"As {a.name}, generate your boldest and most varied "
+                        "ideas from your expertise — quantity and novelty over "
+                        "polish; no idea is too wild at this stage. Use the "
+                        "component format for anything with more than one "
+                        "fact."
+                    ) for a in agents}
+                pending = {
+                    asyncio.ensure_future(solo(a, bs_prompts[a.id])): a
+                    for a in agents}
+                while pending:
+                    done, _ = await asyncio.wait(
+                        set(pending), return_when=asyncio.FIRST_COMPLETED)
+                    for t in done:
+                        pending.pop(t)
+                        a, text = t.result()
+                        transcript.append(
+                            {"role": "assistant", "name": a.name, "content": text})
+                        yield _meta({"event": "agent_message",
+                                     "agent": a.name, "content": text})
+                yield _meta({"event": "agent_start", "agent": ORCHESTRATOR_NAME,
+                             "text": f"{ORCHESTRATOR_NAME} is organizing the ideas…"})
+                ideas = "\n\n".join(
+                    f"--- {h['name']} ---\n{h['content']}"
+                    for h in transcript
+                    if h.get("role") == "assistant" and h.get("name"))
+                final = await orchestrate(
+                    f"Brainstorm on the user's message:\n{body.message}\n\n"
+                    f"Raw ideas from every participant:\n\n{ideas}\n\n"
+                    "Curate the board: cluster related ideas, deduplicate, "
+                    "rank by impact/feasibility, and mark the top picks. "
+                    "Reply ONLY with the nova-response envelope defined in "
+                    "your instructions.")
+                transcript.append({"role": "assistant", "name": ORCHESTRATOR_NAME,
+                                   "content": final})
+                if conv_id:
+                    astra_memory.store_short(conv_id, "assistant", final)
+                    asyncio.ensure_future(
+                        astra_memory.extract_and_store(gw, body.message, final))
+                yield _meta({"event": "agent_message",
+                             "agent": ORCHESTRATOR_NAME, "content": final})
                 yield _meta({"event": "group_done", "text": "Done"})
                 yield b"data: [DONE]\n\n"
                 return

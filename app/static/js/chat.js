@@ -42,7 +42,7 @@ async function loadModels(silent){
 }
 
 // --- State ----------------------------------------------------------------
-const state={model:MODELS[0],conversations:[],current:null,streaming:false,abort:null,agent:null,group:null,groupMode:false,pipelineMode:false,researchMode:false,depth:'auto'};
+const state={model:MODELS[0],conversations:[],current:null,streaming:false,abort:null,agent:null,group:null,groupMode:false,multiMode:'parallel',researchMode:false,depth:'auto'};
 try{state.rpChar=JSON.parse(localStorage.getItem('nova_rp_char')||'null')||null;}catch(_){state.rpChar=null;}
 window.__chatState=state; // wizard.js reads agent
 const STORE_KEY='nova_chat_state_v1';
@@ -55,7 +55,7 @@ function saveState(){
       modelId:state.model.id,depth:state.depth,conversations:state.conversations,currentId:cur,
       researchMode:pendingMode?pendingMode.researchMode:!!state.researchMode,
       agentId:pendingMode?pendingMode.agentId:(state.agent?state.agent.id:null),
-      pipelineMode:pendingMode?pendingMode.pipelineMode:!!state.pipelineMode,
+      multiMode:pendingMode?pendingMode.multiMode:state.multiMode,
       groupMode:pendingMode?pendingMode.groupMode:!!state.groupMode,
       groupIds:pendingMode?pendingMode.groupIds:(state.group?state.group.agents.map(a=>a.id):[])}));
   }catch(_){}
@@ -116,7 +116,7 @@ function loadState(){
     else{const fresh=mkConv('New conversation');state.conversations.unshift(fresh);state.current=fresh;}
     if(['auto','quick','standard','deep'].includes(s.depth))state.depth=s.depth;
     pendingMode={researchMode:!!s.researchMode,agentId:s.agentId||null,
-      pipelineMode:!!s.pipelineMode,
+      multiMode:s.multiMode||(s.pipelineMode?'pipeline':'parallel'),
       groupMode:!!s.groupMode,groupIds:Array.isArray(s.groupIds)?s.groupIds:[]};
     paintDepth();paintModeChips();
     const m=MODELS.find(x=>x.id===s.modelId);
@@ -753,7 +753,7 @@ async function loadAgents(){
         $('#chatStatus').textContent=`research mode · depth ${state.depth} · multi-step, slower`;
       }else if(pm.groupMode&&pm.groupIds.length){
         state.groupMode=true;
-        state.pipelineMode=!!pm.pipelineMode;
+        state.multiMode=pm.multiMode||'parallel';
         state.group={agents:pm.groupIds.map(id=>data.find(a=>a.id===id)).filter(Boolean)};
         if(state.group.agents.length)renderGroupBar();
         else{state.groupMode=false;state.group=null;}
@@ -774,7 +774,7 @@ function renderAgentMenu(agents){
   const list=$('#agentList');
   const gm=state.groupMode;
   if(!agents.length){list.innerHTML='<div style="padding:10px;color:var(--text-3);font-size:12.5px">No agents yet. Click ＋ to create one.</div>';return;}
-  const head=gm?`<div class="mi-head">${state.pipelineMode?'Pick pipeline agents — click order = chain order':'Pick the group agents — click to add/remove'}</div>`:'';
+  const head=gm?`<div class="mi-head">${state.multiMode!=='parallel'?'Pick agents — click order = speaking/stage order':'Pick the group agents — click to add/remove'}</div>`:'';
   list.innerHTML=head+agents.map(a=>{
     const inGroup=state.group&&state.group.agents.some(x=>x.id===a.id);
     return `<div class="mi agent-opt ${!gm&&state.agent&&state.agent.id===a.id?'sel':''}" data-id="${a.id}">
@@ -810,8 +810,8 @@ function renderGroupBar(){
   bar.innerHTML='<span id="gNow" class="gnow"></span>'+
     `<details class="gdrop" id="gDrop"><summary>👥 ${g.agents.length} agent${g.agents.length>1?'s':''} ▾</summary>`+
     '<div class="glist">'+
-    g.agents.map((a,i)=>`<span class="gagent" data-name="${esc(a.name)}" style="--gc:${GCOLORS[i%GCOLORS.length]}${state.pipelineMode?';cursor:grab':''}">
-      ${state.pipelineMode?`<span class="gord">${i+1}</span>`:''}
+    g.agents.map((a,i)=>`<span class="gagent" data-name="${esc(a.name)}" style="--gc:${GCOLORS[i%GCOLORS.length]}${state.multiMode!=='parallel'?';cursor:grab':''}">
+      ${state.multiMode!=='parallel'?`<span class="gord">${i+1}</span>`:''}
       <span class="gav">${esc(a.name[0].toUpperCase())}</span><span class="gname">${esc(a.name)}</span>
       <button class="grm" title="Remove">✕</button></span>`).join('')+
     '</div></details>'+
@@ -824,8 +824,8 @@ function renderGroupBar(){
     renderGroupBar();renderAgentMenu(state._agents||[]);
   });
   bar.querySelector('#gExit').onclick=()=>{exitGroupMode();};
-  if(state.pipelineMode){
-    // Drag & drop reorder — array order IS the pipeline order.
+  if(state.multiMode!=='parallel'){
+    // Drag & drop reorder — array order IS the speaking/stage order.
     bar.querySelectorAll('.gagent').forEach(el=>{
       el.draggable=true;
       el.ondragstart=e=>{e.dataTransfer.setData('text/plain',el.dataset.name);el.classList.add('dragging');};
@@ -847,7 +847,7 @@ function renderGroupBar(){
   }
 }
 function exitGroupMode(){
-  state.groupMode=false;state.group=null;state.pipelineMode=false;
+  state.groupMode=false;state.group=null;state.multiMode='parallel';
   $('#groupStage').style.display='none';
   renderAgentMenu(state._agents||[]);
   selectAgent(null);
@@ -873,7 +873,7 @@ async function streamGroupReply(c){
   const last=messages[messages.length-1];
   const payload={message:last.content,history:messages.slice(0,-1),
     agent_ids:state.group.agents.map(a=>a.id),conversation_id:c.id,
-    mode:state.pipelineMode?'pipeline':'parallel'};
+    mode:state.multiMode};
   const ctrl=new AbortController();
   state.abort={get stop(){return ctrl.signal.aborted},set stop(v){if(v)ctrl.abort()}};
   // per-speaker typing row + activity list
@@ -965,6 +965,14 @@ async function streamGroupReply(c){
 // Full pipeline: route -> plan -> parallel researchers -> gap check ->
 // verifier -> synthesizer. Stage events stream into the activity list; the
 // terminal `research_answer` chunk carries the final markdown.
+const MULTI_MODES={parallel:['👥','Group'],pipeline:['🔗','Pipeline'],debate:['⚔️','Debate'],roundtable:['🪑','Roundtable'],brainstorm:['💡','Brainstorm']};
+function paintMulti(){
+  const v=$('#multiVal');if(v)v.textContent=MULTI_MODES[state.multiMode][1].toLowerCase();
+  document.querySelectorAll('#multiSub .multi-opt').forEach(o=>{
+    const chk=o.querySelector('.dchk');if(chk)chk.textContent=o.dataset.m===state.multiMode?'✓':'';
+    o.style.color=o.dataset.m===state.multiMode?'var(--accent)':'';
+  });
+}
 const DEPTHS=['auto','quick','standard','deep'];
 function setDepth(v){
   if(!DEPTHS.includes(v))v='auto';
@@ -993,7 +1001,7 @@ function paintModeChips(){
   const host=$('#modeChips');if(!host)return;
   const chips=[];
   if(state.groupMode&&state.group&&state.group.agents.length)
-    chips.push({ico:state.pipelineMode?'🔗':'👥',tx:(state.pipelineMode?'Pipeline · ':'Group · ')+state.group.agents.length,off:exitGroupMode});
+    chips.push({ico:MULTI_MODES[state.multiMode][0],tx:MULTI_MODES[state.multiMode][1]+' · '+state.group.agents.length,off:exitGroupMode});
   else if(state.agent)
     chips.push({ico:'🤖',tx:state.agent.name,off:()=>selectAgent(null)});
   if(state.rpChar)
@@ -1020,7 +1028,7 @@ function toggleResearchMode(){
   toast(state.researchMode?'Research mode on':'Research mode off');
   saveState();
 }
-function exitGroupModeKeepAgent(){state.groupMode=false;state.group=null;state.pipelineMode=false;$('#groupStage').style.display='none';}
+function exitGroupModeKeepAgent(){state.groupMode=false;state.group=null;state.multiMode='parallel';$('#groupStage').style.display='none';}
 async function streamResearchReply(c){
   state.streaming=true;setSend(true);
   const inner=$('#chatInner'),scroller=$('#chatScroll');
@@ -1151,7 +1159,7 @@ $('#agentNoneBtn').onclick=()=>{
   toast('Raw model mode');
 };
 $('#agentGroupBtn').onclick=()=>{
-  state.groupMode=true;state.pipelineMode=false;
+  state.groupMode=true;state.multiMode='parallel';
   if(!state.group)state.group={agents:[]};
   renderAgentMenu(state._agents||[]);
   renderGroupBar();
@@ -1240,11 +1248,18 @@ function rpOpenModal(i){
   $('#rpModal').dataset.edit=String((i==null||i<0)?-1:i);
   $('#rpModal').style.display='flex';
 }
-$('#pipelineBtn').onclick=e=>{e.stopPropagation();
-  state.groupMode=true;state.pipelineMode=true;
-  if(!state.group)state.group={agents:[]};
-  renderAgentMenu(state._agents||[]);$('#agentMenu').style.display='block';renderGroupBar();
-  toast('Pipeline: pick agents — click order = chain order');};
+$('#multiBtn').onclick=e=>{e.preventDefault();
+  const s=$('#multiSub');if(s)s.style.display=s.style.display==='none'?'block':'none';};
+document.querySelectorAll('#multiSub .multi-opt').forEach(o=>{
+  o.onclick=e=>{e.preventDefault();
+    state.multiMode=o.dataset.m;state.groupMode=true;
+    if(!state.group)state.group={agents:[]};
+    paintMulti();renderAgentMenu(state._agents||[]);
+    $('#agentMenu').style.display='block';renderGroupBar();
+    $('#multiSub').style.display='none';saveState();
+    toast(MULTI_MODES[state.multiMode][1]+': pick agents — click order = order');
+  };
+});
 $('#rpBtn').onclick=()=>{renderRpMenu();const m=$('#rpMenu');m.style.display=(m.style.display==='none')?'block':'none';};
 $('#rpStarterBtn').onclick=async()=>{
   try{
@@ -1296,6 +1311,7 @@ $('#plusMenu').addEventListener('click',e=>{
 },true);
 paintModeChips();
 paintDepth();
+paintMulti();
 paintResearchBtn();
 $('#shareBtn').onclick=async()=>{
   const c=state.current;

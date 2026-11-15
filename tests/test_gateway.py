@@ -361,3 +361,22 @@ async def test_no_second_sweep_after_all_providers_fail(session, monkeypatch):
 
     assert first.call_count == 1
     assert second.call_count == 1
+
+
+def test_scrub_body_strips_nulls():
+    """Ollama (and other strict parsers) 400 on explicit null params."""
+    from app.gateway import _scrub_body
+    body = {"model": "m", "temperature": None, "top_p": None, "stop": None,
+            "max_tokens": 8,
+            "messages": [
+                {"role": "assistant", "content": None, "tool_calls": [{"id": "t"}]},
+                {"role": "user", "content": "hi"},
+            ]}
+    out = _scrub_body(body)
+    assert "temperature" not in out and "top_p" not in out and "stop" not in out
+    assert out["max_tokens"] == 8
+    assert out["messages"][0]["content"] == ""
+    assert out["messages"][0]["tool_calls"] == [{"id": "t"}]
+    assert out["messages"][1] == {"role": "user", "content": "hi"}
+    # Original untouched
+    assert body["temperature"] is None

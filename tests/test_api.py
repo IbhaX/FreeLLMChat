@@ -89,7 +89,7 @@ def test_undecryptable_key_flagged():
                 k.encrypted_key = "gAAAAAB" + "x" * 100
                 await s.commit()
 
-        asyncio.get_event_loop().run_until_complete(corrupt())
+        asyncio.run(corrupt())
         keys = c.get("/admin/keys?provider=groq", headers=ADMIN).json()
         assert keys[0]["decryptable"] is False
         assert keys[0]["healthy"] is False
