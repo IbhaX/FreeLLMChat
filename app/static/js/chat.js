@@ -562,7 +562,7 @@ async function streamAPIReply(c,live){
       const it=document.createElement('div');it.className='act-item';
       it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
       actList.appendChild(it);}
-    if(!actDone)actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
+    if(!actDone&&!actLog)actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
     scrollBottom();};
   let actDone=false;
   const closeAct=(ok)=>{
@@ -949,7 +949,7 @@ async function streamGroupReply(c,live){
       const it=document.createElement('div');it.className='act-item';
       it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
       actList.appendChild(it);}
-    actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
+    if(!actLog)actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
     scrollBottom();};
   const fail=note=>{
     if(trow)trow.remove();
@@ -1111,7 +1111,7 @@ async function streamResearchReply(c){
       const it=document.createElement('div');it.className='act-item';
       it.innerHTML=`<span class="act-dot"></span><span>${esc(text)}</span>`;
       actList.appendChild(it);}
-    actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
+    if(!actLog)actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''}…`;
     scrollBottom();};
   const finish=(msg,bubble)=>{
     if(window.NovaRender&&NovaRender.ResponseRenderer){
