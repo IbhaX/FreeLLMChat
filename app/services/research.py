@@ -669,54 +669,102 @@ async def _research_one(
         # candidates (e.g. ``auto``'s local backstop) from trying.
         if outage is not None:
             raise outage
+        emit({"event": "note",
+              "text": f"{qid}: researcher failed on all model candidates — "
+                      "no findings for this aspect"})
         return
     text = text_of(((result.get("choices") or [{}])[0]).get("message", {}).get("content"))
     data = _extract_json(text)
-    if data is None and text.strip():
-        # Weak model ignored the JSON contract: keep the prose as an
-        # unverified finding instead of dropping the research entirely.
-        data = {"findings": [{"claim": text.strip()[:600], "evidence": "",
-                              "source_id": "", "confidence": "low"}],
-                "sources": []}
-        state.unverified.append(f"{qid}: researcher returned non-JSON output")
-    _merge_findings(state, data or {}, qid)
+    merged_before = len(state.findings)
+    if data is not None:
+        _merge_findings(state, data, qid)
+    if len(state.findings) == merged_before and text.strip():
+        # Weak model ignored the JSON contract — or returned VALID JSON in a
+        # different shape ({\"results\": …}, {\"answer\": …}). Keep the reply
+        # as an unverified finding instead of dropping the research; also
+        # carry any sources the JSON did give so citations still resolve.
+        salvage = {
+            "findings": [{"claim": text.strip()[:600], "evidence": "",
+                          "source_id": "", "confidence": "low"}],
+            "sources": (data or {}).get("sources") or [],
+        }
+        _merge_findings(state, salvage, qid)
+        state.unverified.append(
+            f"{qid}: researcher output had no findings key" if data is not None
+            else f"{qid}: researcher returned non-JSON output")
+    if len(state.findings) == merged_before:
+        emit({"event": "note",
+              "text": f"{qid}: researcher returned no usable findings"})
     state.harvested[qid] = seen_urls
 
 
-def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> None:
+def _merge_findings_sources_only(
+    state: ResearchState, srcs: Any, qid: str, id_map: dict[str, str],
+) -> None:
     # Every researcher numbers its own sources s1, s2… — namespace the ids
     # per sub-question and dedupe by URL so citations never collide or
     # point at another researcher's page.
+    if not isinstance(srcs, list):
+        return
+    for s in srcs:
+        if not isinstance(s, dict):
+            continue
+        sid = str(s.get("id") or "").strip()
+        if not sid:
+            continue
+        url = str(s.get("url") or "")
+        existing = next((x.id for x in state.sources.values()
+                         if x.url and x.url == url), None)
+        ns = existing or (f"{qid}:{sid}" if sid in state.sources else sid)
+        id_map[sid] = ns
+        if existing is None and ns not in state.sources:
+            src = Source(
+                id=ns, title=str(s.get("title") or ""), url=url,
+                publisher=str(s.get("publisher") or ""),
+                date=str(s.get("date") or ""),
+                type=str(s.get("type") or ""),
+            )
+            state.sources[ns] = src
+
+
+def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> None:
     id_map: dict[str, str] = {}
-    srcs = data.get("sources") or []
-    if isinstance(srcs, list):
-        for s in srcs:
-            if not isinstance(s, dict):
-                continue
-            sid = str(s.get("id") or "").strip()
-            if not sid:
-                continue
-            url = str(s.get("url") or "")
-            existing = next((x.id for x in state.sources.values()
-                             if x.url and x.url == url), None)
-            ns = existing or (f"{qid}:{sid}" if sid in state.sources else sid)
-            id_map[sid] = ns
-            if existing is None and ns not in state.sources:
-                src = Source(
-                    id=ns, title=str(s.get("title") or ""), url=url,
-                    publisher=str(s.get("publisher") or ""),
-                    date=str(s.get("date") or ""),
-                    type=str(s.get("type") or ""),
-                )
-                state.sources[ns] = src
-    findings = data.get("findings") or []
+    _merge_findings_sources_only(state, data.get("sources") or [], qid, id_map)
+    # Accept alternate shapes too — models often nest findings under
+    # "results"/"items"/"claims" or inside an "answer"/"data" object.
+    findings = None
+    for key in ("findings", "results", "items", "claims"):
+        v = data.get(key)
+        if isinstance(v, list) and v:
+            findings = v
+            break
+    if findings is None:
+        for key in ("findings", "results", "items", "claims", "answer", "data",
+                    "response", "output"):
+            v = data.get(key)
+            if isinstance(v, dict):
+                _merge_findings(state, v, qid)
+                return
+            if isinstance(v, list) and v and all(
+                    isinstance(x, dict) for x in v):
+                findings = v
+                break
+    srcs = data.get("sources") or data.get("references") or data.get("citations") or []
+    if srcs and not (data.get("sources")):
+        # Merge the alternate source list through the same normalization path.
+        _merge_findings_sources_only(state, srcs, qid, id_map)
+    findings = findings or []
     if isinstance(findings, list):
         for f in findings:
-            if not isinstance(f, dict) or not f.get("claim"):
+            if not isinstance(f, dict):
                 continue
-            raw_sid = str(f.get("source_id") or "")
+            claim = f.get("claim") or f.get("text") or f.get("statement") \
+                or f.get("finding")
+            if not claim:
+                continue
+            raw_sid = str(f.get("source_id") or f.get("source") or "")
             state.findings.append(Finding(
-                claim=str(f.get("claim")), evidence=str(f.get("evidence") or ""),
+                claim=str(claim), evidence=str(f.get("evidence") or f.get("detail") or ""),
                 source_id=id_map.get(raw_sid, raw_sid),
                 confidence=str(f.get("confidence") or ""), sub_question=qid,
             ))
