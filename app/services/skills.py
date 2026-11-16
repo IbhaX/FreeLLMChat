@@ -178,11 +178,13 @@ async def load_custom_skills(session: Any) -> int:
 
 
 def _lookup(name: str) -> SkillDef | None:
-    return _BY_NAME.get(name) or _DYNAMIC.get(name)
+    # user overrides shadow built-ins with the same name
+    return _DYNAMIC.get(name) or _BY_NAME.get(name)
 
 
 def all_skills() -> list[SkillDef]:
-    return list(SKILLS) + list(_DYNAMIC.values())
+    return [s for s in SKILLS if s.name not in _DYNAMIC] \
+        + list(_DYNAMIC.values())
 
 
 def get_skill(name: str) -> SkillDef | None:

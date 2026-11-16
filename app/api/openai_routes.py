@@ -222,7 +222,7 @@ async def list_experts():
 @router.get("/skills")
 async def list_skills():
     """Skill registry — reusable capability modules agents can attach."""
-    from app.services.skills import all_skills
+    from app.services.skills import _DYNAMIC, _BY_NAME, all_skills
 
     return {
         "skills": [
@@ -231,7 +231,10 @@ async def list_skills():
                 "version": s.version,
                 "description": s.description,
                 "requires_tools": list(s.requires_tools),
+                "instructions": s.instructions,
                 "domains": list(s.domains),
+                "custom": s.name in _DYNAMIC,
+                "overrides_builtin": s.name in _DYNAMIC and s.name in _BY_NAME,
             }
             for s in all_skills()
         ]
