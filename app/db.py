@@ -106,6 +106,7 @@ async def init_db() -> None:
                 "mood": "VARCHAR(32) DEFAULT ''",
                 "paused_ids": "JSON",
                 "director_notes": "TEXT DEFAULT ''",
+                "tools_enabled": "BOOLEAN DEFAULT 0",
             }
             for col, ddl in rp_adds.items():
                 if col not in rp_cols:

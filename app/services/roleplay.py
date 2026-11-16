@@ -47,7 +47,7 @@ def normalize_room(room: RoleplayRoom) -> None:
 def persona_prompt(c: Character, scenario: str = "",
                    others: list[Character] | None = None,
                    *, mood: str = "", director_notes: str = "",
-                   summary: str = "") -> str:
+                   summary: str = "", tools: bool = False) -> str:
     """Build the identity-locking system prompt for one character."""
     lines = [
         f"You are {c.name}. Stay in character at all times — never break "
@@ -90,6 +90,13 @@ def persona_prompt(c: Character, scenario: str = "",
         lines.append(
             "Stage direction from the player (treat as private guidance, "
             f"never quote it): {director_notes}")
+    if tools:
+        lines.append(
+            "You may use the web_search and http_get tools to look up "
+            "real-world facts the scene calls for — dates, places, lore, "
+            "current events. Search when it genuinely helps; weave what "
+            "you find into your in-character speech, and never mention "
+            "tools, searches, or sources.")
     lines.append(
         "Write only this character's next turn — 1-3 short paragraphs or a "
         "few lines of dialogue. No stage directions in brackets unless your "
@@ -151,8 +158,26 @@ def clean_turn_text(text: str, name: str) -> str:
 
 
 async def _reply(gateway: Any, session: Any, model: str, system: str,
-                 history: list[dict[str, str]]) -> str:
+                 history: list[dict[str, str]], *,
+                 tools: bool = False) -> str:
     """One character turn via the model policy's general-role candidates."""
+    if tools:
+        from app.services.tools import run_tool_loop
+        payload: dict[str, Any] = {
+            "model": model or "auto",
+            "messages": [{"role": "system", "content": system}] + history,
+            "temperature": 0.8,
+            "stream": False,
+        }
+        try:
+            result = await run_tool_loop(gateway, session, payload,
+                                         ROLEPLAY_TOOLS, max_rounds=3,
+                                         call_timeout=120.0)
+            msg = ((result.get("choices") or [{}])[0]).get("message", {})
+            content = msg.get("content")
+            return content.strip() if isinstance(content, str) else ""
+        except Exception:
+            return ""
     from app.services.model_policy import internal_chat
     payload = {
         "messages": [{"role": "system", "content": system}] + history,
@@ -167,12 +192,48 @@ def _find_msg(room: RoleplayRoom, mid: str) -> dict[str, Any] | None:
     return next((m for m in room.messages or [] if m.get("id") == mid), None)
 
 
+ROLEPLAY_TOOLS = ["web_search", "http_get"]
+
+
 async def _char_reply_stream(
     gateway: Any, session: Any, model: str, system: str,
     history: list[dict[str, str]], emit: Any = None,
+    tools: bool = False,
 ) -> AsyncIterator[str]:
     """Yield streamed delta text for one character turn; falls back to a
-    single buffered reply when streaming fails before any token."""
+    single buffered reply when streaming fails before any token.
+
+    With ``tools`` on, the turn goes through the non-streaming tool loop
+    (web_search/http_get) instead — empty heartbeat yields keep the
+    caller draining queued tool-activity events while the loop runs,
+    and the finished reply arrives as one final delta.
+    """
+    if tools:
+        import asyncio
+
+        from app.services.tools import run_tool_loop
+        payload: dict[str, Any] = {
+            "model": model or "auto",
+            "messages": [{"role": "system", "content": system}] + history,
+            "temperature": 0.8,
+            "stream": False,
+        }
+        task = asyncio.ensure_future(run_tool_loop(
+            gateway, session, payload, ROLEPLAY_TOOLS, emit=emit,
+            max_rounds=3, call_timeout=120.0))
+        while not task.done():
+            await asyncio.sleep(0.3)
+            yield ""
+        try:
+            result = task.result()
+        except Exception:
+            result = {}
+        msg = ((result.get("choices") or [{}])[0]).get("message", {})
+        content = msg.get("content")
+        text = content if isinstance(content, str) else ""
+        if text.strip():
+            yield text.strip()
+        return
     payload: dict[str, Any] = {
         "model": model or "auto",
         "messages": [{"role": "system", "content": system}] + history,
@@ -274,12 +335,14 @@ async def turn_stream(
                 system = persona_prompt(
                     c, room.scenario, others, mood=room.mood or "",
                     director_notes=room.director_notes or "",
-                    summary=room.summary or "")
+                    summary=room.summary or "",
+                    tools=bool(room.tools_enabled))
                 acc = ""
                 try:
                     async for piece in _char_reply_stream(
                             gateway, session, room.model or "auto",
-                            system, history, emit=emit):
+                            system, history, emit=emit,
+                            tools=bool(room.tools_enabled)):
                         acc += piece
                         while not evq.empty():
                             yield _sse(evq.get_nowait())
@@ -397,7 +460,8 @@ async def retry_stream(
         system = persona_prompt(
             c, room.scenario, others, mood=room.mood or "",
             director_notes=room.director_notes or "",
-            summary=room.summary or "")
+            summary=room.summary or "",
+            tools=bool(room.tools_enabled))
         yield _sse({"event": "char_start", "id": message_id,
                     "character_id": c.id, "name": c.name,
                     "emoji": c.emoji, "regen": True})
@@ -405,7 +469,7 @@ async def retry_stream(
         try:
             async for piece in _char_reply_stream(
                     gateway, session, room.model or "auto", system, history,
-                    emit=emit):
+                    emit=emit, tools=bool(room.tools_enabled)):
                 acc += piece
                 while not evq2.empty():
                     yield _sse(evq2.get_nowait())
@@ -461,8 +525,9 @@ async def room_turn(gateway: Any, session: Any, room: RoleplayRoom,
                 persona_prompt(c, room.scenario, others,
                                mood=room.mood or "",
                                director_notes=room.director_notes or "",
-                               summary=room.summary or ""),
-                history)
+                               summary=room.summary or "",
+                               tools=bool(room.tools_enabled)),
+                history, tools=bool(room.tools_enabled))
         except Exception:
             text = ""
         text = clean_turn_text(text, c.name)

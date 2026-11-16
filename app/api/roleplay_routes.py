@@ -25,6 +25,7 @@ class RoomIn(BaseModel):
     scenario: str = ""
     character_ids: list[int] = Field(default_factory=list, max_length=6)
     model: str = "auto"
+    tools_enabled: bool = False
 
 
 class MessageIn(BaseModel):
@@ -56,6 +57,7 @@ class RoomPatch(BaseModel):
     director_notes: str | None = None
     character_ids: list[int] | None = None
     model: str | None = None
+    tools_enabled: bool | None = None
 
 
 def _room_out(r: RoleplayRoom) -> dict[str, Any]:
@@ -64,6 +66,7 @@ def _room_out(r: RoleplayRoom) -> dict[str, Any]:
             "summary": r.summary or "", "mood": r.mood or "",
             "paused_ids": r.paused_ids or [],
             "director_notes": r.director_notes or "",
+            "tools_enabled": bool(r.tools_enabled),
             "messages": r.messages, "updated_at": r.updated_at.isoformat()}
 
 
@@ -88,6 +91,7 @@ async def create_room(body: RoomIn,
                       user: User | None = Depends(optional_user)):
     room = RoleplayRoom(name=body.name.strip(), scenario=body.scenario,
                         character_ids=body.character_ids, model=body.model,
+                        tools_enabled=body.tools_enabled,
                         owner_id=user.id if user else None, messages=[])
     session.add(room)
     await session.commit()

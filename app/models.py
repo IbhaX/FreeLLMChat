@@ -363,6 +363,7 @@ class RoleplayRoom(Base):
     mood: Mapped[str] = mapped_column(String(32), default="")
     paused_ids: Mapped[list] = mapped_column(JSON, default=list)
     director_notes: Mapped[str] = mapped_column(Text, default="")
+    tools_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow)

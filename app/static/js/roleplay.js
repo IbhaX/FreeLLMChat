@@ -52,7 +52,7 @@
     $('#charSave').onclick=saveCharacter;
     $$('[data-close]').forEach(b=>b.onclick=e=>
       e.target.closest('.st-veil').classList.remove('open'));
-    ['dScenario','dMood','dNotes'].forEach(id=>{
+    ['dScenario','dMood','dNotes','dTools'].forEach(id=>{
       $('#'+id).addEventListener('change',patchRoom);});
     $('#dSummarize').onclick=async()=>{
       try{const r=await v1Api(`/v1/roleplay/rooms/${room.id}/summary`,{method:'POST'});
@@ -182,6 +182,13 @@
         if(room)room.messages=ev.messages;
         $('#queueLine').textContent='';renderCast();
         break;}
+      case 'tool':{
+        const q=(ev.args&&(ev.args.query||ev.args.url))||'';
+        $('#queueLine').innerHTML=`🔍 <b>${esc(ev.tool||'tool')}</b>`+
+          (q?` ${esc(String(q)).slice(0,80)}`:'');
+        break;}
+      case 'note': case 'fail': case 'retry':{
+        if(ev.text)$('#queueLine').textContent=ev.text;break;}
       case 'error': toast2(ev.text||'something went wrong');break;
     }
   }
@@ -339,6 +346,7 @@
     $('#dScenario').value=room.scenario||'';
     $('#dMood').value=room.mood||'';
     $('#dNotes').value=room.director_notes||'';
+    $('#dTools').checked=!!room.tools_enabled;
     $('#dSummary').textContent=room.summary||'No recap yet — it builds as the scene runs.';
     $('#backdrop').dataset.mood=room.mood||'';
     $('#scenarioLine').textContent=room.scenario||'';
@@ -377,11 +385,13 @@
     room.scenario=$('#dScenario').value;
     room.mood=$('#dMood').value;
     room.director_notes=$('#dNotes').value;
+    room.tools_enabled=$('#dTools').checked;
     $('#backdrop').dataset.mood=room.mood;
     $('#scenarioLine').textContent=room.scenario;
     try{await v1Api(`/v1/roleplay/rooms/${room.id}`,{method:'PATCH',
       body:JSON.stringify({scenario:room.scenario,mood:room.mood,
-        director_notes:room.director_notes})});}
+        director_notes:room.director_notes,
+        tools_enabled:room.tools_enabled})});}
     catch(e){toast2(e.message);}
   }
 

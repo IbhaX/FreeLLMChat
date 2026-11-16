@@ -196,6 +196,9 @@ body {
   outline: none; border-color: var(--stage-violet);
 }
 .st-director .mini { font-size: 11px; color: var(--stage-faint); margin-top: 4px; }
+.st-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px;
+  color: var(--stage-ink); cursor: pointer; line-height: 1.4; }
+.st-check input[type=checkbox] { margin-top: 2px; accent-color: var(--stage-violet); }
 .st-order { display: flex; flex-direction: column; gap: 5px; }
 .st-order .ord {
   display: flex; align-items: center; gap: 8px; padding: 6px 9px;
