@@ -41,7 +41,7 @@ class ChatJob:
 
     __slots__ = (
         "conv_id", "frames", "reply", "done", "error", "model",
-        "started_at", "done_at", "_cond", "_task",
+        "started_at", "done_at", "_cond", "_task", "linked",
     )
 
     def __init__(self, conv_id: str) -> None:
@@ -55,6 +55,9 @@ class ChatJob:
         self.done_at = 0.0
         self._cond = asyncio.Condition()
         self._task: asyncio.Task[None] | None = None
+        # Extra tasks torn down with the job (e.g. a detached research run
+        # that owns the frame queue the pump consumes).
+        self.linked: list[asyncio.Task[Any]] = []
 
     def _pump_dead(self) -> bool:
         """Pump task finished without marking done (e.g. cancelled before
@@ -84,6 +87,9 @@ class ChatJob:
                 yield _KEEPALIVE
 
     def cancel(self) -> None:
+        for t in self.linked:
+            if not t.done():
+                t.cancel()
         if self._task is not None and not self._task.done():
             self._task.cancel()
 

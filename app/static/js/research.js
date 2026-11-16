@@ -20,6 +20,7 @@
   async function init(){
     loadModels();loadRuns();
     $('#runBtn').onclick=runResearch;
+    $('#stopBtn').onclick=stopResearch;
     $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')runResearch();});
     $('#exportBtn').onclick=exportMd;
     $('#printBtn').onclick=()=>{const w=window.open('','_blank');
@@ -94,10 +95,25 @@
     a.click();URL.revokeObjectURL(a.href);
   }
 
+  let runId='';
+  let stopCtl=null;
+
+  async function stopResearch(){
+    const btn=$('#stopBtn');btn.disabled=true;
+    try{
+      await fetch(API_BASE+'/v1/research/stop',{method:'POST',headers:apiHeaders(false),
+        body:JSON.stringify({conversation_id:runId})});
+    }catch(_){}
+    if(stopCtl){try{stopCtl.abort();}catch(_){}}
+  }
+
   async function runResearch(){
     const q=$('#q').value.trim();
     if(!q||running)return;
     running=true;$('#runBtn').disabled=true;$('#runBtn').textContent='Researching…';
+    $('#stopBtn').style.display='';$('#stopBtn').disabled=false;
+    runId='research-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
+    stopCtl=new AbortController();
     $('#stages').innerHTML='';$('#report').innerHTML='<p class="tx-3" style="text-align:center;padding:48px 0">Research in progress — the report appears here when complete.</p>';
     actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create($('#stages')):null;
     currentAnswer='';$('#exportBtn').disabled=true;
@@ -107,8 +123,8 @@
         market:' Focus on market data, competitor analysis, pricing, and industry news.'};
       const msg=q+(modeHints[$('#mode').value]||'');
       const resp=await fetch(API_BASE+'/v1/research/stream',{
-        method:'POST',headers:apiHeaders(false),
-        body:JSON.stringify({message:msg,model:$('#model').value,depth:$('#depth').value||null,save:true})
+        method:'POST',headers:apiHeaders(false),signal:stopCtl.signal,
+        body:JSON.stringify({message:msg,model:$('#model').value,depth:$('#depth').value||null,save:true,conversation_id:runId})
       });
       if(!resp.ok)throw new Error('research failed: '+resp.status);
       const reader=resp.body.getReader();const dec=new TextDecoder();
@@ -139,11 +155,16 @@
         }
       }
     }catch(e){
-      if(actLog)actLog.fail(e.message);else addStage('Error: '+e.message);
-      toast(e.message,'err');
+      if(e.name==='AbortError'){
+        addStage('Research stopped by user.');
+      }else{
+        if(actLog)actLog.fail(e.message);else addStage('Error: '+e.message);
+        toast(e.message,'err');
+      }
     }finally{
       if(actLog)actLog.finish();
       running=false;$('#runBtn').disabled=false;$('#runBtn').textContent='Run research';
+      $('#stopBtn').style.display='none';
     }
   }
 })();

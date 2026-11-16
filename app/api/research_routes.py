@@ -171,6 +171,14 @@ async def research_stream(
                     meta={"research_run_id": rid, "depth": state.depth},
                     duration_ms=int((time.monotonic() - _t0) * 1000))
                 await ls.commit()
+        except asyncio.CancelledError:
+            queue.put_nowait({"event": "error", "text": "research stopped"})
+            async with factory() as ls:
+                await agent_log.finish_run(
+                    ls, arun, "cancelled",
+                    duration_ms=int((time.monotonic() - _t0) * 1000))
+                await ls.commit()
+            raise
         except Exception as e:
             queue.put_nowait({"event": "error",
                               "text": f"research failed: {str(e)[:200]}"})
@@ -182,30 +190,40 @@ async def research_stream(
     task = asyncio.ensure_future(run())
 
     async def gen():
-        while not (task.done() and queue.empty()):
-            try:
-                ev = await asyncio.wait_for(queue.get(), timeout=0.2)
-            except (asyncio.TimeoutError, TimeoutError):
-                continue
-            if ev.get("event") == "research_answer":
-                content = ev.pop("answer")
-                chunk = {
-                    "id": f"research-{uuid.uuid4().hex[:8]}",
-                    "object": "chat.completion.chunk",
-                    "choices": [{"index": 0, "delta": {"content": content},
-                                 "finish_reason": "stop"}],
-                }
-                yield f"data: {json.dumps(chunk)}\n\n"
-                yield _meta({k: v for k, v in ev.items() if k != "event"})
-                yield "data: [DONE]\n\n"
-                return
-            yield _meta(ev)
-        yield "data: [DONE]\n\n"
+        try:
+            while not (task.done() and queue.empty()):
+                try:
+                    ev = await asyncio.wait_for(queue.get(), timeout=0.2)
+                except (asyncio.TimeoutError, TimeoutError):
+                    continue
+                if ev.get("event") == "research_answer":
+                    content = ev.pop("answer")
+                    chunk = {
+                        "id": f"research-{uuid.uuid4().hex[:8]}",
+                        "object": "chat.completion.chunk",
+                        "choices": [{"index": 0, "delta": {"content": content},
+                                     "finish_reason": "stop"}],
+                    }
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                    yield _meta({k: v for k, v in ev.items() if k != "event"})
+                    yield "data: [DONE]\n\n"
+                    return
+                yield _meta(ev)
+            yield "data: [DONE]\n\n"
+        finally:
+            # Job-wrapped streams only tear down early on an explicit
+            # job.cancel() (a viewer refresh just re-attaches to the
+            # pump), so tearing down here = a real stop request: kill the
+            # detached research task instead of letting it burn provider
+            # calls nobody will read.
+            if conv_key and not task.done():
+                task.cancel()
 
     if conv_key:
         from app.services import chat_jobs
 
         job = chat_jobs.start(conv_key, gen())
+        job.linked.append(task)
         return StreamingResponse(
             job.stream(), media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -214,6 +232,25 @@ async def research_stream(
         gen(), media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/research/stop")
+async def research_stop(body: dict[str, Any]):
+    """Cancel the running research job for a conversation key.
+
+    Cancelling the job's pump tears the frame generator down, which cancels
+    the detached research task (see ``gen``'s ``finally``).
+    """
+    conv_key = str((body or {}).get("conversation_id") or "")
+    if not conv_key:
+        return {"stopped": False}
+    from app.services import chat_jobs
+
+    job = chat_jobs.get_running(conv_key) or chat_jobs.get(conv_key)
+    if job is None:
+        return {"stopped": False}
+    job.cancel()
+    return {"stopped": True}
 
 
 # ---------- saved runs (admin view) ----------
