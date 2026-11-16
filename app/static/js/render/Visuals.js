@@ -306,6 +306,46 @@
     return wrap;
   }
 
+  // ---------- Text primitives ----------
+  // heading / paragraph / spacer / card let a reply be composed entirely of
+  // components — no bare-markdown prose required.
+  function heading(data) {
+    const lvl = Math.min(4, Math.max(1, Number(data && data.level) || 2));
+    return el("h" + lvl, { class: "nova-heading nova-h" + lvl, html: inline(data && data.text || "") });
+  }
+
+  function paragraph(data) {
+    const text = (data && data.text) || "";
+    if (!text.trim()) return null;
+    // Blank lines split into separate <p>; single newlines become <br>.
+    const wrap = el("div", { class: "nova-paragraphs" });
+    text.split(/\n{2,}/).forEach((chunk) => {
+      if (!chunk.trim()) return;
+      wrap.append(el("p", { class: "nova-paragraph", html: inline(chunk).replace(/\n/g, "<br>") }));
+    });
+    return wrap.childNodes.length ? wrap : null;
+  }
+
+  function spacer(data) {
+    const size = { small: "s", medium: "m", large: "l" }[(data && data.size) || "medium"] || "m";
+    return el("div", { class: "nova-spacer nova-spacer-" + size, "aria-hidden": "true" });
+  }
+
+  function card(data) {
+    const box = el("div", { class: "nova-card" + (data && data.variant ? " nova-card-" + data.variant : "") });
+    if (data && data.title) box.append(el("div", { class: "nova-card-title", html: inline(data.title) }));
+    const kids = (data && data.components) || [];
+    const inner = el("div", { class: "nova-comp-grid nova-card-grid" });
+    kids.forEach((c) => {
+      if (!c || typeof c !== "object") return;
+      Nova.ResponseRenderer.renderComponent(c, inner);
+      const slot = inner.lastElementChild;
+      if (slot && Nova.isTile && Nova.isTile(c.type)) slot.classList.add("nova-tile");
+    });
+    box.append(inner);
+    return box;
+  }
+
   // ---------- Register all ----------
   Nova.ComponentRegistry.registerComponent("timeline", timeline);
   Nova.ComponentRegistry.registerComponent("stat_grid", statGrid);
@@ -319,6 +359,10 @@
   Nova.ComponentRegistry.registerComponent("heatmap", heatmap);
   Nova.ComponentRegistry.registerComponent("tagcloud", tagcloud);
   Nova.ComponentRegistry.registerComponent("divider", divider);
+  Nova.ComponentRegistry.registerComponent("heading", heading);
+  Nova.ComponentRegistry.registerComponent("paragraph", paragraph);
+  Nova.ComponentRegistry.registerComponent("spacer", spacer);
+  Nova.ComponentRegistry.registerComponent("card", card);
 
-  Nova.Visuals = { timeline, statGrid, callout, gauge, sparkline, keyvalue, badge, quote, diff, heatmap, tagcloud, divider };
+  Nova.Visuals = { timeline, statGrid, callout, gauge, sparkline, keyvalue, badge, quote, diff, heatmap, tagcloud, divider, heading, paragraph, spacer, card };
 })();

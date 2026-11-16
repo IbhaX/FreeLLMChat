@@ -276,12 +276,14 @@ def markdown_to_envelope(text: str) -> str | None:
         lead = remaining_prose.pop(0).strip()
     if not components:
         return None
-    # Remaining prose beyond the lead is kept as markdown content after the
-    # components so nothing the model said is lost.
+    # Remaining prose is emitted as paragraph components so nothing the
+    # model said is lost — never bare markdown content.
     extra_prose = "\n".join(remaining_prose).strip()
+    if extra_prose:
+        components.append({"type": "paragraph", "data": {"text": extra_prose}})
     env = {
         "response_type": "general",
-        "content": lead + ("\n\n" + extra_prose if extra_prose else ""),
+        "content": lead,
         "components": components,
     }
     if env_sources:
