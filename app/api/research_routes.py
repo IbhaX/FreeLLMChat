@@ -58,10 +58,15 @@ def _state_payload(state) -> tuple[list, list, list]:
         "confidence": f.confidence, "verdict": f.verdict,
         "sub_question": f.sub_question,
         "corroborated_by": list(getattr(f, "corroborated_by", [])),
+        "evidence_class": getattr(f, "evidence_class", "") or "",
     } for f in state.findings]
     sources = [{
         "id": s.id, "title": s.title, "url": s.url, "publisher": s.publisher,
         "date": s.date, "type": s.type, "quality": s.quality, "score": s.score,
+        "authors": getattr(s, "authors", "") or "",
+        "doi": getattr(s, "doi", "") or "",
+        "access": getattr(s, "access", "") or "",
+        "fetched": getattr(s, "fetched", "") or "",
     } for s in sorted(state.sources.values(), key=lambda x: -x.score)]
     return state.plan or [], findings, sources
 

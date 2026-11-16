@@ -152,7 +152,7 @@ Return JSON only:
       "confidence_reason": "primary source / corroborated / single secondary / dated"
     }}
   ],
-  "sources": [{{"id":"s1","title":"","url":"","publisher":"","date":"","type":"primary|academic|news|gov|company|blog|forum"}}],
+  "sources": [{{"id":"s1","title":"","url":"","publisher":"","date":"","authors":"","doi":"","access":"open|paywalled","type":"primary|academic|news|gov|company|blog|forum"}}],
   "conflicts": ["where sources disagree and why"],
   "not_found": ["what you looked for and could not find"]
 }}
@@ -492,6 +492,12 @@ class Source:
     type: str = ""
     quality: str = ""
     score: float = 0.0
+    authors: str = ""
+    doi: str = ""
+    # open | paywalled | unknown
+    access: str = ""
+    # fetched | unreachable | not_fetched — set by the verifier
+    fetched: str = ""
 
 
 @dataclass
@@ -504,6 +510,10 @@ class Finding:
     researcher: str = ""
     verdict: str = ""  # set by verifier
     verdict_note: str = ""
+    # Evidence classification set after verification:
+    # verified | corroborated | partially_supported | contradicted |
+    # inaccessible | unverified | not_found
+    evidence_class: str = ""
     # Other source ids whose identical claims corroborate this one.
     corroborated_by: list[str] = field(default_factory=list)
     # True when the cited source was auto-attached by _backfill_sources
@@ -747,14 +757,36 @@ async def _research_one(
     state.harvested[qid] = seen_urls
 
 
+_TRACK_PARAM_RE = re.compile(r"^(utm_|fbclid|gclid|mc_|igshid|ref_src)", re.I)
+
+
+def _canon_url(url: str) -> str:
+    """Canonical form for source dedupe: lowercase host, no www., no
+    tracking params, no trailing slash/fragment."""
+    try:
+        from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+        p = urlsplit((url or "").strip())
+        host = p.netloc.lower()
+        if host.startswith("www."):
+            host = host[4:]
+        qs = urlencode([(k, v) for k, v in parse_qsl(p.query)
+                        if not _TRACK_PARAM_RE.match(k)])
+        path = p.path.rstrip("/") or "/"
+        return urlunsplit((p.scheme.lower() or "https", host, path, qs, ""))
+    except Exception:
+        return (url or "").strip()
+
+
 def _merge_findings_sources_only(
     state: ResearchState, srcs: Any, qid: str, id_map: dict[str, str],
 ) -> None:
     # Every researcher numbers its own sources s1, s2… — namespace the ids
-    # per sub-question and dedupe by URL so citations never collide or
-    # point at another researcher's page.
+    # per sub-question and dedupe by canonical URL so citations never
+    # collide or point at another researcher's page.
     if not isinstance(srcs, list):
         return
+    canon_to_id = {(_canon_url(x.url)): x.id
+                   for x in state.sources.values() if x.url}
     for s in srcs:
         if not isinstance(s, dict):
             continue
@@ -762,8 +794,8 @@ def _merge_findings_sources_only(
         if not sid:
             continue
         url = str(s.get("url") or "")
-        existing = next((x.id for x in state.sources.values()
-                         if x.url and x.url == url), None)
+        canon = _canon_url(url)
+        existing = canon_to_id.get(canon) if canon else None
         ns = existing or (f"{qid}:{sid}" if sid in state.sources else sid)
         id_map[sid] = ns
         if existing is None and ns not in state.sources:
@@ -772,8 +804,13 @@ def _merge_findings_sources_only(
                 publisher=str(s.get("publisher") or ""),
                 date=str(s.get("date") or ""),
                 type=str(s.get("type") or ""),
+                authors=str(s.get("authors") or s.get("author") or ""),
+                doi=str(s.get("doi") or ""),
+                access=str(s.get("access") or s.get("access_status") or ""),
             )
             state.sources[ns] = src
+            if canon:
+                canon_to_id[canon] = ns
 
 
 def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> None:
@@ -841,14 +878,16 @@ def _backfill_sources(state: ResearchState) -> None:
             sid = f"h{n}"
             if sid not in state.sources and u not in {s2.url for s2 in state.sources.values()}:
                 state.sources[sid] = Source(id=sid, url=u, title=u, type="web")
-    url_to_id = {s2.url: s2.id for s2 in state.sources.values() if s2.url}
+    url_to_id = {_canon_url(s2.url): s2.id
+                 for s2 in state.sources.values() if s2.url}
     for f in state.findings:
         if f.source_id and f.source_id in state.sources:
             continue
         urls = state.harvested.get(f.sub_question) or []
-        pick = next((u for u in urls if u in url_to_id), urls[0] if urls else "")
+        pick = next((u for u in urls if _canon_url(u) in url_to_id),
+                    urls[0] if urls else "")
         if pick:
-            f.source_id = url_to_id.get(pick) or next(
+            f.source_id = url_to_id.get(_canon_url(pick)) or next(
                 (s2.id for s2 in state.sources.values() if s2.url == pick), "")
             f.source_guessed = True
         if not f.source_id and state.sources:
@@ -857,15 +896,33 @@ def _backfill_sources(state: ResearchState) -> None:
 
 
 def _score_sources(state: ResearchState) -> None:
-    """Source quality scoring: primary > academic/gov/company > news > blog/forum."""
+    """Transparent source scoring.
+
+    score = type_rank + recency + retrievability
+      type_rank: primary 5, academic/gov 4, company/news 3, unknown 2,
+                 blog 1, forum 0
+      recency: +0.5 when the source carries a current-year date
+      retrievability: +0.5 when the verifier fetched the page,
+                      -0.5 when it proved unreachable
+
+    quality: high >= 4.5, medium >= 3, low otherwise.
+    This ranks source credibility only — a claim's evidentiary status is
+    set separately in ``Finding.evidence_class`` after verification, so
+    a credible source never auto-validates the claim citing it.
+    """
     rank = {"primary": 5, "academic": 4, "gov": 4, "company": 3, "news": 3,
             "blog": 1, "forum": 0}
+    year_now = int(TODAY[:4])
     for s in state.sources.values():
         sc = float(rank.get(s.type, 2))
-        if s.date and re.search(r"202[5-9]", s.date):
+        if s.date and re.search(rf"{year_now}|{year_now - 1}", s.date):
             sc += 0.5
+        if s.fetched == "fetched":
+            sc += 0.5
+        elif s.fetched == "unreachable":
+            sc -= 0.5
         s.score = sc
-        s.quality = "high" if sc >= 4 else "medium" if sc >= 3 else "low"
+        s.quality = "high" if sc >= 4.5 else "medium" if sc >= 3 else "low"
 
 
 def _coverage_ok(state: ResearchState) -> bool:
@@ -1021,6 +1078,9 @@ async def _verify(
         await asyncio.gather(*(_fetch_excerpt(u) for u in fetch_urls.values())),
         strict=False))
     fetched = sum(1 for v in excerpts.values() if v)
+    for sid, text in excerpts.items():
+        if sid in state.sources:
+            state.sources[sid].fetched = "fetched" if text else "unreachable"
     state.verify_stats = {
         "claims_checked": len(claims_list),
         "sources_fetched": fetched,
@@ -1075,12 +1135,47 @@ async def _verify(
     ok = sum(1 for f in claims_list
              if (f.verdict or "").lower() in ("supported", "partially supported"))
     flagged = [f for f in claims_list if (f.verdict or "").lower() in bad]
+    _classify_evidence(state)
     emit({"event": "note", "stage": "verify",
           "text": f"{ok} verified · {len(flagged)} flagged · "
                   f"{fetched} sources fetched",
           "detail": "\n".join(
               f"- {f.claim[:160]} ({f.verdict}: {f.verdict_note[:120]})"
               for f in flagged[:10]) or "all clear"})
+
+
+def _classify_evidence(state: ResearchState) -> None:
+    """Assign each finding its evidence class after verification.
+
+    The claim's status is decided by the verifier's excerpt-level
+    verdict, never by source credibility alone:
+    - corroborated: supported AND the same claim was found in >1 source
+    - verified: supported
+    - partially_supported: partial support in the excerpt
+    - contradicted: the excerpt states the opposite
+    - inaccessible: cannot_verify AND the cited source failed to fetch
+    - not_found: no cited source at all
+    - unverified: everything else (cannot_verify, unchecked, blank)
+    """
+    unreachable = {s.id for s in state.sources.values()
+                   if s.fetched == "unreachable"}
+    for f in state.findings:
+        v = (f.verdict or "").lower()
+        if v == "contradicted":
+            f.evidence_class = "contradicted"
+        elif v == "supported":
+            f.evidence_class = "corroborated" if f.corroborated_by else "verified"
+        elif v in ("partially_supported", "partially supported"):
+            f.evidence_class = "partially_supported"
+        elif v == "cannot_verify":
+            if f.source_id in unreachable:
+                f.evidence_class = "inaccessible"
+            elif not f.source_id:
+                f.evidence_class = "not_found"
+            else:
+                f.evidence_class = "unverified"
+        else:
+            f.evidence_class = "unverified" if f.source_id else "not_found"
 
 
 async def _crosscheck(
@@ -1285,7 +1380,8 @@ async def _synthesize_sections(
     cands = [model] if isinstance(model, str) else list(model)
     src_list = sorted(state.sources.values(), key=lambda s: -s.score)
     src_json = [{"n": i + 1, "id": s.id, "title": s.title, "url": s.url,
-                 "publisher": s.publisher, "date": s.date}
+                 "publisher": s.publisher, "date": s.date,
+                 "authors": s.authors, "access": s.access}
                 for i, s in enumerate(src_list)]
     section_system = SECTION_WRITER_PROMPT
     if custom_instructions:
@@ -1301,7 +1397,8 @@ async def _synthesize_sections(
                  "source_id": f.source_id,
                  "corroborated_by": f.corroborated_by,
                  "confidence": f.confidence,
-                 "verdict": f.verdict or "unverified"}
+                 "verdict": f.verdict or "unverified",
+                 "evidence_class": f.evidence_class or "unverified"}
                 for f in kept_f],
             "rejected_claims": [
                 {"claim": f.claim, "verdict": f.verdict,
@@ -1324,7 +1421,8 @@ async def _synthesize_sections(
     async def write_summary() -> str:
         kept_f, _ = _ledger_findings(state.findings)
         brief = [{"claim": f.claim, "source_id": f.source_id,
-                  "verdict": f.verdict or "unverified"}
+                  "verdict": f.verdict or "unverified",
+                  "evidence_class": f.evidence_class or "unverified"}
                  for f in kept_f[:25]]
         ctx = factory() if factory else contextlib.nullcontext(session)
         async with ctx as s:
@@ -1433,13 +1531,14 @@ async def _synthesize(
         {"claim": f.claim, "evidence": f.evidence, "source_id": f.source_id,
          "corroborated_by": f.corroborated_by,
          "confidence": f.confidence, "verdict": f.verdict or "unverified",
+         "evidence_class": f.evidence_class or "unverified",
          "sub_question": f.sub_question}
         for f in kept_findings
     ]
     plan_brief = {k: state.plan.get(k) for k in ("interpretation", "must_verify", "success_criteria")}
     srcs = [{"n": i + 1, "id": s.id, "title": s.title, "url": s.url,
              "publisher": s.publisher, "date": s.date, "type": s.type,
-             "quality": s.quality}
+             "quality": s.quality, "authors": s.authors, "access": s.access}
             for i, s in enumerate(src_list)]
     # Bound the package by dropping findings, never by cutting the JSON
     # string — the source list must survive intact or [n] citations dangle.
