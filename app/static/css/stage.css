@@ -148,6 +148,9 @@ body {
   padding: 6px 12px; border-radius: 8px;
 }
 .st-msg.whisper .txt { color: var(--stage-teal); font-style: italic; }
+.st-msg.aside { opacity: .78; margin: -8px 0 14px 34px; }
+.st-msg.aside .av { width: 26px; height: 26px; font-size: 14px; }
+.st-msg.aside .txt { font-style: italic; font-size: 13px; }
 .st-msg.writing .txt::after {
   content: "▍"; color: var(--stage-violet); animation: blink .8s infinite;
 }

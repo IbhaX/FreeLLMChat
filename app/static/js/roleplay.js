@@ -164,12 +164,16 @@
         presence(ev.character_id,true);
         const b=ensureMsgEl({id:ev.id,role:'character',kind:'dialogue',
           speaker:ev.name,emoji:ev.emoji,character_id:ev.character_id,
-          text:'',variants:[]});
+          text:'',variants:[],aside:ev.aside});
         b.classList.add('writing');b._streaming=true;break;}
       case 'char_delta':{
         const el=document.getElementById('m-'+ev.id);
         if(el){el._text=(el._text||'')+ev.text;
           el.querySelector('.txt').textContent=el._text;scroll();}break;}
+      case 'char_skip':{
+        const el=document.getElementById('m-'+ev.id);
+        if(el)el.remove();
+        presence(ev.character_id,false);break;}
       case 'char_end':{
         const el=document.getElementById('m-'+ev.id);
         if(el){el.classList.remove('writing');el._streaming=false;
@@ -224,7 +228,8 @@
     const isUser=m.role==='user'&&m.kind!=='ooc';
     el.className='st-msg'+(isUser?' user':'')+
       (m.kind==='narration'?' narration':'')+
-      (m.kind==='ooc'?' ooc':'')+(m.kind==='whisper'?' whisper':'');
+      (m.kind==='ooc'?' ooc':'')+(m.kind==='whisper'?' whisper':'')+
+      (m.aside?' aside':'');
     el.id='m-'+m.id;
     const who=m.kind==='narration'?'':m.kind==='ooc'?'out of character':
       m.kind==='whisper'?`whispered to ${esc(charById(m.whisper_to)?.name||'?')}`:

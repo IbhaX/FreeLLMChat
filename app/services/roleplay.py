@@ -192,6 +192,59 @@ def _find_msg(room: RoleplayRoom, mid: str) -> dict[str, Any] | None:
     return next((m for m in room.messages or [] if m.get("id") == mid), None)
 
 
+MAX_COMMENTERS = 3   # characters that may add a brief aside after the reply
+
+
+def _is_pass(text: str) -> bool:
+    return text.strip().upper().startswith("PASS")
+
+
+async def _pick_responder(
+    gateway: Any, session: Any, room: RoleplayRoom,
+    live: list[Character], text: str, emit: Any = None,
+) -> Character:
+    """Choose the single character the player's beat is addressed to.
+
+    Order: explicit name mention → only live character → a tiny router
+    call (best effort) → least-recently-spoke rotation, so every cast
+    member gets the stage over time.
+    """
+    for c in live:
+        first = (c.name or "").split()[0] if c.name else ""
+        if first and re.search(rf"\b{re.escape(first)}\b", text, re.I):
+            return c
+    if len(live) == 1:
+        return live[0]
+    try:
+        cast = "\n".join(
+            f"{c.id}: {c.name} — {c.tagline or c.category or ''}"
+            for c in live)
+        payload = {"messages": [
+            {"role": "system", "content":
+             "You direct a roleplay scene. Given the cast and the player's "
+             "latest line, reply with ONLY the id of the single character "
+             "who should respond first.\nCast:\n" + cast},
+            {"role": "user", "content": text}],
+            "temperature": 0}
+        from app.services.model_policy import internal_chat
+        res = await internal_chat(gateway, session, payload,
+                                  requested=room.model or "auto",
+                                  role="general", retries=0)
+        if res.ok and res.text:
+            m = re.search(r"\d+", res.text)
+            pick = next((c for c in live if m and c.id == int(m.group())),
+                        None)
+            if pick:
+                return pick
+    except Exception:
+        pass
+    last_spoke: dict[int, int] = {}
+    for i, m in enumerate(room.messages or []):
+        if m.get("role") == "character":
+            last_spoke[int(m.get("character_id") or 0)] = i
+    return min(live, key=lambda c: last_spoke.get(c.id, -1))
+
+
 ROLEPLAY_TOOLS = ["web_search", "http_get"]
 
 
@@ -315,19 +368,27 @@ async def turn_stream(
             yield b"data: [DONE]\n\n"
             return
 
-        yield _sse({"event": "turn_queue", "order": [c.id for c in live],
+        # one responder takes the stage; the rest may add short asides
+        responder = await _pick_responder(gateway, session, room, live,
+                                          text)
+        order = [responder] + [c for c in live
+                               if c.id != responder.id][:MAX_COMMENTERS]
+        yield _sse({"event": "note",
+                    "text": f"🎭 {responder.name} responds"})
+        yield _sse({"event": "turn_queue", "order": [c.id for c in order],
                     "cast": [{"id": c.id, "name": c.name, "emoji": c.emoji}
-                             for c in live]})
+                             for c in order]})
         others = await room_characters(session, room)
         empty_scene = not any(
             m.get("role") == "character" for m in room.messages[:-1])
-        for c in live:
+        for idx, c in enumerate(order):
+            reacting = idx > 0
             mid = _mid()
             yield _sse({"event": "char_start", "id": mid,
                         "character_id": c.id, "name": c.name,
-                        "emoji": c.emoji})
+                        "emoji": c.emoji, "aside": reacting})
             # greeting autoplay: first-ever turn opens with the set greeting
-            if empty_scene and c.greeting:
+            if empty_scene and c.greeting and not reacting:
                 text = c.greeting.strip()
                 yield _sse({"event": "char_delta", "id": mid, "text": text})
             else:
@@ -336,29 +397,44 @@ async def turn_stream(
                     c, room.scenario, others, mood=room.mood or "",
                     director_notes=room.director_notes or "",
                     summary=room.summary or "",
-                    tools=bool(room.tools_enabled))
+                    tools=bool(room.tools_enabled) and not reacting)
+                if reacting:
+                    system += (
+                        f"\n\n{responder.name} just spoke. Give only a "
+                        "SHORT in-character aside reacting to it — one "
+                        "line of dialogue or a brief *action*, at most "
+                        "~25 words. If your character would stay silent "
+                        "here, reply with exactly: PASS")
                 acc = ""
                 try:
                     async for piece in _char_reply_stream(
                             gateway, session, room.model or "auto",
                             system, history, emit=emit,
-                            tools=bool(room.tools_enabled)):
+                            tools=bool(room.tools_enabled) and not reacting):
                         acc += piece
                         while not evq.empty():
                             yield _sse(evq.get_nowait())
-                        yield _sse({"event": "char_delta", "id": mid,
-                                    "text": piece})
+                        if piece:
+                            yield _sse({"event": "char_delta", "id": mid,
+                                        "text": piece})
                 except Exception:
                     acc = ""
                 while not evq.empty():
                     yield _sse(evq.get_nowait())
                 text = clean_turn_text(acc, c.name)
+            if reacting and (not text or _is_pass(text)):
+                # no aside from this character — remove the placeholder
+                yield _sse({"event": "char_skip", "id": mid,
+                            "character_id": c.id})
+                continue
             if not text or _looks_like_tool_blob(text):
                 text = f"*{c.name} remains quiet, considering.*" \
                     if not text else _TOOL_BLOB_FALLBACK
             msg = {"id": mid, "role": "character", "kind": "dialogue",
                    "speaker": c.name, "character_id": c.id,
                    "emoji": c.emoji, "text": text, "variants": []}
+            if reacting:
+                msg["aside"] = True
             room.messages = (list(room.messages or []) + [msg])[-MAX_STORED:]
             session.add(room)
             await session.commit()
@@ -511,6 +587,11 @@ async def room_turn(gateway: Any, session: Any, room: RoleplayRoom,
         return []
     if speaker_filter is not None:
         chars = [c for c in chars if c.id == speaker_filter] or chars
+    else:
+        live = [c for c in chars if c.id not in set(room.paused_ids or [])]
+        if live:
+            chars = [await _pick_responder(gateway, session, room, live,
+                                           user_text)]
 
     room.messages = list(room.messages or []) + [
         {"id": _mid(), "role": "user", "kind": "talk",
