@@ -191,7 +191,31 @@
   --r-lg:20px; --r-xl:24px;
 }
 
+/* Stage: cinematic blue-violet — the roleplay page's native palette */
+[data-theme="stage"]{
+  color-scheme:dark;
+  --bg-0:#0d0b14; --bg-1:#151223;
+  --surface-1:rgba(24,20,38,.92); --surface-2:#1b1730; --surface-3:#241f3d;
+  --border-1:rgba(148,130,220,.14); --border-2:rgba(148,130,220,.24);
+  --border-3:rgba(148,130,220,.4);
+  --text-1:#ece8f7; --text-2:#9b93b8; --text-3:#6d6590;
+  --accent:#8b7cf6; --accent-2:#6a5ae0; --on-accent:#ffffff;
+  --accent-soft:rgba(139,124,246,.13); --accent-line:rgba(139,124,246,.45);
+  --success:#5fd4c4; --success-soft:rgba(95,212,196,.12);
+  --warn:#e8c56d; --warn-soft:rgba(232,197,109,.14);
+  --error:#f27d98; --error-soft:rgba(242,125,152,.12);
+  --shadow-1:0 1px 2px rgba(0,0,0,.3);
+  --shadow-2:0 2px 8px rgba(0,0,0,.32),0 1px 2px rgba(0,0,0,.24);
+  --shadow-3:0 8px 24px rgba(0,0,0,.4),0 2px 6px rgba(0,0,0,.3);
+  --shadow-4:0 24px 64px rgba(0,0,0,.55),0 8px 20px rgba(0,0,0,.4);
+  --ring:0 0 0 3px rgba(139,124,246,.25);
+  --glow:radial-gradient(60% 50% at 50% -10%,rgba(139,124,246,.12),transparent 70%);
+  --code-bg:#14111f;
+}
+
 /* ---------- Per-theme component character ---------- */
+[data-theme="stage"] .ui-btn{border-radius:10px}
+
 [data-theme="elevenlabs"] .ui-btn{border-radius:999px}
 [data-theme="elevenlabs"] h1,[data-theme="elevenlabs"] h2,[data-theme="elevenlabs"] h3,[data-theme="elevenlabs"] h4{
   font-family:Georgia,"Times New Roman",serif;font-weight:300;letter-spacing:-.01em}

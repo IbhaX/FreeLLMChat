@@ -4,9 +4,9 @@
 (function(){
   const KEY='ui-theme';
   // Cycle order: dark (ClickHouse) is the default; light stays last.
-  const THEMES=['dark','composio','apple','bmw','meta','elevenlabs','light'];
+  const THEMES=['dark','stage','composio','apple','bmw','meta','elevenlabs','light'];
   const LABELS={
-    dark:'ClickHouse',composio:'Composio',apple:'Apple',bmw:'BMW',
+    dark:'ClickHouse',stage:'Stage',composio:'Composio',apple:'Apple',bmw:'BMW',
     meta:'Meta',elevenlabs:'ElevenLabs',light:'Light'
   };
   window.UITheme={
