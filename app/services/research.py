@@ -541,6 +541,11 @@ class ResearchState:
     answer: str = ""
     confidence: str = ""
     cache_hits: int = 0
+    # Orchestration telemetry: per-stage event counts + wall-clock, and a
+    # checkpoint per completed stage (persisted via meta for resumability
+    # audit). v2's durable job runner owns cross-request resume.
+    agent_metrics: dict[str, dict[str, Any]] = field(default_factory=dict)
+    checkpoints: list[dict[str, Any]] = field(default_factory=list)
 
 
 # Per-conversation cache of planner/search/fetch results, in-process only.
@@ -1919,17 +1924,49 @@ async def run_research(
     depth: str | None = None, on_event: Emit | None = None,
 ) -> str:
     """Run the full pipeline for the last user message. Returns markdown."""
-    emit = on_event or (lambda ev: None)
     question = _last_user(messages)
     conv = str(conversation_id or "")
     t0 = time.monotonic()
     state = ResearchState(question=question)
+
+    # Telemetry: track per-stage event counts and wall-clock, keyed by
+    # agent name (falling back to stage) so meta explains where the run
+    # spent its time and calls.
+    _stage_started: dict[str, float] = {}
+    raw_emit = on_event or (lambda ev: None)
+
+    def emit(ev: dict[str, Any]) -> None:
+        if ev.get("event") == "stage":
+            _stage_started[str(ev.get("stage") or "?")] = time.monotonic()
+        key = str(ev.get("agent") or ev.get("stage") or "")
+        if key:
+            m = state.agent_metrics.setdefault(key, {"events": 0, "seconds": 0.0})
+            m["events"] += 1
+            if key in _stage_started:
+                m["seconds"] = round(time.monotonic() - _stage_started[key], 1)
+        raw_emit(ev)
+
+    def checkpoint(stage: str) -> None:
+        state.checkpoints.append({
+            "stage": stage,
+            "at_s": round(time.monotonic() - t0, 1),
+            "findings": len(state.findings),
+            "sources": len(state.sources),
+        })
 
     state.depth = depth if depth in ("quick", "standard", "deep") else classify_depth(
         question, messages[:-1]
     )
     emit({"event": "stage", "text": f"Research depth: {state.depth}",
           "stage": "route", "depth": state.depth})
+
+    # Wall-clock budget per depth (aligned with the v2 durable runner's
+    # DEPTH_BUDGETS); RESEARCH_MAX_SECONDS overrides all depths.
+    budget_s = float(os.environ.get("RESEARCH_MAX_SECONDS") or {
+        "quick": 60, "standard": 360, "deep": 1500}[state.depth])
+
+    def over_budget() -> bool:
+        return time.monotonic() - t0 > budget_s
 
     if state.depth == "quick":
         # One search + short answer via the plain tool loop.
@@ -2025,11 +2062,17 @@ async def run_research(
             raise
 
     await research_round(state.plan.get("sub_questions") or [])
+    checkpoint("research")
     emit({"event": "stage", "text": f"{len(state.findings)} findings, "
           f"{len(state.sources)} sources", "stage": "research_done"})
 
-    # Gap check + at most 2 follow-up rounds (deep only).
+    # Gap check + at most 2 follow-up rounds (deep only) — stopped early
+    # when the wall-clock budget is exhausted.
     for _ in range(2):
+        if over_budget():
+            emit({"event": "note", "stage": "gap",
+                  "text": "time budget exhausted — answering with current findings"})
+            break
         gaps = await _gap_check(gateway, session, checker_model, state, emit)
         if not gaps:
             break
@@ -2043,7 +2086,13 @@ async def run_research(
     _backfill_sources(state)
     _atomize_findings(state)
     await _verify(gateway, session, verifier_model, state, emit)
-    await _crosscheck(gateway, session, cross_model, state, emit)
+    checkpoint("verify")
+    if over_budget():
+        emit({"event": "note", "stage": "contradictions",
+              "text": "time budget exhausted — skipping cross-check"})
+    else:
+        await _crosscheck(gateway, session, cross_model, state, emit)
+        checkpoint("contradictions")
     _score_sources(state)
     # Keep the source list bounded: everything a finding cites, plus the
     # top-scored remainder (cap 30) so prompts and the Sources block stay sane.
@@ -2059,6 +2108,7 @@ async def run_research(
     custom = await get_custom_instructions(session)
     state.answer = await _synthesize(gateway, session, synth_model, question, state, emit,
                                      custom_instructions=custom)
+    checkpoint("synthesize")
     await _qa_gate(gateway, session, qa_model, question, state, emit)
     meta_quality = await _quality_check(state, emit)
 
@@ -2074,6 +2124,9 @@ async def run_research(
         "disagreements": len(state.contradiction_report),
         "rounds": state.rounds,
         "seconds": round(time.monotonic() - t0, 1),
+        "budget_s": budget_s,
+        "agents": state.agent_metrics,
+        "checkpoints": state.checkpoints,
         "quality": meta_quality,
     }
     emit({"event": "research_done", "text": f"Research complete: {meta['findings']} findings, "
