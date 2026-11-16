@@ -41,7 +41,7 @@
         tr.innerHTML=`<td><b>${esc(s.name)}</b></td><td>${esc(s.version||'')}</td>
           <td class="tx-2">${esc(s.description||'')}</td>
           <td class="tx-3" style="font-size:var(--t-xs)">${(s.requires_tools||s.tools||[]).join(', ')}</td>
-          <td style="text-align:right"><button class="ui-btn ui-btn-ghost ui-btn-sm" data-c>customize</button></td>`;
+          <td style="text-align:right"><button class="ui-btn ui-btn-primary ui-btn-sm" data-c>edit</button></td>`;
         tr.querySelector('[data-c]').onclick=()=>{
           const existing=customSkills.find(x=>x.name===s.name);
           openModal(existing||{
