@@ -40,7 +40,9 @@ async function refresh(){
        <td><b>${fmtTok(stats.tokens_in_24h+stats.tokens_out_24h)}</b></td>
        <td><b>~${fmtTok(stats.est_tokens_total)}</b></td><td></td></tr>`);
 
-  document.querySelector('#providers tbody').innerHTML=providers.map(p=>`<tr>
+  const keyed=providers.filter(p=>p.key_count>0);
+  const unkeyed=providers.filter(p=>!p.key_count);
+  const provRow=p=>`<tr>
     <td><b>${esc(p.name)}</b><br><span class="tx-3 t-xs">${esc(p.display_name)}</span></td>
     <td class="tx-2">${p.rotation_strategy}</td><td>${p.key_count}</td><td>${p.healthy_key_count}</td>
     <td class="tx-3 t-xs">${fmt.limits(p.limits)}</td>
@@ -48,7 +50,14 @@ async function refresh(){
       <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="toggleP('${p.name}',${!p.enabled})">${p.enabled?'disable':'enable'}</button>
       <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="refreshModels('${p.name}')">refresh models</button>
     </div></td>
-  </tr>`).join('');
+  </tr>`;
+  document.querySelector('#providers tbody').innerHTML=
+    keyed.map(provRow).join('')+
+    (unkeyed.length?`<tr><td colspan="6" style="padding:0;border:none">
+      <button class="ui-btn ui-btn-ghost ui-btn-sm" style="width:100%;opacity:.6"
+        onclick="this.closest('tr').nextElementSibling.style.display='';this.closest('tr').remove()">
+        show ${unkeyed.length} provider(s) with no keys…</button></td></tr>
+      <tr style="display:none"><td colspan="6" style="padding:0"><table style="width:100%">${unkeyed.map(provRow).join('')}</table></td></tr>`:'');
 
   $('#kp').innerHTML=providers.map(p=>`<option>${esc(p.name)}</option>`).join('');
 
