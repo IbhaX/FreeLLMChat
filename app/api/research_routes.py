@@ -57,6 +57,7 @@ def _state_payload(state) -> tuple[list, list, list]:
         "claim": f.claim, "evidence": f.evidence, "source_id": f.source_id,
         "confidence": f.confidence, "verdict": f.verdict,
         "sub_question": f.sub_question,
+        "corroborated_by": list(getattr(f, "corroborated_by", [])),
     } for f in state.findings]
     sources = [{
         "id": s.id, "title": s.title, "url": s.url, "publisher": s.publisher,

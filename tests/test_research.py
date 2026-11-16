@@ -370,6 +370,108 @@ def test_research_one_salvages_wrong_shape_json(monkeypatch):
     assert any("no findings key" in u for u in st.unverified)
 
 
+def test_atomize_findings_splits_and_dedupes():
+    st = R.ResearchState()
+    st.findings = [
+        R.Finding(claim="REST uses HTTP verbs. It is stateless.",
+                  evidence="e1", source_id="s1", sub_question="q1"),
+        R.Finding(claim="it is stateless", evidence="e2", source_id="s2",
+                  sub_question="q2", source_guessed=True),
+        R.Finding(claim="REST uses HTTP verbs", evidence="e3",
+                  source_id="s3", sub_question="q3"),
+    ]
+    R._atomize_findings(st)
+    claims = [f.claim for f in st.findings]
+    assert len(claims) == 2
+    assert "REST uses HTTP verbs." in claims or "REST uses HTTP verbs" in claims
+    dup = next(f for f in st.findings if "stateless" in f.claim.lower())
+    assert dup.source_id == "s1" and "s2" in dup.corroborated_by
+    verb = next(f for f in st.findings if "HTTP verbs" in f.claim)
+    assert "s3" in verb.corroborated_by
+
+
+def test_backfill_marks_guessed_sources():
+    st = R.ResearchState()
+    st.harvested["q1"] = ["https://example.com/a"]
+    R._merge_findings(st, {"findings": [{"claim": "c1", "source_id": ""}],
+                           "sources": []}, "q1")
+    R._backfill_sources(st)
+    assert st.findings[0].source_id in st.sources
+    assert st.findings[0].source_guessed is True
+
+
+def test_ledger_findings_separates_rejected():
+    fs = [
+        R.Finding(claim="good", evidence="", verdict="supported"),
+        R.Finding(claim="half", evidence="", verdict="partially_supported"),
+        R.Finding(claim="bad", evidence="", verdict="unsupported"),
+        R.Finding(claim="worse", evidence="", verdict="contradicted"),
+        R.Finding(claim="unknown", evidence="", verdict=""),
+    ]
+    kept, rejected = R._ledger_findings(fs)
+    assert {f.claim for f in kept} == {"good", "half", "unknown"}
+    assert {f.claim for f in rejected} == {"bad", "worse"}
+
+
+def test_verify_fetches_sources_and_applies_verdicts(monkeypatch):
+    import asyncio
+
+    st = R.ResearchState()
+    st.sources["s1"] = R.Source(id="s1", title="t", url="https://page/x")
+    st.sources["s2"] = R.Source(id="s2", title="t2", url="https://dead/y")
+    st.findings = [
+        R.Finding(claim="claim zero", evidence="", source_id="s1"),
+        R.Finding(claim="claim one", evidence="", source_id="s2"),
+    ] + [R.Finding(claim=f"extra {i}", evidence="", source_id="s1")
+         for i in range(R._VERIFY_MAX_CLAIMS)]
+
+    async def _fetch(url):
+        return "page text" if "page" in url else ""
+    monkeypatch.setattr(R, "_fetch_excerpt", _fetch)
+
+    async def _call(*a, **kw):
+        msgs = kw.get("msgs") or (a[3] if len(a) > 3 else [])
+        content = msgs[0]["content"]
+        assert '"excerpt"' in content or "excerpt" in content
+        return ('[{"claim_id": "c0", "verdict": "supported"},'
+                ' {"claim_id": "c1", "verdict": "cannot_verify"}]')
+    monkeypatch.setattr(R, "_call", _call)
+
+    asyncio.run(R._verify(_FakeGateway(), None, ["m"], st, lambda ev: None))
+    assert st.findings[0].verdict == "supported"
+    assert st.findings[1].verdict == "cannot_verify"
+    # claims beyond the verifier's slice are marked, not left blank
+    assert st.findings[-1].verdict == "cannot_verify"
+    assert st.verify_stats["sources_fetched"] == 1
+    assert st.verify_stats["claims_checked"] == R._VERIFY_MAX_CLAIMS
+
+
+def test_synthesize_sections_excludes_rejected_claims():
+    import asyncio
+    st = _state_with_findings()
+    st.findings.append(R.Finding(
+        claim="a fabricated claim", evidence="", source_id="s1",
+        sub_question="sq1", verdict="unsupported"))
+    calls = []
+
+    class _CapturingGateway:
+        async def chat(self, session, payload, **kw):
+            calls.append(payload["messages"][-1]["content"])
+            return ({"choices": [{"message": {"content":
+                "## Aspect\n\n" + "word " * 600}}]}, "fake", None, "fake/model")
+
+    asyncio.run(R._synthesize_sections(
+        _CapturingGateway(), None, ["m"], st.question, st,
+        R._group_findings(st), lambda ev: None))
+    section_payloads = [c for c in calls if '"aspect"' in c]
+    for p in section_payloads:
+        assert '"fabricated claim"' not in p or "rejected_claims" in p
+        import json as _json
+        data = _json.loads(p.split("\n\nThe previous draft")[0])
+        kept = [f["claim"] for f in data["findings"]]
+        assert "a fabricated claim" not in kept
+
+
 def test_research_one_notes_when_empty(monkeypatch):
     import asyncio
 
