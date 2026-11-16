@@ -208,10 +208,13 @@ async def edit_message(rid: int, mid: str, body: EditIn,
     msg = next((m for m in room.messages or [] if m.get("id") == mid), None)
     if not msg:
         raise HTTPException(404, "message not found")
-    msg["text"] = body.text.strip()
-    room.messages = list(room.messages)
+    room.messages = [
+        {**m, "text": body.text.strip()} if m.get("id") == mid else m
+        for m in room.messages or []
+    ]
     session.add(room)
     await session.commit()
+    msg = next(m for m in room.messages if m.get("id") == mid)
     return {"ok": True, "message": msg}
 
 

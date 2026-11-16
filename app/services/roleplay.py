@@ -562,9 +562,12 @@ async def retry_stream(
         variants = list(msg.get("variants") or [])
         if msg.get("text"):
             variants.append(msg["text"])
-        msg["variants"] = variants
-        msg["text"] = text
-        room.messages = list(room.messages or [])
+        new_msg = {**msg, "variants": variants, "text": text}
+        room.messages = [
+            new_msg if m.get("id") == msg.get("id") else m
+            for m in room.messages or []
+        ]
+        msg = new_msg
         session.add(room)
         await session.commit()
         yield _sse({"event": "char_end", "id": message_id, "text": text,

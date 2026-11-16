@@ -177,6 +177,8 @@
       case 'char_end':{
         const el=document.getElementById('m-'+ev.id);
         if(el){el.classList.remove('writing');el._streaming=false;
+          if(ev.text&&el._text!==ev.text){el._text=ev.text;
+            el.querySelector('.txt').textContent=ev.text;}
           if(ev.variants&&ev.variants.length)attachSwipe(el,ev.id,ev.variants);}
         // keep room.messages in sync
         if(room){const m=(room.messages||[]).find(x=>x.id===ev.id);
