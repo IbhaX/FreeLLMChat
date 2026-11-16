@@ -614,6 +614,7 @@ async def _research_one(
 
     candidates = [model] if isinstance(model, str) else list(model)
     result: dict[str, Any] | None = None
+    outage: Exception | None = None
     for cand in candidates:
         payload["model"] = cand
         try:
@@ -632,11 +633,16 @@ async def _research_one(
                 )
             break
         except Exception as e:
+            if _is_outage(e):
+                outage = e
             emit({"event": "note",
                   "text": f"{qid} failed ({cand}): {str(e)[:120]}"})
-            if _is_outage(e):
-                raise
     if result is None:
+        # Outage on the last working candidate = the run cannot continue;
+        # but an outage on an early candidate must not block later
+        # candidates (e.g. ``auto``'s local backstop) from trying.
+        if outage is not None:
+            raise outage
         return
     text = text_of(((result.get("choices") or [{}])[0]).get("message", {}).get("content"))
     data = _extract_json(text)

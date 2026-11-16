@@ -294,7 +294,7 @@
     const stats = {
       calls: 0, tin: 0, tout: 0, cost: 0, costKnown: false, currency: '',
       latency: 0, latencyN: 0, models: new Map(), lastModel: '', lastProvider: '',
-      tools: 0, toolsFailed: 0, failed: 0,
+      tools: 0, toolsFailed: 0, failed: 0, inflight: '',
     };
     const dashEl = root.querySelector('.alog-dash');
     const dv = k => dashEl.querySelector('[data-m="' + k + '"] .alog-dv');
@@ -342,7 +342,9 @@
         stats.tout.toLocaleString() + ' out';
       dv('cost').textContent = fmtCost(stats.cost);
       const others = stats.models.size - 1;
-      dv('model').textContent = stats.lastModel
+      dv('model').textContent = stats.inflight
+        ? '… ' + stats.inflight
+        : stats.lastModel
         ? stats.lastModel + (stats.lastProvider ? ' · ' + stats.lastProvider : '') +
           (others > 0 ? '  +' + others + ' more' : '')
         : '—';
@@ -628,6 +630,13 @@
         if (!ev) return;
         try {
           const data = ev.kind ? mergeData(ev) : normalize(ev);
+          // In-flight call visibility: a 'try' lands the moment a provider
+          // attempt starts; usage/fail clear it. Without this the card
+          // reads 0 calls for the entire duration of a slow call.
+          if (ev.event === 'try')
+            stats.inflight = (ev.model || '') + (ev.provider ? ' · ' + ev.provider : '');
+          else if (ev.event === 'usage' || ev.event === 'fail' || ev.event === 'done')
+            stats.inflight = '';
           // Usage for the final call lands after the run settles (the
           // gateway reports tokens when the stream closes): count it.
           if (finished) {
@@ -663,6 +672,7 @@
       finish(label, ok) {
         if (finished) return;
         finished = true;
+        stats.inflight = '';
         steps.forEach(rec => {
           if (rec.data.status === 'running' || rec.data.status === 'waiting')
             applyStatus(rec, ok === false ? 'failed' : 'done');

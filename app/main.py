@@ -51,6 +51,18 @@ async def lifespan(app: FastAPI):
         )
     await init_db()
     async with get_session_factory()() as session:
+        # Runs left 'running' by a previous process can never finish —
+        # their tasks died with it. Mark them interrupted so the ledger
+        # doesn't show phantom live runs.
+        from sqlalchemy import update as _upd
+
+        from app.models import AgentRun
+        await session.execute(
+            _upd(AgentRun)
+            .where(AgentRun.status == "running")
+            .values(status="interrupted")
+        )
+        await session.commit()
         await seed_providers(session)
         from app.services.characters import seed_if_empty
         from app.services.ollama import auto_scan_ollama

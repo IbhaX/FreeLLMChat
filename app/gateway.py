@@ -373,6 +373,16 @@ class Gateway:
 
         plan = await self._plan_attempts(session, requested, candidates)
         if not plan:
+            # Every key cooling: when the soonest recovery is short, waiting
+            # beats erroring out or burning a weak backstop — emit a wait
+            # event so the UI can show the hold, then re-plan once.
+            wait_s = await self._soonest_cooldown(session, candidates)
+            if wait_s is not None and wait_s <= self._COOLDOWN_WAIT_S:
+                emit({"event": "wait",
+                      "text": f"All keys cooling — retrying in ~{wait_s}s"})
+                await asyncio.sleep(wait_s + 1)
+                plan = await self._plan_attempts(session, requested, candidates)
+        if not plan:
             raise GatewayExhausted(await self._no_route_reason(session), 503)
         emit({"event": "routing",
               "text": f"Sequential fallback: {len(plan)} provider(s) with a live key"})
@@ -407,6 +417,28 @@ class Gateway:
         r"model .{0,40}(not found|does not exist|unavailable|decommissioned|removed)",
         re.I,
     )
+
+    _COOLDOWN_WAIT_S = 120
+
+    async def _soonest_cooldown(
+        self, session: AsyncSession,
+        candidates: list[tuple[Provider, str]] | None = None,
+    ) -> int | None:
+        """Seconds until the soonest-expiring enabled key cooldown; None when
+        nothing is cooling (or no keys exist). When ``candidates`` is given,
+        only keys of providers that can serve this request count — waiting
+        on an unrelated provider's cooldown is wasted time."""
+        q = select(func.min(ApiKey.cooldown_until)).where(
+            ApiKey.enabled.is_(True),
+            ApiKey.cooldown_until.isnot(None))
+        if candidates:
+            ids = {p.id for p, _m in candidates}
+            q = q.where(ApiKey.provider_id.in_(ids))
+        soonest = (await session.execute(q)).scalar()
+        if soonest is None:
+            return None
+        cd = self._aware(soonest)
+        return max(0, int((cd - datetime.now(timezone.utc)).total_seconds()))
 
     async def _no_route_reason(self, session: AsyncSession) -> str:
         """Honest explanation when the attempt plan is empty: keys may all be
@@ -663,7 +695,8 @@ class Gateway:
             for model in models:
                 if provider_done or attempts >= budget:
                     break
-                emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
+                emit({"event": "try", "provider": provider.name, "model": model,
+                      "text": f"Trying {provider.name} · {model}"})
                 body = _scrub_body(dict(payload))
                 body["model"] = model
                 body["stream"] = False
@@ -765,6 +798,13 @@ class Gateway:
 
         plan = await self._plan_attempts(session, requested, candidates)
         if not plan:
+            wait_s = await self._soonest_cooldown(session, candidates)
+            if wait_s is not None and wait_s <= self._COOLDOWN_WAIT_S:
+                emit({"event": "wait",
+                      "text": f"All keys cooling — retrying in ~{wait_s}s"})
+                await asyncio.sleep(wait_s + 1)
+                plan = await self._plan_attempts(session, requested, candidates)
+        if not plan:
             raise GatewayExhausted(await self._no_route_reason(session), 503)
         emit({"event": "routing",
               "text": f"Sequential fallback: {len(plan)} provider(s) with a live key"})
@@ -788,7 +828,8 @@ class Gateway:
             for model in models:
                 if provider_done or attempts >= budget:
                     break
-                emit({"event": "try", "text": f"Trying {provider.name} · {model}"})
+                emit({"event": "try", "provider": provider.name, "model": model,
+                      "text": f"Trying {provider.name} · {model}"})
                 body = _scrub_body(dict(payload))
                 body["model"] = model
                 body["stream"] = True
