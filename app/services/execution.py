@@ -351,7 +351,9 @@ async def _run_step(
 
     system = skills_mod.attach_instructions(expert.system_prompt, expert.skills)
     user = step.task + (f"\n\n## Upstream results\n{ctx}" if ctx else "")
-    tool_names = list(expert.tools) or None
+    tool_names = sorted(set(expert.tools)
+                        | set(skills_mod.required_tools(expert.skills))
+                        ) or None
 
     async def _call() -> dict[str, Any]:
         from app.services.model_policy import stage_models

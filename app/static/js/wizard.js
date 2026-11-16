@@ -31,12 +31,12 @@ const blank=()=>({
   ask_clarifying:false,explain_reasoning:false,provide_examples:false,
   cite_sources:false,admit_uncertainty:false,
   system_prompt:'',custom_rules:'',constraints:'',knowledge:'',
-  enable_tools:false,tools:[],
+  enable_tools:false,tools:[],skills:[],
   model:'auto',temperature:'',max_tokens:'',output_format:'text',
   decision_making:'',error_handling:'',max_retries:'',timeout:'',
 });
 
-let W=blank(),step=1,editId=null,MODEL_CHOICES=[],AVAILABLE_TOOLS=[];
+let W=blank(),step=1,editId=null,MODEL_CHOICES=[],AVAILABLE_TOOLS=[],AVAILABLE_SKILLS=[];
 
 // ---------- helpers ----------
 const V=(k)=>W[k]??'';
@@ -114,6 +114,11 @@ const BODIES={
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px" id="w_toolGrid">
       <div class="ui-pcard" id="w_toolLoading"><span class="tx-3 t-sm">Loading tools…</span></div>
     </div>
+    <div class="label" style="margin-bottom:8px">Skills — prompt methods & playbooks (click to attach)</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="w_skillGrid">
+      <span class="tx-3 t-sm">Loading skills…</span>
+    </div>
+    <div id="w_skillHint" class="hint" style="margin:-10px 0 16px"></div>
     <div class="ui-panel" style="padding:12px 14px">
       <div class="t-xs tx-3" style="margin-bottom:4px">Knowledge</div>
       <div class="t-sm tx-2">Knowledge base content is configured on the <b>Instructions</b> step and injected into the system prompt.</div>
@@ -182,6 +187,8 @@ function bindInputs(root){
     root.querySelectorAll('[data-model]').forEach(x=>x.classList.toggle('sel',x===el));preview();});
   const tg=root.querySelector('#w_toolGrid');
   if(tg){renderToolGrid(tg);}
+  const sg=root.querySelector('#w_skillGrid');
+  if(sg){renderSkillGrid(sg);}
   const ps=root.querySelector('#w_persSummary');if(ps)ps.textContent=persSummary();
   if(step===6){$('#w_reviewSummary').innerHTML=reviewSummary();$('#w_reviewPrompt').textContent=compilePrompt();}
 }
@@ -262,7 +269,7 @@ function collectBody(){
       instructions:{custom_rules:W.custom_rules,constraints:W.constraints,knowledge:W.knowledge},
       execution:{decision_making:W.decision_making,error_handling:W.error_handling,
         max_retries:W.max_retries===''?null:+W.max_retries,timeout:W.timeout===''?null:+W.timeout},
-      capabilities:{tools_enabled:W.enable_tools,tools:W.tools},
+      capabilities:{tools_enabled:W.enable_tools,tools:W.tools,skills:W.skills},
     },
   };
 }
@@ -355,6 +362,36 @@ function renderToolGrid(tg){
     renderToolGrid(tg);preview();
   });
 }
+async function loadSkills(){
+  try{
+    const r=await fetch(API_BASE+'/v1/skills',{headers:apiHeaders(true)});
+    if(r.ok)AVAILABLE_SKILLS=(await r.json()).skills||[];
+  }catch(_){}
+}
+function renderSkillGrid(sg){
+  if(!AVAILABLE_SKILLS.length){sg.innerHTML='<span class="tx-3 t-sm">No skills available.</span>';return;}
+  sg.innerHTML=AVAILABLE_SKILLS.map(s=>{
+    const on=W.skills.includes(s.name);
+    const tools=(s.requires_tools||[]).join(', ')||'none';
+    return `<button type="button" class="ui-chip ${on?'sel':''}" data-skill="${esc(s.name)}"
+      title="${esc(s.description)}&#10;tools: ${esc(tools)}" style="cursor:pointer">${esc(s.name)}</button>`;}).join('');
+  sg.querySelectorAll('[data-skill]').forEach(el=>el.onclick=()=>{
+    const n=el.dataset.skill;
+    W.skills=W.skills.includes(n)?W.skills.filter(x=>x!==n):[...W.skills,n];
+    renderSkillGrid(sg);
+    const hint=document.getElementById('w_skillHint');
+    if(hint){
+      const need=new Set();
+      AVAILABLE_SKILLS.filter(s=>W.skills.includes(s.name))
+        .forEach(s=>(s.requires_tools||[]).forEach(t=>need.add(t)));
+      const missing=[...need].filter(t=>!W.tools.includes(t));
+      hint.textContent=missing.length
+        ?`Skills will auto-enable tools: ${missing.join(', ')}`
+        :need.size?`Skill tools covered: ${[...need].join(', ')}`:'';
+    }
+    preview();
+  });
+}
 
 // ---------- open / populate / submit ----------
 function openWizard(agent){
@@ -380,10 +417,11 @@ function openWizard(agent){
       decision_making:e.decision_making||'',error_handling:e.error_handling||'',
       max_retries:e.max_retries??'',timeout:e.timeout??'',
       tools:Array.isArray(cap.tools)?cap.tools:[],
+      skills:Array.isArray(cap.skills)?cap.skills:[],
     });
   }
   step=1;
-  loadModelChoices();loadTools();
+  loadModelChoices();loadTools();loadSkills();
   $('#agentModal').style.display='grid';
   render();preview();
 }

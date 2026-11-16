@@ -244,6 +244,11 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
     caps = _caps(cfg)
     if caps.get("tools_enabled"):
         parts.append("You may use tool/function calls when helpful.")
+    skill_names = _skill_names(agent_cfg)
+    if skill_names:
+        from app.services import skills as skills_mod
+        prompt = "\n\n".join(parts) if parts else "You are a helpful assistant."
+        return skills_mod.attach_instructions(prompt, skill_names)
     if agent_cfg.output_format == "json":
         parts.append("Always respond with valid JSON only — no prose, no markdown fences.")
     if agent_cfg.output_format == "structured":
@@ -294,16 +299,31 @@ def _caps(cfg: dict[str, Any]) -> dict[str, Any]:
     return caps if isinstance(caps, dict) else {}
 
 
+def _skill_names(agent_cfg: AgentConfig) -> list[str]:
+    """Skill names attached to the agent (wizard: capabilities.skills;
+    seed agents: config.skills)."""
+    cfg = _cfg(agent_cfg)
+    names = _caps(cfg).get("skills") or cfg.get("skills") or []
+    return [n for n in names if isinstance(n, str)]
+
+
 def _tool_names(agent_cfg: AgentConfig) -> list[str]:
     cfg = _cfg(agent_cfg)
     caps = _caps(cfg)
-    if not (caps.get("tools_enabled") or cfg.get("tools_enabled")
-            or agent_cfg.enable_tools):
-        return []
-    # Wizard stores the list under capabilities.tools; seed/builtin agents
-    # keep it at config.tools.
-    tools = caps.get("tools") or cfg.get("tools")
-    return list(tools) if isinstance(tools, list) and tools else ["*"]
+    explicit = caps.get("tools") or cfg.get("tools")
+    if caps.get("tools_enabled") or cfg.get("tools_enabled") \
+            or agent_cfg.enable_tools:
+        tools = list(explicit) if isinstance(explicit, list) \
+            and explicit else ["*"]
+    else:
+        tools = list(explicit) if isinstance(explicit, list) else []
+    # Skills may require tools the agent didn't explicitly enable —
+    # union them so the skill actually works.
+    from app.services import skills as skills_mod
+    for t in skills_mod.required_tools(_skill_names(agent_cfg)):
+        if tools != ["*"] and t not in tools:
+            tools.append(t)
+    return tools
 
 
 async def get_memory_text(query: str = "", conversation_id: str | None = None) -> str:

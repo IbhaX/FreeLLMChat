@@ -573,7 +573,10 @@ async def _research_one(
     question = str(sq.get("question") or "")
     queries = _norm_queries(sq.get("search_queries")) or [question]
     calls = {"quick": 4, "standard": 8, "deep": 12}[depth]
-    system = RESEARCHER_SYSTEM.replace("{max_calls}", str(calls))
+    from app.services import skills as skills_mod
+    system = skills_mod.attach_instructions(
+        RESEARCHER_SYSTEM.replace("{max_calls}", str(calls)),
+        ["web_research"])
     user = (
         f"Sub-question ({qid}): {question}\n"
         f"Why it matters: {sq.get('why', '')}\n"
@@ -595,7 +598,10 @@ async def _research_one(
 
     def collect_emit(ev: dict) -> None:
         emit(ev)
-    # Researcher only gets search/fetch: no calculator/datetime/media.
+    # Researcher gets search/fetch plus anything the (possibly overridden)
+    # web_research skill requires.
+    research_tools = sorted({"web_search", "http_get"}
+                            | set(skills_mod.required_tools(["web_research"])))
     payload = {
         "model": model,
         "messages": [{"role": "system", "content": system},
@@ -621,13 +627,13 @@ async def _research_one(
             if factory is not None:
                 async with factory() as own:
                     result = await run_tool_loop(
-                        gateway, own, payload, ["web_search", "http_get"],
+                        gateway, own, payload, research_tools,
                         emit=collect_emit, max_rounds=5, call_timeout=240,
                         tool_output_hook=harvest,
                     )
             else:
                 result = await run_tool_loop(
-                    gateway, session, payload, ["web_search", "http_get"],
+                    gateway, session, payload, research_tools,
                     emit=collect_emit, max_rounds=5, call_timeout=240,
                     tool_output_hook=harvest,
                 )
@@ -792,8 +798,12 @@ async def _verify(
     msgs = [{"role": "user", "content":
              f"Claims:\n{json.dumps(claims, ensure_ascii=False)[:9000]}\n\n"
              f"Sources:\n{json.dumps(src_list, ensure_ascii=False)[:6000]}"}]
-    text = await _call(gateway, session, model, msgs, system=VERIFIER_PROMPT,
-                       json_mode=True)
+    from app.services import skills as skills_mod
+    text = await _call(
+        gateway, session, model, msgs,
+        system=skills_mod.attach_instructions(VERIFIER_PROMPT,
+                                              ["verification"]),
+        json_mode=True)
     verdicts = _extract_json(text)
     if isinstance(verdicts, list):
         state.verdicts = [v for v in verdicts if isinstance(v, dict)]
@@ -1008,7 +1018,9 @@ async def _synthesize(
         "conflicts": state.contradictions, "not_found": state.unverified[:15],
     }, ensure_ascii=False)
     msgs = [{"role": "user", "content": f"Research package (JSON):\n{ctx[:30000]}\n\nWrite the final answer now."}]
-    system = SYNTHESIZER_PROMPT
+    from app.services import skills as skills_mod
+    system = skills_mod.attach_instructions(SYNTHESIZER_PROMPT,
+                                            ["structured_report"])
     if custom_instructions:
         from app.services.settings_store import custom_instructions_block
         system += "\n\n" + custom_instructions_block(custom_instructions)
