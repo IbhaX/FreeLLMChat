@@ -340,6 +340,18 @@ def _extract_json(text: str) -> Any:
     return None
 
 
+# Provider-level outage signatures — retrying another candidate cannot
+# help when every key is cooling or disabled; the run should fail fast
+# instead of writing an empty "report".
+_OUTAGE_RE = re.compile(
+    r"provider key\(s\) are on cooldown|No providers have an enabled",
+    re.I)
+
+
+def _is_outage(err: BaseException | str) -> bool:
+    return bool(_OUTAGE_RE.search(str(err)))
+
+
 async def _call(
     gateway: Any, session: Any, model: str | list[str],
     messages: list[dict[str, Any]],
@@ -349,9 +361,14 @@ async def _call(
 ) -> str:
     """One LLM call across an ordered candidate list: strong concrete
     models first, ``auto`` sweep as last resort. Returns "" when every
-    candidate fails or replies empty."""
+    candidate fails or replies empty.
+
+    Raises the provider-outage error when every candidate failed for
+    infrastructure reasons (all keys cooling) — an empty string would
+    silently degrade the run into a fabricated report."""
     candidates = [model] if isinstance(model, str) else list(model)
     emit = on_event or (lambda ev: None)
+    outage: Exception | None = None
     for cand in candidates:
         payload: dict[str, Any] = {
             "model": cand,
@@ -368,6 +385,8 @@ async def _call(
                 gateway.chat(session, payload, on_event=emit), timeout=180
             )
         except Exception as e:
+            if _is_outage(e):
+                outage = e
             emit({"event": "note",
                   "text": f"research step failed ({cand}): {str(e)[:120]}"})
             continue
@@ -377,6 +396,8 @@ async def _call(
             return text
         emit({"event": "note",
               "text": f"empty reply from {cand} — trying next model"})
+    if outage is not None:
+        raise outage
     return ""
 
 
@@ -613,6 +634,8 @@ async def _research_one(
         except Exception as e:
             emit({"event": "note",
                   "text": f"{qid} failed ({cand}): {str(e)[:120]}"})
+            if _is_outage(e):
+                raise
     if result is None:
         return
     text = text_of(((result.get("choices") or [{}])[0]).get("message", {}).get("content"))
@@ -1413,10 +1436,20 @@ async def run_research(
     _cache_put(conv, "plan", question, state.plan)
 
     async def research_round(sqs: list[dict[str, Any]]) -> None:
-        await asyncio.gather(*(
-            _research_one(gateway, session, researcher_model, sq, state.depth, state, emit)
+        tasks = [
+            asyncio.create_task(_research_one(
+                gateway, session, researcher_model, sq, state.depth,
+                state, emit))
             for sq in sqs
-        ))
+        ]
+        try:
+            await asyncio.gather(*tasks)
+        except Exception:
+            # Provider outage in one researcher: stop the rest instead of
+            # burning cooled keys — the run is about to fail fast anyway.
+            for t in tasks:
+                t.cancel()
+            raise
 
     await research_round(state.plan.get("sub_questions") or [])
     emit({"event": "stage", "text": f"{len(state.findings)} findings, "
