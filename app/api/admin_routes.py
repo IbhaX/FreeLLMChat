@@ -733,13 +733,16 @@ async def stats(session: AsyncSession = Depends(get_session)) -> StatsOut:
     for p in prov_rows:
         est = (p.limits or {}).get("est_tpd")
         n_keys = sum(1 for k in p.keys if k.enabled)
+        used = used_by_provider.get(p.name, 0)
+        if not n_keys and not used:
+            continue
         est_daily = est * n_keys if est else None
         est_total += est_daily or 0
         token_budget.append({
             "provider": p.name,
             "est_daily": est_daily,
             "keys": n_keys,
-            "used_24h": used_by_provider.get(p.name, 0),
+            "used_24h": used,
         })
     token_budget.sort(key=lambda r: -(r["est_daily"] or 0))
 
