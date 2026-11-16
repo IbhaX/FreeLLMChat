@@ -472,6 +472,88 @@ def test_synthesize_sections_excludes_rejected_claims():
         assert "a fabricated claim" not in kept
 
 
+def test_crosscheck_records_disagreements(monkeypatch):
+    import asyncio
+
+    st = _state_with_findings()
+
+    async def _call(*a, **kw):
+        return ('[{"topic": "speed of X", "claim_ids": ["c0", "c4"],'
+                ' "explanation": "s1 says 10 m/s, s2 says 12 m/s — '
+                'different measurement dates", "severity": "major",'
+                ' "resolution": "more_recent_wins"}]')
+    monkeypatch.setattr(R, "_call", _call)
+
+    asyncio.run(R._crosscheck(_FakeGateway(), None, ["m"], st,
+                              lambda ev: None))
+    assert len(st.contradiction_report) == 1
+    assert st.contradiction_report[0]["severity"] == "major"
+    # fed into the synthesis-facing contradictions list too
+    assert any("speed of X" in c for c in st.contradictions)
+
+
+def test_crosscheck_skips_tiny_finding_sets():
+    import asyncio
+    st = R.ResearchState()
+    st.findings = [R.Finding(claim="a", evidence=""),
+                   R.Finding(claim="b", evidence="")]
+    asyncio.run(R._crosscheck(_FakeGateway(), None, ["m"], st,
+                              lambda ev: None))
+    assert st.contradiction_report == []
+
+
+def test_qa_gate_static_checks():
+    st = R.ResearchState()
+    st.sources["s1"] = R.Source(id="s1", title="t", url="https://x")
+    st.answer = ("## Executive summary\n\nClaim [1] and dangling [7].\n\n"
+                 "## Body\n\ntext")
+    issues = R._qa_static_checks(st.answer, st)
+    assert issues["bad_citations"] == [7]
+
+    st2 = R.ResearchState()
+    st2.answer = ('{"findings": [{"claim": "x"}]}')
+    assert "raw_artifacts" in R._qa_static_checks(st2.answer, st2)
+
+
+def test_qa_gate_marks_unverified_on_critical(monkeypatch):
+    import asyncio
+
+    st = R.ResearchState()
+    st.sources["s1"] = R.Source(id="s1", title="t", url="https://x")
+    st.answer = ("## Executive summary\n\nThe answer [9].\n\n"
+                 "## Details\n\nbody [1].\n\n```nova-response\n{}\n```")
+
+    async def _call(*a, **kw):
+        return '{"consistent": true, "issues": []}'
+    monkeypatch.setattr(R, "_call", _call)
+
+    asyncio.run(R._qa_gate(_FakeGateway(), None, ["m"], "q?", st,
+                           lambda ev: None))
+    assert st.qa["passed"] is False
+    assert "bad_citations" in st.qa["critical"]
+    assert "## Report status" in st.answer
+    assert "unverified" in st.answer
+    # status lands before the envelope fence, not after it
+    assert st.answer.index("## Report status") < st.answer.index("```nova-response")
+
+
+def test_qa_gate_passes_clean_report(monkeypatch):
+    import asyncio
+
+    st = R.ResearchState()
+    st.sources["s1"] = R.Source(id="s1", title="t", url="https://x")
+    st.answer = "## Executive summary\n\nFine [1].\n\n## Details\n\nMore [1]."
+
+    async def _call(*a, **kw):
+        return '{"consistent": true, "issues": []}'
+    monkeypatch.setattr(R, "_call", _call)
+
+    asyncio.run(R._qa_gate(_FakeGateway(), None, ["m"], "q?", st,
+                           lambda ev: None))
+    assert st.qa["passed"] is True
+    assert "## Report status" not in st.answer
+
+
 def test_research_one_notes_when_empty(monkeypatch):
     import asyncio
 

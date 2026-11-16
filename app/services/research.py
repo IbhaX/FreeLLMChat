@@ -86,7 +86,9 @@ RESEARCH_AGENTS: dict[str, dict[str, str]] = {
     "researcher": {"role": "fan-out web research per sub-question (parallel)", "prompt": "RESEARCHER_SYSTEM"},
     "gap_checker": {"role": "find coverage gaps, trigger follow-up rounds", "prompt": "GAP_CHECKER_PROMPT"},
     "verifier": {"role": "fact-check claims against cited sources", "prompt": "VERIFIER_PROMPT"},
+    "contradiction_checker": {"role": "cross-verify findings, surface disagreements", "prompt": "CROSSCHECK_PROMPT"},
     "synthesizer": {"role": "write the final answer from verified findings", "prompt": "SYNTHESIZER_PROMPT"},
+    "qa_auditor": {"role": "final quality gate before publish", "prompt": "QA_PROMPT"},
 }
 
 
@@ -277,6 +279,36 @@ Component rules:
   them in the markdown — the UI renders them as chips).
 - Omit keys you have nothing for. The JSON MUST parse — if you cannot
   emit valid JSON, omit the fence entirely. Never emit a broken block.
+"""
+
+
+CROSSCHECK_PROMPT = f"""You are the cross-verification agent on a research team. Today's date is {TODAY}.
+
+You are given atomic claims with their verdicts and source ids. Your job: find where findings DISAGREE — do not force consensus.
+
+Look for: contradictory values (different numbers/dates for the same fact), opposing causal claims, temporal conflicts (a statement true only for a period presented as current), and definitional conflicts (the same term used two ways).
+
+Output JSON only:
+[{{
+  "topic": "what the disagreement is about",
+  "claim_ids": ["c1", "c7"],
+  "explanation": "one or two sentences: what each side says and why they might differ (date, methodology, definition)",
+  "severity": "major|minor",
+  "resolution": "unresolved | more_recent_wins | different_scopes"
+}}]
+
+Only report genuine conflicts between claims — missing data is not a contradiction. Return [] when nothing conflicts.
+"""
+
+QA_PROMPT = f"""You are the final QA auditor for a research report. Today's date is {TODAY}.
+
+You are given the report's executive summary, its section headings, and flagged claims. Check ONLY consistency:
+- Does the executive summary contradict any section heading or known verdict?
+- Does it present as settled anything marked rejected/unverified?
+
+Output JSON: {{"consistent": boolean, "issues": ["..."]}}
+
+Do not re-judge evidence; only check that the summary agrees with what the report establishes.
 """
 
 
@@ -492,7 +524,9 @@ class ResearchState:
     contradictions: list[str] = field(default_factory=list)
     verdicts: list[dict[str, Any]] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
+    contradiction_report: list[dict[str, Any]] = field(default_factory=list)
     verify_stats: dict[str, Any] = field(default_factory=dict)
+    qa: dict[str, Any] = field(default_factory=dict)
     rounds: int = 0
     answer: str = ""
     confidence: str = ""
@@ -1049,6 +1083,151 @@ async def _verify(
               for f in flagged[:10]) or "all clear"})
 
 
+async def _crosscheck(
+    gateway: Any, session: Any, model: str, state: ResearchState, emit: Emit,
+) -> None:
+    """Cross-verification agent: compares atomic claims against each other
+    and emits a structured disagreement report. Never forces consensus —
+    unresolved conflicts are disclosed to the report as disagreements."""
+    judged = [f for f in state.findings[:_VERIFY_MAX_CLAIMS] if f.claim]
+    if len(judged) < 4:
+        return
+    emit({"event": "stage", "text": "Cross-checking findings for contradictions…",
+          "stage": "contradictions", "agent": "contradiction_checker"})
+    src_titles = {s.id: s.title or s.url for s in state.sources.values()}
+    claims = [
+        {"claim_id": f"c{i}", "claim": f.claim[:280],
+         "verdict": f.verdict or "unverified",
+         "source": src_titles.get(f.source_id, f.source_id)}
+        for i, f in enumerate(judged)
+    ]
+    msgs = [{"role": "user", "content":
+             json.dumps(claims, ensure_ascii=False)[:14000]}]
+    text = await _call(gateway, session, model, msgs,
+                       system=CROSSCHECK_PROMPT, json_mode=True)
+    data = _extract_json(text)
+    items = data if isinstance(data, list) else (
+        (data or {}).get("contradictions") or (data or {}).get("items") or [])
+    report = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        report.append({
+            "topic": str(it.get("topic") or ""),
+            "claim_ids": [str(c) for c in (it.get("claim_ids") or [])],
+            "explanation": str(it.get("explanation") or ""),
+            "severity": str(it.get("severity") or "minor"),
+            "resolution": str(it.get("resolution") or "unresolved"),
+        })
+    state.contradiction_report = report[:12]
+    for r in state.contradiction_report:
+        line = f"{r['topic']}: {r['explanation']}".strip(": ").strip()
+        if line and line not in state.contradictions:
+            state.contradictions.append(line[:400])
+    if report:
+        emit({"event": "note", "stage": "contradictions",
+              "text": f"{len(report)} disagreement(s) found",
+              "detail": "\n".join(
+                  f"- {r['topic']} ({r['severity']}, {r['resolution']})"
+                  for r in report[:8])})
+
+
+# ---------------------------------------------------------------- QA gate
+
+_QA_CRITICAL = {"bad_citations", "summary_inconsistent", "raw_artifacts"}
+
+
+def _qa_static_checks(answer: str, state: ResearchState) -> dict[str, Any]:
+    """Deterministic publish checks: citations resolve, no raw artifacts,
+    no heavy repetition, summary and sections both present."""
+    issues: dict[str, Any] = {}
+    n_sources = len(state.sources)
+    cites = [int(m) for m in _CITE_RE.findall(answer or "")]
+    bad = sorted({c for c in cites if c < 1 or c > n_sources})
+    if bad:
+        issues["bad_citations"] = bad[:10]
+
+    # Repetition: >25% of non-trivial sentences duplicated verbatim.
+    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", answer or "")
+             if len(s.strip()) > 40]
+    dup = len(sents) - len({s.lower() for s in sents})
+    if sents and dup / len(sents) > 0.25:
+        issues["repetition"] = f"{dup}/{len(sents)} sentences duplicated"
+
+    # Raw research artifacts: unbalanced fences, dumped JSON objects.
+    if (answer or "").count("```") % 2:
+        issues["raw_artifacts"] = "unbalanced code fences"
+    elif re.search(r'^\s*\{\s*"(findings|sources|results|answer)"\s*:',
+                   answer or "", re.M):
+        issues["raw_artifacts"] = "raw JSON payload in report body"
+
+    if "## Executive summary" not in (answer or ""):
+        issues["missing_summary"] = True
+    return issues
+
+
+async def _qa_gate(
+    gateway: Any, session: Any, model: str, question: str,
+    state: ResearchState, emit: Emit,
+) -> dict[str, Any]:
+    """Final QA audit before publish. Critical failures mark the report
+    unverified — it is still returned, but labelled rather than presented
+    as verified research."""
+    emit({"event": "stage", "text": "QA audit…", "stage": "qa",
+          "agent": "qa_auditor"})
+    issues = _qa_static_checks(state.answer, state)
+
+    # One bounded LLM check: executive summary must agree with sections.
+    summary = ""
+    m = re.search(r"## Executive summary\s*\n+(.*?)(?=\n## |\Z)",
+                  state.answer or "", re.S)
+    if m:
+        summary = m.group(1)[:3000]
+    if summary:
+        rejected = [f.claim[:200] for f in state.findings
+                    if (f.verdict or "").lower() in _REJECTED_VERDICTS][:10]
+        headings = re.findall(r"^##+ (.+)$", state.answer or "", re.M)[:15]
+        payload = json.dumps({
+            "summary": summary,
+            "section_headings": headings,
+            "rejected_claims": rejected,
+            "known_disagreements": [r["topic"] for r in
+                                    state.contradiction_report],
+        }, ensure_ascii=False)[:8000]
+        t = await _call(gateway, session, model,
+                        [{"role": "user", "content": payload}],
+                        system=QA_PROMPT, json_mode=True, max_tokens=800)
+        data = _extract_json(t) or {}
+        if data.get("consistent") is False:
+            issues["summary_inconsistent"] = [
+                str(i)[:200] for i in (data.get("issues") or [])][:6] or [
+                    "summary disagrees with sections"]
+
+    critical = [k for k in issues if k in _QA_CRITICAL]
+    state.qa = {
+        "passed": not critical,
+        "issues": issues,
+        "critical": critical,
+    }
+    emit({"event": "note", "stage": "qa",
+          "text": ("QA passed" if not issues else
+                   f"QA: {', '.join(issues)}"
+                   + (" — report marked unverified" if critical else ""))})
+    if critical:
+        status = "## Report status\n\n"
+        status += ("This report failed critical quality checks "
+                   f"({', '.join(critical)}) and is published as "
+                   "**unverified**. Treat its claims as provisional.\n")
+        # Insert ahead of the nova-response fence when one exists.
+        fence = re.search(r"\n```\s*nova[\s\-_]*response", state.answer or "")
+        if fence:
+            state.answer = (state.answer[:fence.start()] + "\n\n" + status
+                            + state.answer[fence.start():])
+        else:
+            state.answer = (state.answer or "") + "\n\n" + status
+    return state.qa
+
+
 _REJECTED_VERDICTS = {"unsupported", "contradicted"}
 _VERIFIED_VERDICTS = {"supported", "partially supported", "corroborated"}
 
@@ -1569,6 +1748,8 @@ _STAGE_ROLES = {
     "researcher": "general",
     "checker": "fast",
     "verifier": "reasoning",
+    "contradiction": "reasoning",
+    "qa": "fast",
     "synth": "reasoning",
 }
 
@@ -1721,6 +1902,8 @@ async def run_research(
     researcher_model = _stage_model("researcher", model)
     checker_model = _stage_model("checker", model)
     verifier_model = _stage_model("verifier", model)
+    cross_model = _stage_model("contradiction", model)
+    qa_model = _stage_model("qa", model)
     synth_model = _stage_model("synth", model)
     state.plan = await _plan(gateway, session, planner_model, question, state.depth,
                              messages[:-1], emit, prior=prior)
@@ -1761,6 +1944,7 @@ async def run_research(
     _backfill_sources(state)
     _atomize_findings(state)
     await _verify(gateway, session, verifier_model, state, emit)
+    await _crosscheck(gateway, session, cross_model, state, emit)
     _score_sources(state)
     # Keep the source list bounded: everything a finding cites, plus the
     # top-scored remainder (cap 30) so prompts and the Sources block stay sane.
@@ -1776,6 +1960,7 @@ async def run_research(
     custom = await get_custom_instructions(session)
     state.answer = await _synthesize(gateway, session, synth_model, question, state, emit,
                                      custom_instructions=custom)
+    await _qa_gate(gateway, session, qa_model, question, state, emit)
     meta_quality = await _quality_check(state, emit)
 
     meta = {
@@ -1786,6 +1971,8 @@ async def run_research(
         "verified": sum(1 for f in state.findings
                         if (f.verdict or "").lower() in _VERIFIED_VERDICTS),
         "verify": state.verify_stats,
+        "qa": state.qa,
+        "disagreements": len(state.contradiction_report),
         "rounds": state.rounds,
         "seconds": round(time.monotonic() - t0, 1),
         "quality": meta_quality,
