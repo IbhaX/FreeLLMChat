@@ -72,8 +72,12 @@
     const Nova=window.NovaRender||{};
     if(Nova.ResponseRenderer&&Nova.ResponseRenderer.renderMessage){
       try{
-        Nova.ResponseRenderer.renderMessage({role:'assistant',content:text},host,{});
-        $('#exportBtn').disabled=false;$('#printBtn').disabled=false;return;
+        Nova.ResponseRenderer.renderMessage({role:'assistant',text:text},host,{showActions:false});
+        // Guard: if the renderer produced nothing visible, fall through
+        // to the <pre> fallback rather than showing a blank report.
+        if(host.textContent.trim()||host.querySelector('canvas,img,svg,video,audio')){
+          $('#exportBtn').disabled=false;$('#printBtn').disabled=false;return;
+        }
       }catch(_){}
     }
     host.innerHTML='<pre style="white-space:pre-wrap">'+esc(text)+'</pre>';

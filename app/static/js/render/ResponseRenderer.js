@@ -173,7 +173,10 @@
     opts = opts || {};
     host.innerHTML = "";
     host.classList.add("nova-response");
-    const text = message.text || "";
+    // Accept both chat-shaped ({text}) and API-shaped ({content}) messages —
+    // a caller passing {content} used to render an empty pane with only the
+    // actions bar, which is exactly what the research page did.
+    const text = message.text ?? message.content ?? "";
     const plan = Nova.ResponseClassifier.classify(text);
     render(plan, host, { message });
 
