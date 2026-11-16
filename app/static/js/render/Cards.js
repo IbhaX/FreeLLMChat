@@ -33,10 +33,17 @@
     body.append(el("div", { class: "nova-metric-label" }, d.label || d.title || ""));
     const val = el("div", { class: "nova-metric-value" }, fmtNum(d.value, d.unit));
     if (d.delta != null) {
-      const up = Number(d.delta) >= 0;
-      const delta = el("span", { class: "nova-metric-delta " + (up ? "up" : "down") },
-        (up ? "▲" : "▼") + " " + Math.abs(d.delta) + (d.delta_unit || "%"));
-      val.append(" ", delta);
+      const dn = Number(d.delta);
+      if (Number.isFinite(dn)) {
+        const up = dn >= 0;
+        const delta = el("span", { class: "nova-metric-delta " + (up ? "up" : "down") },
+          (up ? "▲" : "▼") + " " + Math.abs(dn) + (d.delta_unit || "%"));
+        val.append(" ", delta);
+      } else {
+        // Non-numeric delta ("vs JSON", "est.") — show as a muted note, not NaN%.
+        val.append(" ", el("span", { class: "nova-metric-delta", style: "color:var(--text-3)" },
+          String(d.delta)));
+      }
     }
     body.append(val);
     card.append(body);

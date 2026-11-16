@@ -43,6 +43,22 @@
 .nova-comp-slot{margin:6px 0}
 .nova-comp-slot:first-child{margin-top:0}
 
+/* ---------- Component tile grid ----------
+   Envelope components live in a grid: wide components span all columns,
+   small "tile" components pack side by side (see Nova.TILE_TYPES). */
+.nova-comp-grid,.nova-stream-comps{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:8px;margin:6px 0;align-items:start;
+}
+.nova-comp-grid .nova-comp-slot,.nova-stream-comps .nova-stream-slot{
+  grid-column:1/-1;margin:0;min-width:0;
+}
+.nova-comp-grid .nova-comp-slot.nova-tile,
+.nova-stream-comps .nova-stream-slot.nova-tile{grid-column:auto}
+@media(max-width:640px){
+  .nova-comp-grid,.nova-stream-comps{grid-template-columns:1fr}
+}
+
 /* ---------- Code block ---------- */
 .nova-codeblock{background:var(--code-bg);border:1px solid var(--border-1);border-radius:var(--r-md);margin:12px 0;overflow:hidden}
 .nova-codehead{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;background:rgba(255,255,255,.04);border-bottom:1px solid var(--border-1)}
