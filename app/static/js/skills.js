@@ -1,15 +1,34 @@
 /* Skills page — built-in catalog + custom skill CRUD. */
 (function(){
   const $=s=>document.querySelector(s);
-  let editId=null,customSkills=[];
+  let editId=null,customSkills=[],availTools=[];
   AdminShell.mount('skills');
   window.addEventListener('admin-ready',init);
   if(ADMIN_TOKEN)init();
 
-  function init(){
+  async function init(){
     $('#newBtn').onclick=()=>openModal(null);
     $('#saveBtn').onclick=save;
+    try{availTools=await adminApi('/admin/tools')||[];}catch(e){availTools=[];}
+    renderToolPicker([]);
     load();
+  }
+
+  function renderToolPicker(checked){
+    const host=$('#sk_tools_list');host.innerHTML='';
+    const sel=new Set(checked||[]);
+    availTools.forEach(t=>{
+      const lbl=document.createElement('label');
+      lbl.title=t.description||'';
+      lbl.style.cssText='display:flex;gap:5px;align-items:center;padding:3px 10px;'+
+        'border:1px solid var(--border);border-radius:20px;cursor:pointer;'+
+        'font-size:var(--t-xs);user-select:none';
+      lbl.innerHTML=`<input type="checkbox" value="${esc(t.name)}" ${sel.has(t.name)?'checked':''} style="margin:0">
+        <span>${esc(t.icon||'')} ${esc(t.name)}</span>`;
+      host.appendChild(lbl);
+    });
+    if(!availTools.length)
+      host.innerHTML='<span class="tx-3" style="font-size:var(--t-xs)">tool registry unavailable — type names below</span>';
   }
 
   async function load(){
@@ -68,15 +87,20 @@
     $('#sk_name').value=s?s.name:'';
     $('#sk_desc').value=s?s.description:'';
     $('#sk_ins').value=s?s.instructions:'';
-    $('#sk_tools').value=(s?s.tools:[]).join(', ');
+    const known=new Set(availTools.map(t=>t.name));
+    const saved=s?s.tools||[]:[];
+    renderToolPicker(saved.filter(t=>known.has(t)));
+    $('#sk_tools').value=saved.filter(t=>!known.has(t)).join(', ');
     $('#sk_enabled').checked=s?s.enabled!==false:true;
     $('#modal').style.display='grid';
   }
 
   async function save(){
+    const picked=[...document.querySelectorAll('#sk_tools_list input:checked')].map(c=>c.value);
+    const extras=$('#sk_tools').value.split(',').map(x=>x.trim()).filter(Boolean);
     const body={name:$('#sk_name').value.trim(),description:$('#sk_desc').value.trim(),
       instructions:$('#sk_ins').value,enabled:$('#sk_enabled').checked,
-      tools:$('#sk_tools').value.split(',').map(x=>x.trim()).filter(Boolean)};
+      tools:[...new Set([...picked,...extras])]};
     try{
       if(editId)await v1Api('/v1/skills/manage/'+editId,{method:'PATCH',body:JSON.stringify(body)});
       else await v1Api('/v1/skills/manage',{method:'POST',body:JSON.stringify(body)});

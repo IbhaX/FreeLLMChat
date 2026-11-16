@@ -30,7 +30,9 @@
     <div class="rp-field" style="margin-bottom:10px"><label style="font-size:var(--t-xs);color:var(--text-3)">Name (snake_case)</label><input id="sk_name" class="ui-input" placeholder="pdf_extract"></div>
     <div class="rp-field" style="margin-bottom:10px"><label style="font-size:var(--t-xs);color:var(--text-3)">Description</label><input id="sk_desc" class="ui-input"></div>
     <div class="rp-field" style="margin-bottom:10px"><label style="font-size:var(--t-xs);color:var(--text-3)">Instructions (injected into agent prompt)</label><textarea id="sk_ins" class="ui-input" rows="5"></textarea></div>
-    <div class="rp-field" style="margin-bottom:10px"><label style="font-size:var(--t-xs);color:var(--text-3)">Required tools (comma separated)</label><input id="sk_tools" class="ui-input" placeholder="web_search, http_get"></div>
+    <div class="rp-field" style="margin-bottom:10px"><label style="font-size:var(--t-xs);color:var(--text-3)">Required tools</label>
+      <div id="sk_tools_list" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0"></div>
+      <input id="sk_tools" class="ui-input" placeholder="other tools, comma separated (optional)" style="font-size:var(--t-xs)"></div>
     <label style="display:flex;gap:8px;align-items:center;margin-bottom:14px;font-size:var(--t-sm)"><input type="checkbox" id="sk_enabled" checked> Enabled — agents can attach this skill</label>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="ui-btn" onclick="document.getElementById('modal').style.display='none'">Cancel</button>
