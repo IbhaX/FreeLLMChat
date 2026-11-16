@@ -843,11 +843,36 @@ async def chat_completions(
 # ---------- detached generation (refresh-resilient chat) ----------
 
 @router.get("/conversations/{client_id}/live")
-async def conversation_live(client_id: str) -> dict[str, Any]:
-    """Job status for a conversation's detached generation."""
+async def conversation_live(
+    client_id: str, session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Job status for a conversation's detached generation.
+
+    When no in-memory job exists but the last stored turn is unanswered
+    (a server restart wiped the job registry mid-run), report the run as
+    interrupted so the client can tell the user instead of going silent."""
+    from app.models import Conversation
     from app.services import chat_jobs
 
-    return chat_jobs.status(chat_jobs.get(client_id))
+    job = chat_jobs.get(client_id)
+    if job is not None:
+        return chat_jobs.status(job)
+    conv = (
+        await session.execute(
+            select(Conversation).where(Conversation.client_id == client_id)
+        )
+    ).scalar_one_or_none()
+    msgs = (conv.messages or []) if conv else []
+    last = msgs[-1] if msgs else {}
+    unanswered = (
+        last.get("role") == "user"
+        or (last.get("role") == "assistant"
+            and not str(last.get("text") or last.get("content") or "").strip())
+    )
+    out = chat_jobs.status(None)
+    if unanswered:
+        out["interrupted"] = True
+    return out
 
 
 @router.get("/conversations/{client_id}/live/stream")

@@ -485,6 +485,17 @@ async function checkLive(c){
   const j=await liveStatus(c.id);
   if(!j)return;
   if(j.running){resumeLive(c);return;}
+  if(j.interrupted){
+    // A run was in flight when the server restarted — the in-memory job is
+    // gone. Drop the dead typing placeholder and say so instead of going
+    // silent.
+    const last=c.msgs[c.msgs.length-1];
+    if(last&&last.role==='assistant'&&!last.text)c.msgs.pop();
+    const st=$('#chatStatus');if(st)st.textContent='previous run interrupted — send again to retry';
+    toast('The previous run was interrupted (server restarted) — send again to retry.');
+    renderAll();
+    return;
+  }
   if(j.done&&j.reply){
     // Reply finished while the page was away — merge it if not already here.
     const last=c.msgs[c.msgs.length-1];
