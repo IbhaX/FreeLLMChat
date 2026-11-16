@@ -374,15 +374,17 @@ async def _chat_with_tools(
 
 _TOOLISH_KEYS = {
     "query", "queries", "q", "search", "max_results", "tool", "tool_name",
-    "arguments", "args", "input", "url", "expression", "code",
+    "tool_calls", "function_call", "arguments", "args", "input", "url",
+    "expression", "code",
 }
 
 
 def _looks_like_tool_blob(text: str) -> bool:
-    """True when the whole reply is a bare JSON tool call, e.g.
-    ``{"query": "...", "max_results": 5}`` — weak models emit the call as
-    text instead of invoking the tool. Structured response envelopes and
-    component objects are legit JSON and are excluded."""
+    """True when the reply is a tool call leaked as JSON text — weak models
+    emit the call instead of invoking the tool. Shapes seen in the wild:
+    ``{"query": ..., "max_results": 5}``, ``{"tool_calls": [{...}]}``, and
+    the same nested inside a fake component's ``data``. Real response
+    envelopes and component objects are legit JSON and are excluded."""
     t = (text or "").strip()
     if not (t.startswith("{") and t.endswith("}")):
         return False
@@ -392,6 +394,15 @@ def _looks_like_tool_blob(text: str) -> bool:
         return False
     if not isinstance(obj, dict) or not obj or len(obj) > 6:
         return False
+    # A nested {"tool_calls": [...]} anywhere one level down is a leaked
+    # call no matter the wrapper.
+    for v in obj.values():
+        if isinstance(v, dict) and "tool_calls" in v:
+            return True
+        if isinstance(v, list) and v and isinstance(v[0], dict) and (
+                "name" in v[0] and ("parameters" in v[0] or "arguments" in v[0]
+                                    or "query" in v[0])):
+            return True
     if "response_type" in obj or ("type" in obj and "data" in obj):
         return False
     return bool(set(obj) & _TOOLISH_KEYS)
@@ -445,9 +456,29 @@ async def run_agent(
         return _maybe_structured(agent_cfg, content)
     memory = await get_memory_text(str(message), conversation_id)
     agent = _build_agent(agent_cfg, gateway, custom_instructions + ("\n\n" + memory if memory else ""))
-    result = await asyncio.wait_for(
-        agent.run(message, message_history=_to_model_history(history)), timeout=timeout_s
-    )
+    try:
+        result = await asyncio.wait_for(
+            agent.run(message, message_history=_to_model_history(history)), timeout=timeout_s
+        )
+    except Exception as e:
+        # Weak models often can't emit a valid structured envelope before
+        # pydantic-ai's output retries run out — retry once as plain text
+        # instead of returning the raw error to the user.
+        if agent_cfg.output_format != "structured" or (
+                "retries" not in str(e).lower()
+                and "output" not in type(e).__name__.lower()):
+            raise
+        import copy
+
+        cfg2 = copy.copy(agent_cfg)
+        cfg2.output_format = "text"
+        fallback = _build_agent(
+            cfg2, gateway,
+            custom_instructions + ("\n\n" + memory if memory else ""))
+        result = await asyncio.wait_for(
+            fallback.run(
+                message, message_history=_to_model_history(history)),
+            timeout=timeout_s)
     out = result.output
     if isinstance(out, ResponseEnvelope):
         return envelope_to_fence(out)

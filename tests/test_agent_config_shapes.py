@@ -91,6 +91,11 @@ def test_tool_blob_detector() -> None:
     # Bare JSON tool-call blobs leaked as text
     assert _looks_like_tool_blob('{"query": "x", "max_results": 5}')
     assert _looks_like_tool_blob('{"tool": "web_search", "arguments": {"q": "x"}}')
+    assert _looks_like_tool_blob(
+        '{"tool_calls": [{"name": "web_search", "query": "q", "max_results": 3}]}')
+    # Leaked call nested inside a fake json component still counts
+    assert _looks_like_tool_blob(
+        '{"type": "json", "data": {"tool_calls": [{"name": "web_search"}]}}')
     # Legit JSON that must NOT be flagged
     assert not _looks_like_tool_blob(
         '{"response_type": "markdown", "data": {}}')
