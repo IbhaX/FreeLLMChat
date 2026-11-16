@@ -59,6 +59,23 @@
   .nova-comp-grid,.nova-stream-comps{grid-template-columns:1fr}
 }
 
+/* ---------- Text primitives ---------- */
+.nova-heading{margin:14px 0 6px;line-height:1.3;color:var(--text-1)}
+.nova-h1{font-size:1.5em}
+.nova-h2{font-size:1.3em}
+.nova-h3{font-size:1.1em}
+.nova-h4{font-size:1em}
+.nova-paragraph{margin:0 0 8px;font-size:14px;line-height:1.65}
+.nova-paragraph:last-child{margin-bottom:0}
+.nova-paragraph code.ic{background:var(--surface-3);border:1px solid var(--border-1);padding:1px 6px;border-radius:5px;font-family:var(--font-mono);font-size:.88em}
+.nova-paragraph a{color:var(--accent)}
+.nova-spacer-s{height:6px}
+.nova-spacer-m{height:14px}
+.nova-spacer-l{height:28px}
+.nova-card{background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md);padding:12px 14px;box-shadow:var(--shadow-1)}
+.nova-card-title{font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px}
+.nova-card-grid{margin:0}
+
 /* ---------- Code block ---------- */
 .nova-codeblock{background:var(--code-bg);border:1px solid var(--border-1);border-radius:var(--r-md);margin:12px 0;overflow:hidden}
 .nova-codehead{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;background:rgba(255,255,255,.04);border-bottom:1px solid var(--border-1)}

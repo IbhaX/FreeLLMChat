@@ -65,7 +65,7 @@ def test_markdown_fallback_maps_structures():
     fence = markdown_to_envelope(MD)
     env = extract_envelope(fence)
     types = [c["type"] for c in env["components"]]
-    assert types == ["table", "list", "stat_grid"]
+    assert types == ["table", "list", "stat_grid", "paragraph"]
     table = env["components"][0]["data"]
     assert table["columns"] == ["Aspect", "Groq", "Gemini"]
     assert table["rows"][1] == ["Context", "128K", "1M"]

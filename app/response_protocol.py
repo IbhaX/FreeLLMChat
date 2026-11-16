@@ -137,6 +137,12 @@ class ComponentType(str, Enum):
     PERSON_CARD = "person_card"
     ARCHITECTURE_DIAGRAM = "architecture_diagram"
     FLOWCHART = "flowchart"
+    # Text primitives — so a reply can be composed ENTIRELY of components,
+    # with no bare-markdown `content` at all.
+    HEADING = "heading"
+    PARAGRAPH = "paragraph"
+    SPACER = "spacer"
+    CARD = "card"
 
 
 class Component(BaseModel):
@@ -470,6 +476,26 @@ def component_schemas() -> dict[str, dict[str, Any]]:
             "optional": ["description", "extract", "thumbnail", "url", "source"],
             "description": "A person profile card with photo, bio and source link.",
         },
+        ComponentType.HEADING.value: {
+            "required": ["text"],
+            "optional": ["level"],
+            "description": "A section heading (level 1-4, default 2).",
+        },
+        ComponentType.PARAGRAPH.value: {
+            "required": ["text"],
+            "optional": [],
+            "description": "A prose paragraph; inline **bold**, *italic*, `code` and links allowed.",
+        },
+        ComponentType.SPACER.value: {
+            "required": [],
+            "optional": ["size"],
+            "description": "Vertical breathing room between sections (size: small|medium|large).",
+        },
+        ComponentType.CARD.value: {
+            "required": ["components"],
+            "optional": ["title", "variant"],
+            "description": "A bordered card grouping nested components (components: [{type, data}]).",
+        },
     }
 
 
@@ -537,6 +563,10 @@ _COMPONENT_GUIDE: dict[str, dict[str, Any]] = {
     "heatmap": {"when": "intensity across a grid (2D numbers 0-1)", "example": {"title": "Activity", "data": [[0.1, 0.8], [0.4, 0.2]]}},
     "tagcloud": {"when": "weighted topics/keywords", "example": {"tags": [{"label": "AI", "weight": 5}, {"label": "APIs", "weight": 3}]}},
     "divider": {"when": "separating sections inside a long answer", "example": {}},
+    "heading": {"when": "section titles inside a long answer", "example": {"text": "How it works", "level": 2}},
+    "paragraph": {"when": "every prose paragraph — prefer this over putting prose in `content`", "example": {"text": "gRPC serializes payloads as compact **protobuf** instead of JSON text."}},
+    "spacer": {"when": "extra vertical breathing room between sections", "example": {"size": "medium"}},
+    "card": {"when": "grouping related components into one bordered panel", "example": {"title": "At a glance", "components": [{"type": "metric_card", "data": {"title": "Users", "value": "48k"}}]}},
     "architecture_diagram": {"when": "system architecture, service boundaries, layers or data flow; prefer this over ASCII diagrams", "example": {"title": "Agent architecture", "layers": [{"title": "API Gateway", "subtitle": "Authentication and validation"}, {"title": "Agent Orchestrator", "nodes": [{"title": "Planner", "subtitle": "Intent and task planning"}, {"title": "Router", "subtitle": "Model selection"}]}, {"title": "Runtime", "nodes": [{"title": "Memory Engine"}, {"title": "Tool Runtime"}, {"title": "Model Router"}]}, {"title": "Persistence", "subtitle": "Database, traces and metrics"}]}},
     "flowchart": {"when": "decision trees, request lifecycles and multi-step processes with branches", "example": {"title": "Request flow", "nodes": [{"id": "start", "label": "Request", "kind": "start"}, {"id": "valid", "label": "Valid?", "kind": "decision"}, {"id": "run", "label": "Execute", "kind": "process"}, {"id": "end", "label": "Respond", "kind": "end"}], "edges": [{"from": "start", "to": "valid"}, {"from": "valid", "to": "run", "label": "Yes"}, {"from": "run", "to": "end"}] }},
 }
@@ -585,14 +615,14 @@ def structured_system_prompt() -> str:
     return f"""## COMPONENT OUTPUT CONTRACT (MANDATORY — overrides any other style instruction)
 
 {RESPONSE_DEPTH}
-DEPTH + COMPONENTS — depth rules above apply WITHIN the envelope: `content` is markdown and carries the direct answer plus the explanatory substance (headings and paragraphs allowed for long-form answers); components carry the structured data (tables, stats, timelines) that supports it. Tables must be followed by prose takeaways in `content` or as a closing component, never stand alone as the whole answer.
+DEPTH + COMPONENTS — depth rules above apply WITHIN the envelope. ALL prose must be expressed as components: use `paragraph` for every paragraph and `heading` for every section title — the answer is composed entirely of components, not markdown. `content` is optional and holds at most a one-sentence plain-text lead for API consumers that do not render components; never put substantive prose there. Tables must be followed by a `paragraph`/`callout` explaining the takeaways, never stand alone as the whole answer.
 
 RULE 0 — When to use components: EVERY reply containing more than one fact, comparison, list, number, step, or source MUST be a structured component response. Plain prose is allowed ONLY for one-line greetings or single-sentence answers. A multi-fact answer with zero components is a FAILURE.
 
 OUTPUT FORMAT — wrap the WHOLE reply in one fenced block tagged `{RESPONSE_FENCE_TAG}` containing ONE JSON envelope (never bare markdown, never multiple fences):
 
 ```{RESPONSE_FENCE_TAG}
-{{"response_type": "<most specific type>", "content": "<direct-answer lead: 1-2 sentences, longer overview allowed for complex questions>", "components": [{{"type": "<type>", "data": {{...}}}}], "sources": [{{"title": "...", "url": "..."}}], "suggested_prompts": ["..."]}}
+{{"response_type": "<most specific type>", "content": "<optional one-line plain-text lead>", "components": [{{"type": "<type>", "data": {{...}}}}], "sources": [{{"title": "...", "url": "..."}}], "suggested_prompts": ["..."]}}
 ```
 
 SELECTION GUIDE — pick by content, not habit:
@@ -608,7 +638,7 @@ SELECTION GUIDE — pick by content, not habit:
 
 COMPOSITION RULE — a good answer = the `content` lead (direct answer first, then substance as needed) + 3 to 6 DIFFERENT component types + prose explanation where the depth rules call for it + a sources block. For architecture questions, include one `architecture_diagram` as the primary visual; do not substitute a text/ASCII diagram. For workflows with branching decisions, use `flowchart`. Keep labels concise and include only relationships supported by the answer. Never repeat the same component type back-to-back when another fits. Do not invent data; if a value is unknown, omit the component.
 
-PACK FACTS INTO WIDGET TILES — the UI lays components out as a tile grid, and small components render side by side. Prefer several small components over burying facts in prose: every key number should be a `metric_card` or `stat_grid`, statuses/labels become `badge`, caveats/takeaways become `callout`, spec sheets become `keyvalue`, notable lines become `quote`, progress/capacity becomes `gauge` or `progress`, pros/cons become paired `list`s. A dense answer with many tiles is better than a sparse one.
+PACK FACTS INTO WIDGET TILES — the UI lays components out as a tile grid, and small components render side by side. Prefer several small components over burying facts in prose: every key number should be a `metric_card` or `stat_grid`, statuses/labels become `badge`, caveats/takeaways become `callout`, spec sheets become `keyvalue`, notable lines become `quote`, progress/capacity becomes `gauge` or `progress`, pros/cons become paired `list`s. Use `heading` to title each section, `paragraph` for prose, `spacer`/`divider` for rhythm, and `card` to group related pieces. A dense answer with many tiles is better than a sparse one.
 
 FEW-SHOT EXAMPLES
 
