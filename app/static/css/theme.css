@@ -579,6 +579,9 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.2}
 }
 .ui-menu .mi:hover{background:var(--surface-2)}
 .ui-menu .mi.sel{background:var(--accent-soft)}
+.ui-menu a.mi{color:var(--text-1);text-decoration:none}
+.ui-menu a.mi svg{width:15px;height:15px;flex:none;opacity:.75}
+.ui-menu a.mi.sel svg{opacity:1;color:var(--accent)}
 .ui-menu .mi-ic{
   width:28px;height:28px;border-radius:8px;flex:none;
   display:grid;place-items:center;font-size:13px;font-weight:700;color:#fff;

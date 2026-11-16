@@ -1500,6 +1500,7 @@ function collapseRepeats(text){
 }
 // --- Init --------------------------------------------------------------------
 if(!loadState())seed();
+AppNav.attach(document.getElementById('appNavBtn'),'chat');
 renderModels();renderAll();loadModels();refreshTokenMeter();
 // checkLive runs after loadAgents resolves: the restored agent/group mode
 // decides which reader re-attaches to a running job.

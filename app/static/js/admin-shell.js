@@ -1,21 +1,10 @@
 /* Shared admin shell — sidebar nav + auth gate for /, /keys, /settings.
    Usage: AdminShell.mount('dashboard'|'keys'|'settings') — injects the
    sidebar into <body> wrapping existing <main class="ui-main"> markup, and
-   shows the login card when admin auth fails. */
+   shows the login card when admin auth fails.
+   Destinations come from app-nav.js (AppNav.NAV) — single source of truth. */
 (function(){
-  const NAV=[
-    {sec:'Product'},
-    {id:'dashboard',href:'/',label:'Home',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>'},
-    {id:'chat',href:'/chat',label:'Chat',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'},
-    {id:'research',href:'/research',label:'Research',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>'},
-    {id:'roleplay',href:'/roleplay',label:'Roleplay',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'},
-    {id:'agents',href:'/agents',label:'Agents',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4m-4 8h.01M16 12h.01M9 16h6"/></svg>'},
-    {id:'skills',href:'/skills',label:'Skills',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3 6 6 .9-4.5 4.2 1 6.4-5.5-3-5.5 3 1-6.4L3 8.9 9 8z"/></svg>'},
-    {sec:'Workspace'},
-    {id:'library',href:'/library',label:'Library',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>'},
-    {id:'keys',href:'/keys',label:'API Keys',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M11 12 21 2m-3 3 3 3"/></svg>'},
-    {id:'settings',href:'/settings',label:'Settings',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.23.61.84 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.67 0-1.28.39-1.51 1z"/></svg>'},
-  ];
+  const NAV=window.AppNav.NAV;
 
   function sidebarHtml(active){
     return `<div class="sb-head" style="display:flex;align-items:center;gap:10px;padding:2px 6px 10px">

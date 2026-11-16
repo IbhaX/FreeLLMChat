@@ -503,5 +503,6 @@
     }catch(e){toast2(e.message);}
   }
 
+  AppNav.attach(document.getElementById('appNavBtn'),'roleplay');
   init();
 })();
