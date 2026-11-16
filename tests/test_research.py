@@ -325,3 +325,64 @@ def test_tool_loop_uses_custom_closing_message():
         max_rounds=1, closing_message="RETURN JSON NOW."))
     closing = seen[-1][-1]
     assert closing["role"] == "user" and closing["content"] == "RETURN JSON NOW."
+
+
+def test_merge_findings_alternate_shapes():
+    st = R.ResearchState()
+    # findings under "results" with "text" claims and "references" sources
+    R._merge_findings(st, {
+        "results": [{"text": "Proxima b orbits in the habitable zone",
+                     "source": "r1", "detail": "ESI 0.87"}],
+        "references": [{"id": "r1", "url": "https://nasa/x", "type": "academic"}],
+    }, "q1")
+    assert len(st.findings) == 1
+    assert st.findings[0].claim.startswith("Proxima")
+    assert st.findings[0].evidence == "ESI 0.87"
+
+    # findings nested inside an "answer" object
+    st2 = R.ResearchState()
+    R._merge_findings(st2, {
+        "answer": {"findings": [{"claim": "gRPC uses HTTP/2", "source_id": "s1"}],
+                   "sources": [{"id": "s1", "url": "https://grpc"}]},
+    }, "q2")
+    assert len(st2.findings) == 1 and st2.findings[0].sub_question == "q2"
+    assert "s1" in st2.sources
+
+
+def test_research_one_salvages_wrong_shape_json(monkeypatch):
+    import asyncio
+
+    async def _tool_loop(*a, **kw):
+        return {"choices": [{"message": {"content":
+            '{"report": "Plato wrote about love in the Symposium.",'
+            ' "notes": ["eros vs agape"]}'}}]}
+    import app.services.tools as tools
+    monkeypatch.setattr(tools, "run_tool_loop", _tool_loop)
+
+    st = R.ResearchState()
+    notes = []
+    asyncio.run(R._research_one(
+        _FakeGateway(), None, ["m1"],
+        {"id": "q1", "question": "love in Greek philosophy?"}, "standard",
+        st, lambda ev: notes.append(ev)))
+    assert st.findings, "valid-but-wrong-shape JSON must still salvage a finding"
+    assert "Plato" in st.findings[0].claim
+    assert any("no findings key" in u for u in st.unverified)
+
+
+def test_research_one_notes_when_empty(monkeypatch):
+    import asyncio
+
+    async def _tool_loop(*a, **kw):
+        return {"choices": [{"message": {"content": ""}}]}
+    import app.services.tools as tools
+    monkeypatch.setattr(tools, "run_tool_loop", _tool_loop)
+
+    st = R.ResearchState()
+    notes = []
+    asyncio.run(R._research_one(
+        _FakeGateway(), None, ["m1"],
+        {"id": "q3", "question": "?"}, "standard",
+        st, lambda ev: notes.append(ev)))
+    assert not st.findings
+    assert any("no usable findings" in n.get("text", "") for n in notes)
