@@ -252,6 +252,7 @@ async def _char_reply_stream(
     gateway: Any, session: Any, model: str, system: str,
     history: list[dict[str, str]], emit: Any = None,
     tools: bool = False,
+    via: dict[str, Any] | None = None,
 ) -> AsyncIterator[str]:
     """Yield streamed delta text for one character turn; falls back to a
     single buffered reply when streaming fails before any token.
@@ -265,6 +266,16 @@ async def _char_reply_stream(
         import asyncio
 
         from app.services.tools import run_tool_loop
+        if via is not None and emit is not None:
+            _emit0 = emit
+            def emit(ev: Any) -> Any:  # capture provider/model from usage events
+                try:
+                    if isinstance(ev, dict) and ev.get("event") == "usage":
+                        via["model"] = ev.get("model")
+                        via["provider"] = ev.get("provider")
+                except Exception:
+                    pass
+                return _emit0(ev)
         payload: dict[str, Any] = {
             "model": model or "auto",
             "messages": [{"role": "system", "content": system}] + history,
@@ -297,6 +308,9 @@ async def _char_reply_stream(
     try:
         stream, _p, _k, _m = await gateway.chat_stream(
             session, payload, on_event=emit)
+        if via is not None:
+            via["provider"] = getattr(_p, "name", None) or _p
+            via["model"] = _m
         async for chunk in stream:
             for line in chunk.decode("utf-8", "ignore").splitlines():
                 line = line.strip()
@@ -384,6 +398,7 @@ async def turn_stream(
         for idx, c in enumerate(order):
             reacting = idx > 0
             mid = _mid()
+            via: dict[str, Any] = {}
             yield _sse({"event": "char_start", "id": mid,
                         "character_id": c.id, "name": c.name,
                         "emoji": c.emoji, "aside": reacting})
@@ -410,7 +425,8 @@ async def turn_stream(
                     async for piece in _char_reply_stream(
                             gateway, session, room.model or "auto",
                             system, history, emit=emit,
-                            tools=bool(room.tools_enabled) and not reacting):
+                            tools=bool(room.tools_enabled) and not reacting,
+                            via=via):
                         acc += piece
                         while not evq.empty():
                             yield _sse(evq.get_nowait())
@@ -435,10 +451,14 @@ async def turn_stream(
                    "emoji": c.emoji, "text": text, "variants": []}
             if reacting:
                 msg["aside"] = True
+            if via.get("model"):
+                msg["via"] = {"model": via["model"],
+                              "provider": via.get("provider")}
             room.messages = (list(room.messages or []) + [msg])[-MAX_STORED:]
             session.add(room)
             await session.commit()
-            yield _sse({"event": "char_end", "id": mid, "text": text})
+            yield _sse({"event": "char_end", "id": mid, "text": text,
+                        "via": msg.get("via")})
         yield _sse({"event": "turn_done", "messages": room.messages})
         yield b"data: [DONE]\n\n"
 
@@ -538,6 +558,7 @@ async def retry_stream(
             director_notes=room.director_notes or "",
             summary=room.summary or "",
             tools=bool(room.tools_enabled))
+        via: dict[str, Any] = {}
         yield _sse({"event": "char_start", "id": message_id,
                     "character_id": c.id, "name": c.name,
                     "emoji": c.emoji, "regen": True})
@@ -545,7 +566,7 @@ async def retry_stream(
         try:
             async for piece in _char_reply_stream(
                     gateway, session, room.model or "auto", system, history,
-                    emit=emit, tools=bool(room.tools_enabled)):
+                    emit=emit, tools=bool(room.tools_enabled), via=via):
                 acc += piece
                 while not evq2.empty():
                     yield _sse(evq2.get_nowait())
@@ -563,6 +584,9 @@ async def retry_stream(
         if msg.get("text"):
             variants.append(msg["text"])
         new_msg = {**msg, "variants": variants, "text": text}
+        if via.get("model"):
+            new_msg["via"] = {"model": via["model"],
+                              "provider": via.get("provider")}
         room.messages = [
             new_msg if m.get("id") == msg.get("id") else m
             for m in room.messages or []
@@ -571,7 +595,7 @@ async def retry_stream(
         session.add(room)
         await session.commit()
         yield _sse({"event": "char_end", "id": message_id, "text": text,
-                    "variants": variants})
+                    "variants": variants, "via": new_msg.get("via")})
         yield _sse({"event": "turn_done", "messages": room.messages})
         yield b"data: [DONE]\n\n"
 

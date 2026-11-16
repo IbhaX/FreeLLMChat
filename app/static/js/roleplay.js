@@ -179,10 +179,16 @@
         if(el){el.classList.remove('writing');el._streaming=false;
           if(ev.text&&el._text!==ev.text){el._text=ev.text;
             el.querySelector('.txt').textContent=ev.text;}
+          if(ev.via&&ev.via.model&&!el.querySelector('.via')){
+            const via=document.createElement('span');via.className='via';
+            via.title='powered by '+(ev.via.provider||'');
+            via.textContent=ev.via.model;
+            el.querySelector('.who').appendChild(via);}
           if(ev.variants&&ev.variants.length)attachSwipe(el,ev.id,ev.variants);}
         // keep room.messages in sync
         if(room){const m=(room.messages||[]).find(x=>x.id===ev.id);
-          if(m){m.text=ev.text;if(ev.variants)m.variants=ev.variants;}}
+          if(m){m.text=ev.text;if(ev.variants)m.variants=ev.variants;
+            if(ev.via)m.via=ev.via;}}
         break;}
       case 'turn_done':{
         if(room)room.messages=ev.messages;
@@ -239,7 +245,8 @@
     el.innerHTML=`${isUser?`<div class="av">🧑</div>`:
       m.role==='narrator'?'<div class="av">📜</div>':
       `<div class="av">${esc(m.emoji||'🎭')}</div>`}
-      <div class="b"><div class="who">${who}</div>
+      <div class="b"><div class="who">${who}${
+        m.via&&m.via.model?`<span class="via" title="powered by ${esc(m.via.provider||'')}">${esc(m.via.model)}</span>`:''}</div>
       <div class="txt">${esc(m.text||'')}</div></div>`;
     el._text=m.text||'';
     attachActs(el,m);

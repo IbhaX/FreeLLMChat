@@ -124,6 +124,10 @@ body {
 .st-msg .b { min-width: 0; max-width: 78%; }
 .st-msg .who { font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
   color: var(--stage-dim); margin-bottom: 4px; }
+.st-msg .who .via { margin-left: 8px; font-size: 9px; letter-spacing: .04em;
+  text-transform: none; opacity: .55; padding: 1px 7px; border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--stage-dim) 35%, transparent);
+  font-family: var(--stage-ui, inherit); cursor: default; vertical-align: 1px; }
 .st-msg .txt {
   font-family: var(--stage-font); font-size: 16.5px; line-height: 1.62;
   white-space: pre-wrap; word-wrap: break-word;
