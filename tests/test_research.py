@@ -185,3 +185,64 @@ def test_synthesize_sectioned_empty_falls_back(monkeypatch):
         _FakeGateway(), None, ["fake/model"], st.question, st,
         lambda ev: None))
     assert "Single-shot answer body." in out
+
+
+def test_is_outage_matches_provider_failures():
+    assert R._is_outage("All 4 provider key(s) are on cooldown after upstream "
+                        "errors — soonest retry in ~0m59s")
+    assert R._is_outage(RuntimeError("No providers have an enabled API key"))
+    assert not R._is_outage("ConnectTimeout")
+    assert not R._is_outage("HTTP 429 rate limited")
+
+
+def test_call_raises_on_provider_outage():
+    import asyncio
+
+    class _CooledGateway:
+        async def chat(self, session, payload, **kw):
+            raise RuntimeError(
+                "All 4 provider key(s) are on cooldown after upstream "
+                "errors — soonest retry in ~0m59s")
+
+    try:
+        asyncio.run(R._call(
+            _CooledGateway(), None, "openrouter/qwen/qwen3-32b",
+            [{"role": "user", "content": "hi"}]))
+        assert False, "outage should propagate"
+    except RuntimeError as e:
+        assert "cooldown" in str(e)
+
+
+def test_call_returns_empty_on_transient_errors():
+    import asyncio
+
+    class _FlakyGateway:
+        async def chat(self, session, payload, **kw):
+            raise RuntimeError("HTTP 502 bad gateway")
+
+    # transient errors still degrade to "" — only outages fail fast
+    out = asyncio.run(R._call(
+        _FlakyGateway(), None, ["m1", "m2"],
+        [{"role": "user", "content": "hi"}]))
+    assert out == ""
+
+
+def test_research_one_reraises_outage(monkeypatch):
+    import asyncio
+
+    async def _tool_loop(*a, **kw):
+        raise RuntimeError(
+            "All 2 provider key(s) are on cooldown after upstream errors")
+    import app.services.tools as tools
+    monkeypatch.setattr(tools, "run_tool_loop", _tool_loop)
+
+    st = R.ResearchState()
+    sq = {"id": "q1", "question": "why?"}
+    try:
+        asyncio.run(R._research_one(
+            _FakeGateway(), None, ["openrouter/qwen/qwen3-32b"],
+            sq, "standard", st, lambda ev: None))
+        assert False, "outage should propagate"
+    except RuntimeError as e:
+        assert "cooldown" in str(e)
+    assert not st.findings
