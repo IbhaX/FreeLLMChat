@@ -203,7 +203,9 @@ def test_markdown_fallback_extracts_trailing_sources():
     )
     fence = markdown_to_envelope(md)
     assert fence is not None
-    import json as _j, re as _re
+    import json as _j
+    import re as _re
+
     env = _j.loads(_re.search(r"```nova-response\n(.*?)\n```", fence, _re.S).group(1))
     assert len(env["sources"]) == 2
     assert env["sources"][0]["url"] == "https://example.com/a"

@@ -300,6 +300,7 @@ def test_gap_check_skips_when_coverage_complete():
 
 def test_tool_loop_uses_custom_closing_message():
     import asyncio
+
     from app.services.tools import run_tool_loop
 
     seen: list[list[dict]] = []
