@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 import webbrowser
 
 import uvicorn
@@ -27,9 +28,27 @@ def _open_browser(url: str) -> None:
         )
         return
     try:
-        webbrowser.get("google-chrome").open(url)
+        # new=0: reuse the existing browser window where the OS supports it
+        webbrowser.get("google-chrome").open(url, new=0)
     except webbrowser.Error:
-        webbrowser.open(url)
+        webbrowser.open(url, new=0)
+
+
+def _server_running() -> bool:
+    try:
+        with socket.create_connection((HOST, PORT), timeout=0.5):
+            pass
+    except OSError:
+        return False
+    try:
+        with urllib.request.urlopen(
+            f"http://{HOST}:{PORT}/healthz", timeout=2
+        ) as resp:
+            return resp.status == 200
+    except Exception:
+        # Something else holds the port, or health check missing — treat as
+        # "not ours" so we don't silently claim it's up.
+        return False
 
 
 def _open_when_up(url: str) -> None:
@@ -44,6 +63,12 @@ def _open_when_up(url: str) -> None:
 
 def main() -> None:
     url = f"http://localhost:{PORT}/chat"
+    if _server_running():
+        # Already running — reopening the URL would spawn a duplicate tab
+        # (browsers can't navigate an arbitrary existing tab), so just point
+        # the user at it instead of stacking tabs.
+        print(f"Nova is already running — open {url} in your existing tab.")
+        return
     threading.Thread(target=_open_when_up, args=(url,), daemon=True).start()
     uvicorn.run("app.main:app", host=HOST, port=PORT)
 
