@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import uuid
-from typing import Any, AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 from pydantic_ai import Agent
-from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -22,12 +21,12 @@ from pydantic_ai.messages import (
     TextPart,
     UserPromptPart,
 )
+from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 
 from app.db import get_session_factory
 from app.gateway import Gateway
 from app.models import AgentConfig
 from app.response_protocol import (
-    RESPONSE_FENCE_TAG,
     ResponseEnvelope,
     envelope_to_fence,
     structured_system_prompt,
@@ -310,6 +309,7 @@ def _tool_names(agent_cfg: AgentConfig) -> list[str]:
 async def get_memory_text(query: str = "", conversation_id: str | None = None) -> str:
     """Fetch persistent + vector memories for system-prompt injection."""
     from sqlalchemy import select
+
     from app.db import get_session_factory
     from app.models import Memory
     from app.services import astra_memory
@@ -491,7 +491,27 @@ async def run_agent(
             timeout=timeout_s)
     out = result.output
     if isinstance(out, ResponseEnvelope):
-        return envelope_to_fence(out)
+        if out.content or out.components:
+            return envelope_to_fence(out)
+        # Degenerate envelope (empty content, no components) — the model
+        # answered with empty JSON. One plain-text retry, then a readable
+        # fallback rather than showing the raw envelope.
+        import copy
+
+        cfg2 = copy.copy(agent_cfg)
+        cfg2.output_format = "text"
+        fallback = _build_agent(
+            cfg2, gateway,
+            custom_instructions + ("\n\n" + memory if memory else ""),
+            emit=emit)
+        try:
+            result2 = await asyncio.wait_for(
+                fallback.run(message, message_history=_to_model_history(history)),
+                timeout=timeout_s)
+            out2 = result2.output
+        except Exception:
+            out2 = ""
+        return out2 if isinstance(out2, str) and out2.strip() else _TOOL_BLOB_FALLBACK
     text = out if isinstance(out, str) else ""
     return _TOOL_BLOB_FALLBACK if _looks_like_tool_blob(text) else text
 
@@ -506,15 +526,20 @@ def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
         candidates.append(fence_match.group(1).strip())
     for candidate in candidates:
         try:
-            return envelope_to_fence(validate_envelope(json.loads(candidate)))
+            env = validate_envelope(json.loads(candidate))
         except Exception:
             continue
+        if env.content or env.components:
+            return envelope_to_fence(env)
+        # Valid shape but empty envelope — treat as a failed answer.
+        return _TOOL_BLOB_FALLBACK
     return content
 
 
 async def stream_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
     *, custom_instructions: str = "", conversation_id: str | None = None,
+    emit: Callable[[dict[str, Any]], None] | None = None,
 ) -> AsyncIterator[bytes]:
     """Run an agent with streaming via the gateway's internal streaming API."""
     history = _bounded_history(history)
@@ -526,7 +551,8 @@ async def stream_agent(
     if agent_cfg.output_format == "structured":
         try:
             text = await run_agent(gateway, agent_cfg, message, history,
-                                   custom_instructions=custom_instructions, conversation_id=conversation_id)
+                                   custom_instructions=custom_instructions,
+                                   conversation_id=conversation_id, emit=emit)
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
             yield f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
         except Exception as e:
@@ -535,7 +561,8 @@ async def stream_agent(
         return
     if _tool_names(agent_cfg):
         try:
-            result = await _chat_with_tools(gateway, agent_cfg, openai_messages, conversation_id)
+            result = await _chat_with_tools(gateway, agent_cfg, openai_messages,
+                                            conversation_id, emit=emit)
             choice = (result.get("choices") or [{}])[0]
             text = (choice.get("message") or {}).get("content") or ""
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
@@ -554,7 +581,8 @@ async def stream_agent(
     try:
         async with asyncio.timeout(timeout_s):
             async with get_session_factory()() as session:
-                stream, provider, key, model = await gateway.chat_stream(session, payload)
+                stream, provider, key, model = await gateway.chat_stream(
+                    session, payload, on_event=emit)
                 async for chunk in stream:
                     yield chunk
     except Exception as e:

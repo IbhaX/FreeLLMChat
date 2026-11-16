@@ -76,7 +76,8 @@ def test_null_content_does_not_crash_gateway_model() -> None:
     from app.services.agents import GatewayModel
 
     gw = SimpleNamespace()
-    async def chat(session: Any, payload: dict[str, Any]) -> tuple:
+    async def chat(session: Any, payload: dict[str, Any],
+                       on_event: Any = None) -> tuple:
         return ({"choices": [{"message": {"content": None}}]},
                 MagicMock(), MagicMock(), "m")
     gw.chat = chat
@@ -117,7 +118,7 @@ async def test_run_agent_retries_tool_blob(monkeypatch) -> None:
     calls: list[list[dict[str, Any]]] = []
 
     async def fake_tool_chat(gw: Any, cfg: Any, messages: list[dict[str, Any]],
-                             conv_id: Any) -> dict[str, Any]:
+                             conv_id: Any, emit: Any = None) -> dict[str, Any]:
         calls.append(messages)
         content = '{"query": "x", "max_results": 5}' if len(calls) == 1 else \
             "The real answer."
@@ -136,7 +137,7 @@ async def test_run_agent_blob_fallback_when_retry_also_blobs(monkeypatch) -> Non
     from app.services import agents as agents_mod
 
     async def fake_tool_chat(gw: Any, cfg: Any, messages: list[dict[str, Any]],
-                             conv_id: Any) -> dict[str, Any]:
+                             conv_id: Any, emit: Any = None) -> dict[str, Any]:
         return {"choices": [{"message": {"content": '{"query": "x"}'}}]}
 
     monkeypatch.setattr(agents_mod, "_chat_with_tools", fake_tool_chat)

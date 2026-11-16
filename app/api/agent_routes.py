@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -122,13 +124,23 @@ async def agent_chat(
                                          meta={"agent_id": a.id, "agent": a.name})
         await ls.commit()
     _t0 = time.monotonic()
+    evq: asyncio.Queue = asyncio.Queue()
 
     async def _wrap_stream():
+        def _drain() -> bytes:
+            ev = evq.get_nowait()
+            return f"data: {json.dumps({'freellm': ev})}\n\n".encode()
+
         try:
             async for chunk in stream_agent(gw, a, body.message, body.history,
                                             custom_instructions=custom,
-                                            conversation_id=body.conversation_id):
+                                            conversation_id=body.conversation_id,
+                                            emit=evq.put_nowait):
+                while not evq.empty():
+                    yield _drain()
                 yield chunk
+            while not evq.empty():
+                yield _drain()
             async with factory() as ls:
                 await agent_log.finish_run(ls, arun, "done",
                     meta={"agent": a.name, "stream": True},
