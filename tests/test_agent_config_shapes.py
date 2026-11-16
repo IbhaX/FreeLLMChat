@@ -112,7 +112,6 @@ def test_tool_blob_detector() -> None:
 async def test_run_agent_retries_tool_blob(monkeypatch) -> None:
     """A tool-capable agent whose model emits a bare JSON call gets one
     retry; if the retry still blobs, the reply is a readable fallback."""
-    import asyncio
     from app.services import agents as agents_mod
 
     calls: list[list[dict[str, Any]]] = []
@@ -133,7 +132,6 @@ async def test_run_agent_retries_tool_blob(monkeypatch) -> None:
 
 
 async def test_run_agent_blob_fallback_when_retry_also_blobs(monkeypatch) -> None:
-    import asyncio
     from app.services import agents as agents_mod
 
     async def fake_tool_chat(gw: Any, cfg: Any, messages: list[dict[str, Any]],

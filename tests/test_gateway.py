@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC
+
 import httpx
 import pytest
 import respx
@@ -407,13 +409,12 @@ async def test_400_request_fault_does_not_cool_key(session):
 async def test_no_route_reports_cooldowns(session):
     """When every enabled key is cooling, the error must say so — not claim
     no keys exist."""
-    from datetime import datetime, timedelta, timezone
-    from sqlalchemy import select
-    from app.models import ApiKey
+    from datetime import datetime, timedelta
+
 
     p = await _provider(session, "p1", "https://p1.example/v1", ["m1"])
     k = await make_key(session, p, "sk-aaa-1111", label="a")
-    k.cooldown_until = datetime.now(timezone.utc) + timedelta(minutes=30)
+    k.cooldown_until = datetime.now(UTC) + timedelta(minutes=30)
     await session.commit()
 
     gw = Gateway()
@@ -439,6 +440,7 @@ def test_model_quality_orders_by_capability():
 def test_order_models_prefers_capable_alternates():
     """Curated defaults stay first; discovered models rank by quality."""
     import types
+
     from app.gateway import Gateway
     gw = Gateway.__new__(Gateway)
     p = types.SimpleNamespace(default_models=["tiny:1b"])

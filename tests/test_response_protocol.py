@@ -50,7 +50,7 @@ def test_every_response_type_accepts_minimal_envelope():
 
 
 def test_unknown_response_type_rejected():
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         validate_envelope({"response_type": "not_a_real_type", "content": "x"})
 
 
@@ -59,8 +59,14 @@ def test_envelope_with_all_optional_fields():
         "response_type": "data_visualization",
         "content": "Monthly revenue breakdown.",
         "components": [
-            {"type": "metric_card", "data": {"title": "Total Revenue", "value": 125000, "unit": "USD"}},
-            {"type": "chart", "data": {"chart_type": "bar", "data": [{"month": "Jan", "revenue": 25000}]}},
+            {
+                "type": "metric_card",
+                "data": {"title": "Total Revenue", "value": 125000, "unit": "USD"},
+            },
+            {
+                "type": "chart",
+                "data": {"chart_type": "bar", "data": [{"month": "Jan", "revenue": 25000}]},
+            },
         ],
         "metadata": {"period": "Q1"},
         "sources": [{"title": "Finance DB", "url": "https://example.com"}],
@@ -89,7 +95,7 @@ def test_every_component_type_is_allowlisted_and_renderable():
 
 
 def test_unknown_component_type_rejected():
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         validate_envelope(
             {"response_type": "general", "components": [{"type": "arbitrary_html", "data": {}}]}
         )
@@ -156,7 +162,6 @@ def test_render_protocol_endpoint_serves_descriptor():
 
 
 def test_render_protocol_prompt_endpoint():
-    from app.response_protocol import structured_system_prompt
 
     with TestClient(app) as c:
         r = c.get("/v1/render-protocol/prompt")

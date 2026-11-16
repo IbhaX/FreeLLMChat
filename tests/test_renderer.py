@@ -3,7 +3,10 @@ import asyncio
 from app.services import renderer
 from app.services.component_enforce import has_renderable_components
 
-ENV = '```nova-response\n{"response_type":"general","content":"Hi","components":[{"type":"list","data":{"items":["a"]}}]}\n```'
+ENV = (
+    '```nova-response\n{"response_type":"general","content":"Hi",'
+    '"components":[{"type":"list","data":{"items":["a"]}}]}\n```'
+)
 MD = "## Q\n\n- one\n- two\n"
 
 
@@ -41,7 +44,8 @@ def test_convert_success_uses_fast_model_without_tools():
 
 def test_convert_rejects_non_components_and_errors():
     assert asyncio.run(renderer.convert_to_components(FakeGateway(MD), None, MD)) is None
-    assert asyncio.run(renderer.convert_to_components(FakeGateway(RuntimeError("x")), None, MD)) is None
+    gw = FakeGateway(RuntimeError("x"))
+    assert asyncio.run(renderer.convert_to_components(gw, None, MD)) is None
     assert asyncio.run(renderer.convert_to_components(FakeGateway(ENV), None, "")) is None
 
 

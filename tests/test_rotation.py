@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
+from datetime import UTC, datetime, timedelta
 
 from app.routing.rotator import Rotator
 from tests.conftest import make_key
@@ -50,7 +48,7 @@ async def test_priority_failover(session, provider):
 async def test_cooling_key_skipped(session, provider):
     hot = await make_key(session, provider, "sk-aaa-1111", label="hot")
     cold = await make_key(session, provider, "sk-bbb-2222", label="cold")
-    cold.cooldown_until = datetime.now(timezone.utc) + timedelta(minutes=5)
+    cold.cooldown_until = datetime.now(UTC) + timedelta(minutes=5)
     await session.commit()
     r = Rotator()
     assert (await r.pick(session, provider)).id == hot.id
@@ -58,16 +56,16 @@ async def test_cooling_key_skipped(session, provider):
 
 async def test_all_cooling_returns_none(session, provider):
     k = await make_key(session, provider, "sk-aaa-1111")
-    k.cooldown_until = datetime.now(timezone.utc) + timedelta(minutes=5)
+    k.cooldown_until = datetime.now(UTC) + timedelta(minutes=5)
     await session.commit()
     assert await Rotator().pick(session, provider) is None
 
 
 async def test_quota_group_cools_whole_pool(session, provider):
     a = await make_key(session, provider, "sk-aaa-1111", quota_group="proj1")
-    b = await make_key(session, provider, "sk-bbb-2222", quota_group="proj1")
+    await make_key(session, provider, "sk-bbb-2222", quota_group="proj1")
     other = await make_key(session, provider, "sk-ccc-3333")
-    a.cooldown_until = datetime.now(timezone.utc) + timedelta(minutes=5)
+    a.cooldown_until = datetime.now(UTC) + timedelta(minutes=5)
     await session.commit()
     picked = await Rotator().pick(session, provider)
     assert picked.id == other.id

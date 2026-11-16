@@ -3,18 +3,20 @@ execution engine, reliability guarantees."""
 
 from __future__ import annotations
 
-import pytest
-
 from app.services import experts, skills
 from app.services.execution import (
-    ExecutionPlan, ExecutionTrace, TaskStep, _parse_plan, _template_plan,
+    ExecutionPlan,
+    TaskStep,
+    _parse_plan,
+    _template_plan,
     orchestrate,
 )
 from app.services.intent import Complexity, Intent, classify
 from app.services.reliable import (
-    CallResult, last_resort_answer, reliable_call,
+    CallResult,
+    last_resort_answer,
+    reliable_call,
 )
-
 
 # ---------------------------------------------------------------- intent
 
@@ -199,8 +201,8 @@ def test_research_stage_roles():
 
 async def test_internal_chat_falls_through_candidates(session, monkeypatch):
     """First preferred model fails -> next candidate serves."""
-    from app.services.model_policy import internal_chat
     from app.services import model_policy
+    from app.services.model_policy import internal_chat
 
     monkeypatch.setattr(model_policy, "_PREFERRED", model_policy._PREFERRED | {
         "general": ("bad/m1", "good/m2")})

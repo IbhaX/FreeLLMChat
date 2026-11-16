@@ -71,10 +71,12 @@ def test_undecryptable_key_flagged():
         c.post("/admin/keys", headers=ADMIN,
                json={"provider": "groq", "keys": ["gsk_ok_1234"]})
         # Corrupt the stored ciphertext to simulate an ENCRYPTION_KEY change.
+        import asyncio
+
         from sqlalchemy import select
+
         from app.db import get_session_factory
         from app.models import ApiKey
-        import asyncio
 
         async def corrupt():
             from app.models import Provider
@@ -199,7 +201,6 @@ def test_keys_test_raw(monkeypatch):
 
 
 def test_wants_tools_classifier():
-    import pytest
     from app.services.tools import wants_tools
 
     class FakeGW:
@@ -228,7 +229,8 @@ def test_wants_tools_classifier():
         assert p["messages"][-1]["content"] == "hi"
         assert "builtin_tools" not in p and "tools" not in p
         boom = FakeGW(boom=True)
-        assert await wants_tools(boom, None, {"messages": [{"role": "user", "content": "hi"}]}) is True
+        req = {"messages": [{"role": "user", "content": "hi"}]}
+        assert await wants_tools(boom, None, req) is True
 
     import asyncio
     asyncio.run(main())

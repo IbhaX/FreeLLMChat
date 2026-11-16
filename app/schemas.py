@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # ---------- Admin: providers ----------
 
@@ -18,36 +17,36 @@ class ProviderCreate(BaseModel):
     auth_style: str = "bearer"
     auth_header: str = "Authorization"
     extra_headers: dict[str, str] = Field(default_factory=dict)
-    default_env_key: Optional[str] = None
+    default_env_key: str | None = None
     default_models: list[str] = Field(default_factory=list)
     limits: dict[str, int] = Field(default_factory=dict)
     pricing: dict[str, Any] = Field(default_factory=dict)
-    daily_reset_tz: Optional[str] = None
+    daily_reset_tz: str | None = None
     requires_card: bool = False
     commercial_ok: bool = True
     enabled: bool = True
     rotation_strategy: str = "least_used"
     fallback_chain: list[str] = Field(default_factory=list)
     auto_route_tags: list[str] = Field(default_factory=list)
-    docs_url: Optional[str] = None
-    notes: Optional[str] = None
-    verified_on: Optional[str] = None
-    account_id_env: Optional[str] = None
+    docs_url: str | None = None
+    notes: str | None = None
+    verified_on: str | None = None
+    account_id_env: str | None = None
 
 
 class ProviderUpdate(BaseModel):
-    display_name: Optional[str] = None
-    base_url: Optional[str] = None
-    enabled: Optional[bool] = None
-    rotation_strategy: Optional[str] = None
-    fallback_chain: Optional[list[str]] = None
-    auto_route_tags: Optional[list[str]] = None
-    limits: Optional[dict[str, int]] = None
-    pricing: Optional[dict[str, Any]] = None
-    default_models: Optional[list[str]] = None
-    extra_headers: Optional[dict[str, str]] = None
-    notes: Optional[str] = None
-    account_id_env: Optional[str] = None
+    display_name: str | None = None
+    base_url: str | None = None
+    enabled: bool | None = None
+    rotation_strategy: str | None = None
+    fallback_chain: list[str] | None = None
+    auto_route_tags: list[str] | None = None
+    limits: dict[str, int] | None = None
+    pricing: dict[str, Any] | None = None
+    default_models: list[str] | None = None
+    extra_headers: dict[str, str] | None = None
+    notes: str | None = None
+    account_id_env: str | None = None
 
 
 class ProviderOut(BaseModel):
@@ -65,9 +64,9 @@ class ProviderOut(BaseModel):
     default_models: list[str]
     requires_card: bool
     commercial_ok: bool
-    docs_url: Optional[str]
-    notes: Optional[str]
-    verified_on: Optional[str]
+    docs_url: str | None
+    notes: str | None
+    verified_on: str | None
     key_count: int = 0
     healthy_key_count: int = 0
 
@@ -80,19 +79,19 @@ class KeyCreate(BaseModel):
     provider: str
     keys: list[str]
     label_prefix: str = ""
-    quota_group: Optional[str] = None
+    quota_group: str | None = None
     priority: int = 100
     weight: int = 1
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class KeyUpdate(BaseModel):
-    label: Optional[str] = None
-    enabled: Optional[bool] = None
-    priority: Optional[int] = None
-    weight: Optional[int] = None
-    quota_group: Optional[str] = None
-    notes: Optional[str] = None
+    label: str | None = None
+    enabled: bool | None = None
+    priority: int | None = None
+    weight: int | None = None
+    quota_group: str | None = None
+    notes: str | None = None
 
 
 class KeyOut(BaseModel):
@@ -100,18 +99,18 @@ class KeyOut(BaseModel):
     provider: str
     label: str
     key_hint: str
-    quota_group: Optional[str]
+    quota_group: str | None
     enabled: bool
     priority: int
     weight: int
     daily_request_count: int
     daily_token_count: int
-    last_used_at: Optional[datetime]
-    cooldown_until: Optional[datetime]
+    last_used_at: datetime | None
+    cooldown_until: datetime | None
     consecutive_failures: int
-    last_error: Optional[str]
+    last_error: str | None
     created_at: datetime
-    notes: Optional[str]
+    notes: str | None
     healthy: bool = True
     decryptable: bool = True
 
@@ -124,10 +123,10 @@ class KeyImportResult(BaseModel):
 
 class KeyTestResult(BaseModel):
     ok: bool
-    status_code: Optional[int] = None
-    latency_ms: Optional[float] = None
-    error: Optional[str] = None
-    model_used: Optional[str] = None
+    status_code: int | None = None
+    latency_ms: float | None = None
+    error: str | None = None
+    model_used: str | None = None
 
 class KeyBulkTestItem(BaseModel):
     key_id: int
@@ -136,10 +135,10 @@ class KeyBulkTestItem(BaseModel):
     key_hint: str = ""
     enabled: bool = True
     ok: bool
-    status_code: Optional[int] = None
-    latency_ms: Optional[float] = None
-    error: Optional[str] = None
-    model_used: Optional[str] = None
+    status_code: int | None = None
+    latency_ms: float | None = None
+    error: str | None = None
+    model_used: str | None = None
 
 
 class KeyBulkTestResult(BaseModel):
@@ -156,10 +155,10 @@ class RawKeyTestIn(BaseModel):
 class RawKeyTestItem(BaseModel):
     key_hint: str = ""
     ok: bool
-    status_code: Optional[int] = None
-    latency_ms: Optional[float] = None
-    error: Optional[str] = None
-    model_used: Optional[str] = None
+    status_code: int | None = None
+    latency_ms: float | None = None
+    error: str | None = None
+    model_used: str | None = None
 
 
 class RawKeyTestResult(BaseModel):
@@ -192,18 +191,18 @@ class ChatCompletionRequest(BaseModel):
     model: str
     messages: list[dict[str, Any]]
     stream: bool = False
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
-    max_tokens: Optional[int] = None
-    stop: Optional[Any] = None
-    tools: Optional[list[dict[str, Any]]] = None
-    tool_choice: Optional[Any] = None
-    response_format: Optional[dict[str, Any]] = None
-    presence_penalty: Optional[float] = None
-    frequency_penalty: Optional[float] = None
-    seed: Optional[int] = None
-    user: Optional[str] = None
-    stream_options: Optional[dict[str, Any]] = None
+    temperature: float | None = None
+    top_p: float | None = None
+    max_tokens: int | None = None
+    stop: Any | None = None
+    tools: list[dict[str, Any]] | None = None
+    tool_choice: Any | None = None
+    response_format: dict[str, Any] | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    seed: int | None = None
+    user: str | None = None
+    stream_options: dict[str, Any] | None = None
 
     model_config = {"extra": "allow"}
 
@@ -215,8 +214,8 @@ class AgentCreate(BaseModel):
     description: str = ""
     system_prompt: str = ""
     model: str = "auto"
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
+    temperature: float | None = None
+    max_tokens: int | None = None
     enable_tools: bool = False
     output_format: str = "text"
     enabled: bool = True
@@ -224,15 +223,15 @@ class AgentCreate(BaseModel):
 
 
 class AgentUpdate(BaseModel):
-    description: Optional[str] = None
-    system_prompt: Optional[str] = None
-    model: Optional[str] = None
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    enable_tools: Optional[bool] = None
-    output_format: Optional[str] = None
-    enabled: Optional[bool] = None
-    config: Optional[dict[str, Any]] = None
+    description: str | None = None
+    system_prompt: str | None = None
+    model: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    enable_tools: bool | None = None
+    output_format: str | None = None
+    enabled: bool | None = None
+    config: dict[str, Any] | None = None
 
 
 class AgentOut(BaseModel):
@@ -241,8 +240,8 @@ class AgentOut(BaseModel):
     description: str
     system_prompt: str
     model: str
-    temperature: Optional[float]
-    max_tokens: Optional[int]
+    temperature: float | None
+    max_tokens: int | None
     enable_tools: bool
     output_format: str
     enabled: bool
@@ -256,14 +255,14 @@ class AgentOut(BaseModel):
 class AgentChatRequest(BaseModel):
     message: Any  # str or OpenAI-style content parts list (text + image_url)
     history: list[dict[str, Any]] = Field(default_factory=list)
-    conversation_id: Optional[str] = Field(default=None, max_length=128)
+    conversation_id: str | None = Field(default=None, max_length=128)
     stream: bool = False
 
 
 # ---------- Roleplay characters ----------
 
 class CharacterIn(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     name: str
     emoji: str = ""
     tagline: str = ""
@@ -304,7 +303,7 @@ class CharacterOut(BaseModel):
     tags: list[str] = Field(default_factory=list)
     visibility: str = "public"
     avatar_url: str = ""
-    creator_id: Optional[int] = None
+    creator_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
