@@ -146,6 +146,14 @@ _BULLET_RE = re.compile(r"^\s*[-*+]\s+(.*)$")
 _NUMBERED_RE = re.compile(r"^\s*\d+[.)]\s+(.*)$")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 _STAT_RE = re.compile(r"^\s*(?:[-*+]\s*)?\*\*(.+?)\*\*\s*[:\-–]\s*(.+?)\s*$")
+# A trailing "--- \n **Sources** \n [1] title — pub (date) · url" block, as
+# research answers produce, becomes envelope.sources instead of prose.
+_SOURCES_TAIL_RE = re.compile(
+    r"\n?-{3,}\s*\n\s*\*\*\s*Sources\s*\*\*\s*\n"
+    r"((?:\s*\[\d+\]\s*.+\n?)+)\s*$",
+    re.IGNORECASE)
+_SOURCE_LINE_RE = re.compile(
+    r"^\s*\[(\d+)\]\s*(.*?)(?:\s*·\s*(https?://\S+))?\s*$")
 
 
 def _parse_md_table(lines: list[str]) -> dict[str, Any] | None:
@@ -250,6 +258,20 @@ def markdown_to_envelope(text: str) -> str | None:
 
     lead = "\n".join(lead_parts).strip()
     remaining_prose = list(prose)
+    # Pull a trailing markdown Sources block out of the prose into the
+    # envelope's dedicated sources field (rendered as chips, never cut).
+    env_sources: list[dict[str, Any]] = []
+    tail_src = _SOURCES_TAIL_RE.search("\n".join(remaining_prose))
+    if tail_src:
+        for line in tail_src.group(1).strip().split("\n"):
+            m = _SOURCE_LINE_RE.match(line)
+            if not m:
+                continue
+            label = m.group(2).strip()
+            url = m.group(3) or ""
+            title = re.split(r"\s+·\s+|\s+—\s+|\s+-\s+", label)[0].strip()
+            env_sources.append({"title": title or label, "url": url})
+        remaining_prose = "\n".join(remaining_prose).split(tail_src.group(0))[0].split("\n")
     if not lead and remaining_prose:
         lead = remaining_prose.pop(0).strip()
     if not components:
@@ -259,9 +281,11 @@ def markdown_to_envelope(text: str) -> str | None:
     extra_prose = "\n".join(remaining_prose).strip()
     env = {
         "response_type": "general",
-        "content": (lead + ("\n\n" + extra_prose if extra_prose else ""))[:2000],
+        "content": lead + ("\n\n" + extra_prose if extra_prose else ""),
         "components": components,
     }
+    if env_sources:
+        env["sources"] = env_sources
     return (
         f"```{RESPONSE_FENCE_TAG}\n"
         + json.dumps(env, ensure_ascii=False, indent=None)

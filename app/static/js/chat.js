@@ -552,7 +552,7 @@ async function streamAPIReply(c,live){
   trow.innerHTML=`<div class="msg-av ai">${state.agent?'🤖':'N'}</div><div class="msg-col"><div class="typing"><i></i><i></i><i></i></div><details class="act-steps" open><summary><span class="act-ico">⚡</span><span class="act-lbl">Agent activity</span></summary><div class="act-list"></div></details></div>`;
   inner.appendChild(trow);scrollBottom();
   const actList=trow.querySelector('.act-list'),actLbl=trow.querySelector('.act-lbl'),t0=Date.now();
-  const actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList):null;
+  const actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
   const acts=[];
   const stepCount=()=>actLog?actLog.count():acts.length;
   const addAct=ev=>{
@@ -939,7 +939,7 @@ async function streamGroupReply(c,live){
     trow.innerHTML=`<div class="msg-av ai" style="background:${agentColor(name)}">🤖</div><div class="msg-col"><div class="msg-meta"><b>${esc(name)}</b></div><div class="typing"><i></i><i></i><i></i></div><details class="act-steps" open><summary><span class="act-ico">⚡</span><span class="act-lbl">working…</span></summary><div class="act-list"></div></details></div>`;
     inner.appendChild(trow);scrollBottom();
     acts=[];actLbl=trow.querySelector('.act-lbl');actList=trow.querySelector('.act-list');
-    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList):null;
+    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
     setStageLive(name,false);
   };
   const addAct=ev=>{if(!actList)return;
@@ -1101,7 +1101,7 @@ async function streamResearchReply(c){
       <div class="bubble typing"><span class="dots"><i></i><i></i><i></i></span></div></div>`;
     inner.appendChild(trow);scrollBottom();
     acts=[];actLbl=trow.querySelector('.act-lbl');actList=trow.querySelector('.act-list');
-    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList):null;
+    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
     addAct({kind:'plan',status:'running',title:'Planning research…'});
   };
   const addAct=ev=>{if(!actList)return;

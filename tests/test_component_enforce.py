@@ -176,3 +176,23 @@ def test_tool_loop_answer_is_replayed_in_deltas(monkeypatch):
         assert len(deltas) > 1, r.text
         assert "".join(deltas) == ENV
         assert r.text.count("[DONE]") == 1
+
+
+def test_markdown_fallback_extracts_trailing_sources():
+    md = (
+        "Intro sentence.\n\n"
+        "- point one\n- point two\n\n"
+        "---\n**Sources**\n"
+        "[1] REST vs gRPC guide — Example Pub · https://example.com/a\n"
+        "[2] gRPC docs · https://grpc.io/docs\n"
+    )
+    fence = markdown_to_envelope(md)
+    assert fence is not None
+    import json as _j, re as _re
+    env = _j.loads(_re.search(r"```nova-response\n(.*?)\n```", fence, _re.S).group(1))
+    assert len(env["sources"]) == 2
+    assert env["sources"][0]["url"] == "https://example.com/a"
+    assert env["sources"][0]["title"] == "REST vs gRPC guide"
+    # the Sources block is removed from prose — answer ends at content
+    assert "Sources" not in env["content"]
+    assert "example.com" not in env["content"]

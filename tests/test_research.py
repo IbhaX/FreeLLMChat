@@ -246,3 +246,75 @@ def test_research_one_reraises_outage(monkeypatch):
     except RuntimeError as e:
         assert "cooldown" in str(e)
     assert not st.findings
+
+
+def test_clean_answer_fallback_groups_with_numbered_citations():
+    st = R.ResearchState()
+    st.plan = {"sub_questions": [{"id": "q1", "question": "How does REST work?"},
+                                 {"id": "q2", "question": "How does gRPC work?"}]}
+    st.sources["q1:s1"] = R.Source(id="q1:s1", title="REST guide",
+                                 url="https://a", type="primary")
+    st.sources["q2:s1"] = R.Source(id="q2:s1", title="gRPC docs",
+                                 url="https://b", type="blog")
+    R._score_sources(st)
+    st.findings.append(R.Finding(claim="REST uses plain HTTP verbs", evidence="",
+                                 source_id="q1:s1", sub_question="q1"))
+    st.findings.append(R.Finding(claim="gRPC streams over HTTP/2", evidence="",
+                                 source_id="q2:s1", sub_question="q2"))
+    out = R._clean_answer("", st)
+    assert "grouped by question" in out
+    assert "**How does REST work?**" in out and "**How does gRPC work?**" in out
+    # citations are [n] numbers matching the score-sorted source order,
+    # never internal ids like [q1:s1]
+    assert "[q1:s1]" not in out and "[q2:s1]" not in out
+    assert "REST uses plain HTTP verbs [1]" in out
+    assert "gRPC streams over HTTP/2 [2]" in out
+
+
+def test_gap_check_skips_when_coverage_complete():
+    import asyncio
+    st = _state_with_findings()
+    st.contradictions = []
+    calls: list = []
+
+    class _CountingGateway:
+        async def chat(self, session, payload, **kw):
+            calls.append(payload)
+            return ({"choices": [{"message": {"content": "{}"}}]},
+                    "fake", None, "fake/model")
+
+    events: list = []
+    out = asyncio.run(R._gap_check(
+        _CountingGateway(), None, ["fake/model"], st, events.append))
+    assert out is None
+    assert not calls  # no LLM call made at all
+    assert any("coverage looks complete" in (e.get("text") or "")
+               for e in events)
+
+
+def test_tool_loop_uses_custom_closing_message():
+    import asyncio
+    from app.services.tools import run_tool_loop
+
+    seen: list[list[dict]] = []
+
+    class _ToolGateway:
+        async def chat(self, session, payload, **kw):
+            seen.append(list(payload.get("messages") or []))
+            if "tools" in payload:
+                return ({"choices": [{"message": {
+                    "content": "",
+                    "tool_calls": [{"id": "c1", "type": "function",
+                                    "function": {"name": "get_datetime",
+                                                 "arguments": "{}"}}]}}]},
+                        "fake", None, "fake/model")
+            return ({"choices": [{"message": {"content": '{"findings":[]}'}}]},
+                    "fake", None, "fake/model")
+
+    payload = {"model": "m",
+               "messages": [{"role": "user", "content": "research this"}]}
+    asyncio.run(run_tool_loop(
+        _ToolGateway(), None, payload, ["get_datetime"],
+        max_rounds=1, closing_message="RETURN JSON NOW."))
+    closing = seen[-1][-1]
+    assert closing["role"] == "user" and closing["content"] == "RETURN JSON NOW."

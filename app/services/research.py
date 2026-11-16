@@ -107,7 +107,10 @@ Turn the user's question into a research plan. Output JSON only:
 
 Principles:
 - Spawn one worker per ASPECT of the topic — as many as needed for a
-  complete picture (each is independently answerable). Examples:
+  complete picture (each is independently answerable, never two covering
+  the same ground). Comparisons split by DIMENSION, not by entity: every
+  sub-question covers all sides on its dimension so findings line up
+  side by side. Examples:
   person -> identity & background, education, career history, current
     role & employer, projects & technical work, public presence &
     profiles, publications/talks/patents, news mentions, community &
@@ -155,6 +158,14 @@ Return JSON only:
 Never invent a source, URL, number or date. If unsure, lower the confidence or omit the claim.
 Never copy long passages. Paraphrase. Quote only a short phrase when the exact wording matters.
 """
+
+# Sent when a researcher runs out of tool rounds. The tool loop's default
+# closing message asks for components, which contradicts the JSON contract.
+RESEARCHER_CLOSING = (
+    "Tool use is finished. Return the JSON object described in your "
+    "instructions now, using only what you gathered. No tool calls and no "
+    "text outside the JSON."
+)
 
 GAP_CHECKER_PROMPT = """You review research findings against the plan.
 
@@ -251,7 +262,10 @@ Component rules:
   numbers/trends -> chart
   {{"type":"chart","data":{{"chart_type":"bar|line|pie","title":"","data":[{{"x":1,"y":2}}]}}}};
   quick stats -> stat_grid {{"type":"stat_grid","data":{{"stats":[{{"label":"","value":""}}]}}}};
-  options side-by-side -> comparison; caveat/evidence strength -> callout.
+  options side-by-side -> comparison; caveat/evidence strength -> callout;
+  product/gear recommendations -> one product_card item per product with
+  name, image URL (only if a source gave one), price + currency, a badge
+  like "Buy first"/"Best value", highlights (2-4 short bullets) and link.
 - sources: the top 3-6 cited sources (title + url required).
 - suggested_prompts: 2-3 specific follow-up questions (do NOT also list
   them in the markdown — the UI renders them as chips).
@@ -524,7 +538,7 @@ async def _plan(
     history: list[dict[str, Any]], emit: Emit,
     prior: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    n = {"quick": 2, "standard": 8, "deep": 14}[depth]
+    n = {"quick": 2, "standard": 5, "deep": 8}[depth]
     hist = "\n".join(
         f"{m.get('role')}: {str(m.get('content'))[:500]}" for m in (history or [])[-6:]
     )
@@ -572,7 +586,7 @@ async def _research_one(
     qid = str(sq.get("id") or f"q{len(state.findings) + 1}")
     question = str(sq.get("question") or "")
     queries = _norm_queries(sq.get("search_queries")) or [question]
-    calls = {"quick": 4, "standard": 8, "deep": 12}[depth]
+    calls = {"quick": 3, "standard": 6, "deep": 8}[depth]
     from app.services import skills as skills_mod
     system = skills_mod.attach_instructions(
         RESEARCHER_SYSTEM.replace("{max_calls}", str(calls)),
@@ -628,14 +642,20 @@ async def _research_one(
                 async with factory() as own:
                     result = await run_tool_loop(
                         gateway, own, payload, research_tools,
-                        emit=collect_emit, max_rounds=5, call_timeout=240,
+                        emit=collect_emit,
+                        max_rounds=4 if depth == "deep" else 3,
+                        call_timeout=240,
                         tool_output_hook=harvest,
+                        closing_message=RESEARCHER_CLOSING,
                     )
             else:
                 result = await run_tool_loop(
                     gateway, session, payload, research_tools,
-                    emit=collect_emit, max_rounds=5, call_timeout=240,
+                    emit=collect_emit,
+                    max_rounds=4 if depth == "deep" else 3,
+                    call_timeout=240,
                     tool_output_hook=harvest,
+                    closing_message=RESEARCHER_CLOSING,
                 )
             break
         except Exception as e:
@@ -664,6 +684,10 @@ async def _research_one(
 
 
 def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> None:
+    # Every researcher numbers its own sources s1, s2… — namespace the ids
+    # per sub-question and dedupe by URL so citations never collide or
+    # point at another researcher's page.
+    id_map: dict[str, str] = {}
     srcs = data.get("sources") or []
     if isinstance(srcs, list):
         for s in srcs:
@@ -672,20 +696,28 @@ def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> Non
             sid = str(s.get("id") or "").strip()
             if not sid:
                 continue
-            src = Source(
-                id=sid, title=str(s.get("title") or ""), url=str(s.get("url") or ""),
-                publisher=str(s.get("publisher") or ""), date=str(s.get("date") or ""),
-                type=str(s.get("type") or ""),
-            )
-            state.sources.setdefault(sid, src)
+            url = str(s.get("url") or "")
+            existing = next((x.id for x in state.sources.values()
+                             if x.url and x.url == url), None)
+            ns = existing or (f"{qid}:{sid}" if sid in state.sources else sid)
+            id_map[sid] = ns
+            if existing is None and ns not in state.sources:
+                src = Source(
+                    id=ns, title=str(s.get("title") or ""), url=url,
+                    publisher=str(s.get("publisher") or ""),
+                    date=str(s.get("date") or ""),
+                    type=str(s.get("type") or ""),
+                )
+                state.sources[ns] = src
     findings = data.get("findings") or []
     if isinstance(findings, list):
         for f in findings:
             if not isinstance(f, dict) or not f.get("claim"):
                 continue
+            raw_sid = str(f.get("source_id") or "")
             state.findings.append(Finding(
                 claim=str(f.get("claim")), evidence=str(f.get("evidence") or ""),
-                source_id=str(f.get("source_id") or ""),
+                source_id=id_map.get(raw_sid, raw_sid),
                 confidence=str(f.get("confidence") or ""), sub_question=qid,
             ))
     for c in data.get("conflicts") or []:
@@ -737,12 +769,26 @@ def _score_sources(state: ResearchState) -> None:
         s.quality = "high" if sc >= 4 else "medium" if sc >= 3 else "low"
 
 
+def _coverage_ok(state: ResearchState) -> bool:
+    """Deterministic cheap check: every planned sub-question has at least
+    one finding with a resolvable source. Skip the gap round when true."""
+    planned = [sq.get("id") for sq in (state.plan.get("sub_questions") or [])]
+    if not planned or not state.findings:
+        return False
+    covered = {f.sub_question for f in state.findings
+               if f.claim and f.source_id in state.sources}
+    return all(pid in covered for pid in planned)
+
+
 async def _gap_check(
     gateway: Any, session: Any, model: str, state: ResearchState, emit: Emit,
 ) -> list[dict[str, Any]] | None:
     """Returns gaps needing a follow-up round, or None when complete."""
     max_rounds = {"quick": 0, "standard": 1, "deep": 3}[state.depth]
     if state.rounds >= max_rounds:
+        return None
+    if state.rounds == 0 and _coverage_ok(state) and not state.contradictions:
+        emit({"event": "note", "text": "coverage looks complete — skipping follow-up round"})
         return None
     emit({"event": "stage", "text": "Checking coverage…", "stage": "gap",
           "agent": "gap_checker",
@@ -1009,15 +1055,27 @@ async def _synthesize(
         for f in state.findings
     ]
     plan_brief = {k: state.plan.get(k) for k in ("interpretation", "must_verify", "success_criteria")}
+    srcs = [{"n": i + 1, "id": s.id, "title": s.title, "url": s.url,
+             "publisher": s.publisher, "date": s.date, "type": s.type,
+             "quality": s.quality}
+            for i, s in enumerate(src_list)]
+    # Bound the package by dropping findings, never by cutting the JSON
+    # string — the source list must survive intact or [n] citations dangle.
+    kept: list[dict[str, Any]] = []
+    used = 0
+    for f in findings:
+        w = len(json.dumps(f, ensure_ascii=False))
+        if kept and used + w > 20000:
+            break
+        kept.append(f)
+        used += w
     ctx = json.dumps({
-        "question": question, "plan": plan_brief, "findings": findings,
-        "sources": [{"n": i + 1, "id": s.id, "title": s.title, "url": s.url,
-                     "publisher": s.publisher, "date": s.date, "type": s.type,
-                     "quality": s.quality}
-                    for i, s in enumerate(src_list)],
+        "question": question, "plan": plan_brief, "findings": kept,
+        "findings_omitted": len(findings) - len(kept),
+        "sources": srcs,
         "conflicts": state.contradictions, "not_found": state.unverified[:15],
     }, ensure_ascii=False)
-    msgs = [{"role": "user", "content": f"Research package (JSON):\n{ctx[:30000]}\n\nWrite the final answer now."}]
+    msgs = [{"role": "user", "content": f"Research package (JSON):\n{ctx[:40000]}\n\nWrite the final answer now."}]
     from app.services import skills as skills_mod
     system = skills_mod.attach_instructions(SYNTHESIZER_PROMPT,
                                             ["structured_report"])
@@ -1039,7 +1097,7 @@ def _env_tag_norm(tag: str) -> str:
     return re.sub(r"[\s\-_]", "", tag or "")
 
 
-def _state_sources(state: ResearchState, limit: int = 6) -> list[dict[str, Any]]:
+def _state_sources(state: ResearchState, limit: int = 12) -> list[dict[str, Any]]:
     """Top-scored sources as envelope ``sources`` entries."""
     top = sorted(state.sources.values(), key=lambda s: -s.score)[:limit]
     return [
@@ -1271,13 +1329,30 @@ def _clean_answer(answer: str, state: ResearchState) -> str:
         except Exception:
             pass
     if is_jsonish or not text:
-        # Fallback: assemble a plain answer from the findings.
-        parts = []
-        for f in state.findings[:12]:
-            cite = f" [{state.sources[f.source_id].id}]" if f.source_id in state.sources else ""
-            parts.append(f"- {f.claim}{cite}")
+        # Fallback: assemble a readable answer from the findings, grouped by
+        # sub-question with numbered citations matching the Sources list —
+        # never internal ids like [s13] and never an empty body.
+        order = {s.id: i + 1 for i, s in enumerate(
+            sorted(state.sources.values(), key=lambda x: -x.score))}
+        by_sq: dict[str, list[Finding]] = {}
+        for f in state.findings:
+            if f.claim:
+                by_sq.setdefault(f.sub_question or "other", []).append(f)
+        sq_titles = {str(sq.get("id")): str(sq.get("question") or "")
+                     for sq in (state.plan.get("sub_questions") or [])}
+        parts: list[str] = []
+        for qid, fs in list(by_sq.items())[:8]:
+            title = sq_titles.get(qid) or (
+                qid if qid != "other" else "Additional findings")
+            lines = [f"**{title}**"]
+            for f in fs[:6]:
+                n = order.get(f.source_id)
+                cite = f" [{n}]" if n else ""
+                lines.append(f"- {f.claim}{cite}")
+            parts.append("\n".join(lines))
         if parts:
-            return "Based on the sources found:\n\n" + "\n".join(parts)
+            return ("Here is what the research found, grouped by question:\n\n"
+                    + "\n\n".join(parts))
         return "_(research completed but no usable answer was produced)_"
     return text
 
@@ -1349,16 +1424,6 @@ async def _quality_check(state: ResearchState, emit: Emit) -> dict[str, Any]:
               "text": f"quality: {len(bad_cites)} bad citation(s), "
                       f"{len(dead)} dead URL(s) of {len(urls)} checked"})
     return quality
-
-
-def _sources_block(state: ResearchState) -> str:
-    src_list = sorted(state.sources.values(), key=lambda s: -s.score)
-    lines = ["", "", "---", "", "**Sources**"]
-    for i, s in enumerate(src_list, 1):
-        label = s.title or s.url or s.id
-        lines.append(f"[{i}] {label}" + (f" — {s.publisher}" if s.publisher else "")
-                      + (f" ({s.date})" if s.date else "") + (f" · {s.url}" if s.url else ""))
-    return "\n".join(lines)
 
 
 async def run_research(
@@ -1518,16 +1583,19 @@ async def run_research(
     }
     emit({"event": "research_done", "text": f"Research complete: {meta['findings']} findings, "
           f"{meta['sources']} sources in {meta['seconds']}s", **meta})
-    state.answer += _sources_block(state)
-    # Renderer agent owns final presentation: convert the markdown report
-    # into a component envelope when possible; keep markdown on failure.
+    # The envelope's `sources` field (added by _ensure_envelope) carries the
+    # citation list — no markdown Sources block, which would render twice.
+    # The renderer agent only runs when the answer lacks components already:
+    # rewriting a long report costs a call and risks truncation.
     try:
+        from app.services.component_enforce import has_renderable_components
         from app.services.renderer import convert_to_components
 
-        rendered = await convert_to_components(gateway, session, state.answer)
-        if rendered:
-            state.answer = rendered
-            emit({"event": "note", "text": "answer rendered as components"})
+        if not has_renderable_components(state.answer):
+            rendered = await convert_to_components(gateway, session, state.answer)
+            if rendered:
+                state.answer = rendered
+                emit({"event": "note", "text": "answer rendered as components"})
     except Exception:
         pass
     state.meta = meta
