@@ -309,7 +309,11 @@ def component_schemas() -> dict[str, dict[str, Any]]:
         ComponentType.PRODUCT_CARD.value: {
             "required": ["products"],
             "optional": ["title"],
-            "description": "A list of product recommendation cards.",
+            "description": ("A list of product recommendation cards. Each "
+                            "product: name, price + currency, badge (a short "
+                            "pill like 'Buy first' or 'Best value'), "
+                            "highlights (2-4 short bullets), image, "
+                            "merchant, rating, and a link/url."),
         },
         ComponentType.BUSINESS_CARD.value: {
             "required": ["businesses"],
@@ -523,7 +527,7 @@ _COMPONENT_GUIDE: dict[str, dict[str, Any]] = {
     "progress": {"when": "a single completion percentage", "example": {"value": 65, "label": "Processing", "status": "running"}},
     "weather": {"when": "current weather for a location", "example": {"location": "Paris", "temperature": 18, "condition": "Cloudy", "unit": "C"}},
     "financial_summary": {"when": "stock/portfolio figures with metrics", "example": {"title": "Portfolio", "currency": "USD", "metrics": [{"label": "Total", "value": "$12,400"}]}},
-    "product_card": {"when": "product recommendations", "example": {"products": [{"name": "Widget Pro", "price": "$29", "description": "Fast and small"}]}},
+    "product_card": {"when": "product recommendations — one entry per product", "example": {"products": [{"name": "Widget Pro", "image": "https://example.com/img.png", "merchant": "Example Store", "price": "$29", "badge": "Buy first", "highlights": ["Great portraits", "Low-light friendly"], "link": "https://example.com/p"}]}},
     "business_card": {"when": "local business recommendations", "example": {"businesses": [{"name": "Cafe Luna", "rating": 4.5, "address": "1 Main St"}]}},
     "interactive": {"when": "the user must pick options before you can answer", "example": {"title": "Choose a plan", "fields": [{"name": "plan", "type": "radio", "options": ["free", "pro"]}]}},
     "error": {"when": "something failed; explain + recovery", "example": {"title": "Rate limited", "message": "Too many requests.", "recovery": "Wait 60s and retry."}},

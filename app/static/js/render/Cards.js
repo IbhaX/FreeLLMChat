@@ -102,12 +102,26 @@
     const body = el("div", { class: "nova-product-body" });
     body.append(el("div", { class: "nova-product-name" }, p.name || ""));
     if (p.merchant) body.append(el("div", { class: "nova-product-merchant" }, p.merchant));
-    if (p.price != null)
-      body.append(el("div", { class: "nova-product-price" }, fmtNum(p.price, p.currency || "")));
+    if (p.badge) {
+      const tone = { warn: "warn", warning: "warn", info: "info" }[String(p.badge_tone || "").toLowerCase()] || "success";
+      body.append(el("div", { class: `nova-product-badge nova-badge-${tone}` }, p.badge));
+    }
+    if (p.price != null) {
+      const row = el("div", { class: "nova-product-pricerow" });
+      row.append(el("div", { class: "nova-product-price" }, fmtNum(p.price, p.currency || "")));
+      if (p.price_note) row.append(el("div", { class: "nova-product-pricenote" }, p.price_note));
+      body.append(row);
+    }
     if (p.rating != null)
       body.append(el("div", { class: "nova-product-rating" }, `${stars(p.rating)} ${p.rating}`));
     if (p.description)
       body.append(el("div", { class: "nova-product-desc" }, p.description));
+    const points = Array.isArray(p.highlights) ? p.highlights : (Array.isArray(p.points) ? p.points : null);
+    if (points && points.length) {
+      const ul = el("ul", { class: "nova-product-points" });
+      points.slice(0, 6).forEach((h) => ul.append(el("li", {}, String(h))));
+      body.append(ul);
+    }
     if (p.link || p.url) {
       const href = p.link || p.url;
       body.append(el("a", { class: "nova-product-link", href, target: "_blank", rel: "noopener" }, "View product →"));

@@ -1,4 +1,4 @@
--r requirements.txt
+-e .
 pytest>=8.2
 pytest-asyncio>=0.23
 respx>=0.21

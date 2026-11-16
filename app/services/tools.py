@@ -497,6 +497,7 @@ async def run_tool_loop(
     call_timeout: float | None = None,
     tool_output_hook: Callable[[str, str], None] | None = None,
     tool_policy: bool = False,
+    closing_message: str | None = None,
 ) -> dict[str, Any]:
     """Server-side tool-call loop over the built-in tools.
 
@@ -507,7 +508,9 @@ async def run_tool_loop(
     Returns the final completion dict. ``tool_policy`` prepends a usage policy
     to the system prompt so the model answers directly when it can instead of
     calling tools speculatively (used for plain chat; researchers/agents keep
-    their own prompts).
+    their own prompts). ``closing_message`` replaces the default "answer with
+    components" instruction sent when rounds run out — callers with their own
+    output contract (research sub-agents return JSON) must pass one.
     """
     import json as _json
 
@@ -597,8 +600,9 @@ async def run_tool_loop(
     # actual results/errors, then ask again — bounded to 3 attempts.
     messages.append({
         "role": "user",
-        "content": "Tool use is finished. Answer now with components using "
-                   "only the gathered data.",
+        "content": closing_message or (
+            "Tool use is finished. Answer now with components using "
+            "only the gathered data."),
     })
     result: dict[str, Any] = {}
     for _try in range(3):
