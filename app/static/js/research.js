@@ -24,7 +24,7 @@
     $('#stopBtn').onclick=stopResearch;
     $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')runResearch();});
     $('#exportBtn').onclick=exportMd;
-    $('#printBtn').onclick=printReport;
+    $('#printBtn').onclick=()=>window.print();
   }
 
   async function loadModels(){
@@ -121,44 +121,6 @@
     host.innerHTML='<pre style="white-space:pre-wrap">'+esc(text)+'</pre>';
     $('#exportBtn').disabled=!text;
     $('#printBtn').disabled=!text;
-  }
-
-  function printReport(){
-    const w=window.open('','_blank');
-    if(!w)return;
-    // Clone the rendered pad + report into a clean paper-themed document.
-    // Canvas charts don't survive cloning — swap them for <img> snapshots.
-    const report=$('#report').cloneNode(true);
-    const canvases=report.querySelectorAll('canvas');
-    $('#report').querySelectorAll('canvas').forEach((src,i)=>{
-      try{
-        const img=document.createElement('img');
-        img.src=src.toDataURL('image/png');img.style.maxWidth='100%';
-        canvases[i].replaceWith(img);
-      }catch(_){}
-    });
-    const links=[...document.querySelectorAll('link[rel="stylesheet"]')]
-      .map(l=>`<link rel="stylesheet" href="${l.href}">`).join('');
-    const inline=[...document.querySelectorAll('style')]
-      .map(s=>`<style>${s.innerHTML}</style>`).join('');
-    w.document.write(`<html data-theme="light"><head><title>Research report</title>${links}${inline}
-      <style>
-        body{background:#fff;color:#111;font-family:Inter,system-ui,sans-serif;
-          max-width:820px;margin:24px auto;padding:0 20px}
-        .rs-report{line-height:1.65}
-        @media print{
-          body{margin:0}
-          a{color:#111;text-decoration:none}
-          .msg-actions,.alog-dash,.ui-btn{display:none!important}
-        }
-      </style></head><body>
-      ${$('#rxpad').innerHTML}
-      <div class="rs-report">${report.innerHTML}</div>
-      </body></html>`);
-    w.document.close();
-    // Stylesheets must finish loading or the print dialog renders unstyled.
-    const go=()=>{try{w.focus();w.print();}catch(_){}};
-    w.onload=go;setTimeout(go,900);
   }
 
   function exportMd(){

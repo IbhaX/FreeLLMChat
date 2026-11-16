@@ -52,6 +52,19 @@
   .rx-foot{padding:8px 18px;border-top:1px solid var(--line);
     font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);
     display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+  /* Print/PDF: isolate the pad + report on a white paper surface. */
+  @media print{
+    body *{visibility:hidden}
+    #reportPrint,#reportPrint *{visibility:visible}
+    #reportPrint{position:absolute;inset:0 auto auto 0;width:100%;border:0;
+      box-shadow:none;margin:0;padding:12px 4px;
+      /* force paper colors regardless of the active theme */
+      --bg-1:#ffffff;--bg-0:#ffffff;--tx:#111111;--text-2:#333333;
+      --text-3:#666666;--line:#dddddd;--accent:#1a1a1a;
+      --accent-soft:#f5f5f5;--accent-line:#cccccc;background:#fff;color:#111}
+    .msg-actions,.alog-dash,.ui-btn,.alog,.alog-dash{display:none!important}
+  }
 </style>
 </head>
 <body>
@@ -99,7 +112,7 @@
       </div>
       <div>
         <div class="sec-title">Report</div>
-        <div class="ui-card ui-card-pad">
+        <div class="ui-card ui-card-pad" id="reportPrint">
           <div id="rxpad"></div>
           <div id="report" class="rs-report">
             <p class="tx-3" style="text-align:center;padding:48px 0">Run a research query or open a saved report.</p>
