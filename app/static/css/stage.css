@@ -36,8 +36,6 @@ body {
   background: linear-gradient(180deg, var(--bg-1), var(--bg-0));
   backdrop-filter: blur(8px); z-index: 5;
 }
-.st-home { color: var(--stage-dim); text-decoration: none; font-size: 18px; }
-.st-home:hover { color: var(--stage-ink); }
 .st-title {
   font-family: var(--stage-font); font-size: 20px; font-weight: 700;
   letter-spacing: .02em; white-space: nowrap; overflow: hidden;

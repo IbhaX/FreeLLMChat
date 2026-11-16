@@ -8,7 +8,7 @@
 
   function sidebarHtml(active){
     return `<div class="sb-head" style="display:flex;align-items:center;gap:10px;padding:2px 6px 10px">
-      <div class="avatar" style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px">F</div>
+      <button class="avatar" id="appNavBtn" title="Apps — all pages" style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;border:0;cursor:pointer">F</button>
       <div><div style="font-weight:700;font-size:14px">FreeLLM</div><div style="font-size:10px;color:var(--text-3)">Gateway admin</div></div>
       <button class="ui-btn ui-btn-ghost ui-btn-icon" id="sbClose" style="margin-left:auto;display:none">✕</button>
     </div>
@@ -27,6 +27,7 @@
       const nav=document.createElement('aside');
       nav.className='ui-sidenav';nav.id='adminSide';
       nav.innerHTML=sidebarHtml(active);
+      if(window.AppNav)AppNav.attach(nav.querySelector('#appNavBtn'),active);
       const shell=document.createElement('div');
       shell.className='ui-shell';
       const main=document.querySelector('.ui-main');

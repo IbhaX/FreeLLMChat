@@ -31,8 +31,11 @@
   window.AppNav={
     NAV,
     GRID,
-    /* Toggle an anchored app-switcher popover on a button click. */
+    /* Toggle an anchored app-switcher popover on a button click.
+       Empty buttons get the grid glyph so any page can wire just an
+       <button id="appNavBtn"></button> in the top-left corner. */
     attach(btn,active){
+      if(btn&&!btn.innerHTML.trim())btn.innerHTML=GRID;
       let menu=null;
       const close=()=>{
         if(menu){menu.remove();menu=null;}
