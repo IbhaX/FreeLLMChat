@@ -309,8 +309,9 @@ async def _char_reply_stream(
         stream, _p, _k, _m = await gateway.chat_stream(
             session, payload, on_event=emit)
         if via is not None:
-            via["provider"] = getattr(_p, "name", None) or _p
-            via["model"] = _m
+            pname = getattr(_p, "name", None)
+            via["provider"] = pname if isinstance(pname, str) else None
+            via["model"] = _m if isinstance(_m, str) else None
         async for chunk in stream:
             for line in chunk.decode("utf-8", "ignore").splitlines():
                 line = line.strip()
