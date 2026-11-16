@@ -9,7 +9,10 @@ class FakeGateway:
         return {"choices": [{"message": {"content": "YES"}}]}, None, None, "m"
 
 
-DEEP_Q = "Compare the economic policies, industrial impacts, and long-term outcomes of Tesla versus Gauss across multiple countries with detailed analysis"
+DEEP_Q = (
+    "Compare the economic policies, industrial impacts, and long-term outcomes "
+    "of Tesla versus Gauss across multiple countries with detailed analysis"
+)
 
 
 def _route(payload, last_user, monkeypatch_wants=None):
@@ -30,11 +33,13 @@ def test_direct_without_builtin_tools():
 
 
 def test_greeting_skips_tools():
-    assert _route({"messages": [], "builtin_tools": True}, "hi", monkeypatch_wants=False) == "direct"
+    route = _route({"messages": [], "builtin_tools": True}, "hi", monkeypatch_wants=False)
+    assert route == "direct"
 
 
 def test_simple_question_uses_tool_loop():
-    assert _route({"messages": [], "builtin_tools": True}, "what is the weather in Paris") == "tools"
+    route = _route({"messages": [], "builtin_tools": True}, "what is the weather in Paris")
+    assert route == "tools"
 
 
 def test_compare_question_stays_on_tool_loop():
@@ -65,6 +70,8 @@ def test_routing_failure_falls_back_safely():
 def test_research_agent_registry_covers_pipeline():
     from app.services.research import RESEARCH_AGENTS
 
-    assert set(RESEARCH_AGENTS) == {"planner", "researcher", "gap_checker", "verifier", "synthesizer"}
+    expected = {"planner", "researcher", "gap_checker", "verifier", "synthesizer"}
+    assert set(RESEARCH_AGENTS) == expected
     for spec in RESEARCH_AGENTS.values():
-        assert spec["role"] and (spec["prompt"].endswith("_PROMPT") or spec["prompt"].endswith("_SYSTEM"))
+        assert spec["role"]
+        assert spec["prompt"].endswith("_PROMPT") or spec["prompt"].endswith("_SYSTEM")

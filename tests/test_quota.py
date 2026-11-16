@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.models import KeyUsage, Provider
 from app.routing.quota import QuotaTracker
@@ -11,7 +11,7 @@ async def test_rpm_limit_blocks(session, provider):
     provider.limits = {"rpm": 2}
     k = await make_key(session, provider, "sk-aaa-1111")
     for _ in range(2):
-        session.add(KeyUsage(key_id=k.id, ts=datetime.now(timezone.utc)))
+        session.add(KeyUsage(key_id=k.id, ts=datetime.now(UTC)))
     await session.commit()
     assert not await QuotaTracker().within_limits(session, k, provider)
 
@@ -20,7 +20,7 @@ async def test_old_requests_dont_count(session, provider):
     provider.limits = {"rpm": 1}
     k = await make_key(session, provider, "sk-aaa-1111")
     session.add(KeyUsage(
-        key_id=k.id, ts=datetime.now(timezone.utc) - timedelta(minutes=5)))
+        key_id=k.id, ts=datetime.now(UTC) - timedelta(minutes=5)))
     await session.commit()
     assert await QuotaTracker().within_limits(session, k, provider)
 
@@ -30,7 +30,7 @@ async def test_rpd_limit_blocks(session, provider):
     k = await make_key(session, provider, "sk-aaa-1111")
     for _ in range(3):
         session.add(KeyUsage(
-            key_id=k.id, ts=datetime.now(timezone.utc) - timedelta(hours=2)))
+            key_id=k.id, ts=datetime.now(UTC) - timedelta(hours=2)))
     await session.commit()
     assert not await QuotaTracker().within_limits(session, k, provider)
 

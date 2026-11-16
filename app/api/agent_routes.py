@@ -5,11 +5,15 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    from app.gateway import Gateway
 
 from app.api.deps import require_admin, require_gateway_key
 from app.db import get_session
@@ -23,7 +27,7 @@ chat_router = APIRouter(prefix="/v1/agents", dependencies=[Depends(require_gatew
 admin_router = APIRouter(prefix="/admin/agents", dependencies=[Depends(require_admin)])
 
 
-def _gateway(request: Request) -> "Gateway":
+def _gateway(request: Request) -> Gateway:
     return request.app.state.gateway
 
 
@@ -114,9 +118,9 @@ async def agent_chat(
     if not a.enabled:
         raise HTTPException(403, "agent is disabled")
     gw = _gateway(request)
-    from app.services.settings_store import get_custom_instructions
-    from app.services import agent_log
     from app.db import get_session_factory
+    from app.services import agent_log
+    from app.services.settings_store import get_custom_instructions
     custom = await get_custom_instructions(session)
     factory = get_session_factory()
     async with factory() as ls:

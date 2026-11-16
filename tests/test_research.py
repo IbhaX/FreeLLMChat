@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.services import research as R
 
 
@@ -64,7 +66,11 @@ def test_backfill_sources_and_clean_answer():
     # JSON-LD answer is unwrapped/rejected
     st3 = R.ResearchState()
     st3.findings.append(R.Finding(claim="HTTP/3 uses QUIC", evidence="", source_id=""))
-    out = R._clean_answer('{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"acceptedAnswer":{"text":"QUIC is UDP-based."}}]}', st3)
+    raw = (
+        '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":'
+        '[{"acceptedAnswer":{"text":"QUIC is UDP-based."}}]}'
+    )
+    out = R._clean_answer(raw, st3)
     assert "QUIC is UDP-based" in out
     assert "@context" not in out
     out2 = R._clean_answer("", st3)
@@ -208,7 +214,7 @@ def test_call_raises_on_provider_outage():
         asyncio.run(R._call(
             _CooledGateway(), None, "openrouter/qwen/qwen3-32b",
             [{"role": "user", "content": "hi"}]))
-        assert False, "outage should propagate"
+        pytest.fail("outage should propagate")
     except RuntimeError as e:
         assert "cooldown" in str(e)
 
@@ -242,7 +248,7 @@ def test_research_one_reraises_outage(monkeypatch):
         asyncio.run(R._research_one(
             _FakeGateway(), None, ["openrouter/qwen/qwen3-32b"],
             sq, "standard", st, lambda ev: None))
-        assert False, "outage should propagate"
+        pytest.fail("outage should propagate")
     except RuntimeError as e:
         assert "cooldown" in str(e)
     assert not st.findings
@@ -294,6 +300,7 @@ def test_gap_check_skips_when_coverage_complete():
 
 def test_tool_loop_uses_custom_closing_message():
     import asyncio
+
     from app.services.tools import run_tool_loop
 
     seen: list[list[dict]] = []

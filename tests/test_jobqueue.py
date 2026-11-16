@@ -22,8 +22,6 @@ async def _mk_job(session, kind="t.ok", payload=None, **kw):
 
 
 async def test_job_runs_to_done(factory):
-    seen = {}
-
     @jq.register("t.ok")
     async def handler(ctx):
         return {"echo": ctx.job.payload.get("x")}

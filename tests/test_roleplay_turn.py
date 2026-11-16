@@ -1,7 +1,6 @@
 """Tests for the Stage turn engine: kinds, streaming, whisper, retry."""
 import asyncio
 import json
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -68,7 +67,7 @@ def _mk_cast(session):
 
 def test_normalize_backfills_ids_and_kinds(session_factory):
     async def go():
-        async with session_factory() as s:
+        async with session_factory():
             room = RoleplayRoom(name="r", messages=[
                 {"role": "user", "speaker": "You", "text": "hi"},
                 {"role": "character", "speaker": "Sherlock", "text": "hm"}])

@@ -89,10 +89,9 @@ def test_usage_quota(session_factory):
 def test_document_ingest_and_search(session_factory):
     async def go():
         async with session_factory() as s:
-            text = ("Photosynthesis converts light into chemical energy.\n\n"
-                    "The Calvin cycle fixes carbon in the stroma.\n\n"
-                    "C4 plants use bundle sheath cells to concentrate CO2.") \
-                   .encode()
+            text = (b"Photosynthesis converts light into chemical energy.\n\n"
+                    b"The Calvin cycle fixes carbon in the stroma.\n\n"
+                    b"C4 plants use bundle sheath cells to concentrate CO2.")
             doc = await documents.ingest(
                 s, name="photo.txt", data=text, owner_id=1, collection_id=None)
             assert doc.status == "ready"
@@ -133,8 +132,8 @@ def test_roleplay_persona_and_room(session_factory):
 
 
 def test_custom_skill_registry(session_factory):
-    from app.services import skills
     from app.models import CustomSkill
+    from app.services import skills
 
     async def go():
         async with session_factory() as s:
@@ -163,9 +162,9 @@ def test_custom_skill_registry(session_factory):
 
 
 def test_agent_run_ledger(session_factory):
-    from app.services import agent_log
+
     from app.models import AgentRun
-    from sqlalchemy import select
+    from app.services import agent_log
 
     async def go():
         async with session_factory() as s:

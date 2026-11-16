@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import contextlib
 import operator
 import re
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from html import unescape
+from typing import Any
 from urllib.parse import unquote, urljoin
 
 import httpx
@@ -51,7 +53,11 @@ _SAFE_OPS = {
 
 
 def _eval(node: ast.AST) -> float:
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+    if (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, (int, float))
+        and not isinstance(node.value, bool)
+    ):
         if abs(node.value) > 10**12:
             raise ValueError("numeric literal too large")
         return node.value
@@ -94,7 +100,7 @@ async def _calculator(expression: str) -> str:
 
 
 async def _get_datetime() -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return f"{now.strftime('%A, %B %d, %Y %H:%M:%S')} UTC"
 
 
@@ -260,7 +266,8 @@ async def _generate_image(prompt: str, width: int = 1024, height: int = 1024) ->
     return (
         f"Generated image URL: {url}\n"
         f"Show it to the user with an image_gallery component: "
-        f'{{"type": "image_gallery", "data": {{"images": [{{"url": "{url}", "caption": "{prompt[:80]}"}}]}}}}'
+        f'{{"type": "image_gallery", "data": {{"images": '
+        f'[{{"url": "{url}", "caption": "{prompt[:80]}"}}]}}}}'
     )
 
 
@@ -295,7 +302,8 @@ async def _generate_audio(text: str, voice: str = "aria") -> str:
         url = f"/media/{fname}"
         return (
             f"Generated audio URL: {url} (voice {voice_id})\n"
-            f'Play it with an audio component: {{"type": "audio", "data": {{"url": "{url}", "title": "{text[:60]}"}}}}'
+            f'Play it with an audio component: {{"type": "audio", "data": '
+            f'{{"url": "{url}", "title": "{text[:60]}"}}}}'
         )
     except ImportError:
         return "error: edge-tts not installed (pip install edge-tts)"
@@ -311,7 +319,10 @@ TOOLS: dict[str, Tool] = {
         Tool(
             name="calculator",
             icon="🧮",
-            description="Evaluate a math expression. Use for any arithmetic or numeric calculation.",
+            description=(
+                "Evaluate a math expression. "
+                "Use for any arithmetic or numeric calculation."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
@@ -331,7 +342,10 @@ TOOLS: dict[str, Tool] = {
         Tool(
             name="web_search",
             icon="🌐",
-            description="Search the web and return ranked results with titles, URLs and snippets (DuckDuckGo, no key needed).",
+            description=(
+                "Search the web and return ranked results with titles, URLs "
+                "and snippets (DuckDuckGo, no key needed)."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
@@ -345,7 +359,10 @@ TOOLS: dict[str, Tool] = {
         Tool(
             name="http_get",
             icon="📡",
-            description="Fetch a URL over HTTP GET and return status + body (truncated). Use for public APIs and docs.",
+            description=(
+                "Fetch a URL over HTTP GET and return status + body "
+                "(truncated). Use for public APIs and docs."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
@@ -454,7 +471,7 @@ async def _execute_tool_call(tc: dict[str, Any]) -> tuple[str, str, dict[str, An
             "duration_ms": round((time.perf_counter() - started) * 1000, 2),
             "success": not output.lower().startswith(("error:", "tool error:", "fetch error:")),
         })
-    except asyncio.TimeoutError:
+    except TimeoutError:
         output = "tool error: execution timed out after 30 seconds"
         logger.warning("tool execution timed out", extra={"tool_name": name})
     except Exception as exc:
@@ -512,7 +529,6 @@ async def run_tool_loop(
     components" instruction sent when rounds run out — callers with their own
     output contract (research sub-agents return JSON) must pass one.
     """
-    import json as _json
 
     emit = emit or (lambda ev: None)
     if names is True or names in (None, [], "*"):
@@ -547,8 +563,8 @@ async def run_tool_loop(
                              attempt_timeout=attempt_timeout),
                 timeout=call_timeout,
             )
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"agent timed out after {call_timeout}s")
+        except TimeoutError:
+            raise TimeoutError(f"agent timed out after {call_timeout}s") from None
         msg = ((result.get("choices") or [{}])[0]).get("message", {})
         if not isinstance(msg.get("content"), str):
             # Some providers return content as a list of parts (text chunks);
@@ -578,10 +594,8 @@ async def run_tool_loop(
         for call_id, name, args, out, dur_ms in executed:
             _emit_tool_result(emit, name, args, out, dur_ms)
             if tool_output_hook is not None:
-                try:
+                with contextlib.suppress(Exception):
                     tool_output_hook(name, out)
-                except Exception:
-                    pass
             messages.append({
                 "role": "tool",
                 "tool_call_id": call_id,
@@ -633,10 +647,8 @@ async def run_tool_loop(
         for call_id, name, args, out, dur_ms in executed:
             _emit_tool_result(emit, name, args, out, dur_ms)
             if tool_output_hook is not None:
-                try:
+                with contextlib.suppress(Exception):
                     tool_output_hook(name, out)
-                except Exception:
-                    pass
             messages.append({
                 "role": "tool",
                 "tool_call_id": call_id,

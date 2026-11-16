@@ -140,7 +140,9 @@ def _to_model_history(history: list[dict[str, Any]]) -> list[ModelMessage]:
     return messages
 
 
-def _bounded_history(history: list[dict[str, Any]], *, max_messages: int = 40, max_chars: int = 48000) -> list[dict[str, Any]]:
+def _bounded_history(
+    history: list[dict[str, Any]], *, max_messages: int = 40, max_chars: int = 48000
+) -> list[dict[str, Any]]:
     """Keep the newest valid turns within a conservative character budget."""
     valid: list[dict[str, Any]] = []
     for item in history or []:
@@ -336,11 +338,17 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
     parts: list[str] = []
     try:
         async with get_session_factory()() as s:
-            rows = (await s.execute(select(Memory).order_by(Memory.id.desc()).limit(100))).scalars().all()
-        ranked = sorted(rows, key=lambda m: (_memory_relevance(m.content, query), m.id), reverse=True)
+            stmt = select(Memory).order_by(Memory.id.desc()).limit(100)
+            rows = (await s.execute(stmt)).scalars().all()
+        ranked = sorted(
+            rows,
+            key=lambda m: (_memory_relevance(m.content, query), m.id),
+            reverse=True,
+        )
         selected = [m for m in ranked if _memory_relevance(m.content, query) > 0][:8]
         if selected:
-            parts.append("## Relevant Long-term Memory\n" + "\n".join(f"- {m.content}" for m in selected))
+            lines = "\n".join(f"- {m.content}" for m in selected)
+            parts.append("## Relevant Long-term Memory\n" + lines)
     except Exception:
         pass
     try:
@@ -355,7 +363,9 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
     return "\n\n".join(parts)
 
 
-def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]], custom: str = "") -> list[dict[str, Any]]:
+def _messages(
+    agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]], custom: str = ""
+) -> list[dict[str, Any]]:
     msgs = _bounded_history(history) + [{"role": "user", "content": message}]
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":

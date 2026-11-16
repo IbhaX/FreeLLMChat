@@ -9,7 +9,10 @@ from app.services.component_enforce import (
     markdown_to_envelope,
 )
 
-ENV = '```nova-response\n{"response_type":"general","content":"Hi","components":[{"type":"list","data":{"items":["a","b"]}}]}\n```'
+ENV = (
+    '```nova-response\n{"response_type":"general","content":"Hi",'
+    '"components":[{"type":"list","data":{"items":["a","b"]}}]}\n```'
+)
 MD = """## Groq vs Gemini
 
 Quick comparison of free tiers.
@@ -139,8 +142,16 @@ def test_stream_endpoint_replaces_markdown_with_components(monkeypatch):
             "model": "auto", "stream": True,
             "messages": [{"role": "user", "content": "benefits of TS"}],
         })
-        events = [json.loads(l[6:]) for l in r.text.split("\n") if l.startswith("data: {")]
-        repl = [e["freellm"] for e in events if (e.get("freellm") or {}).get("event") == "replace_content"]
+        events = [
+            json.loads(line[6:])
+            for line in r.text.split("\n")
+            if line.startswith("data: {")
+        ]
+        repl = [
+            e["freellm"]
+            for e in events
+            if (e.get("freellm") or {}).get("event") == "replace_content"
+        ]
         assert repl, r.text
         assert has_renderable_components(repl[0]["content"])
         assert "<tool_call>" not in repl[0]["content"]
@@ -170,7 +181,11 @@ def test_tool_loop_answer_is_replayed_in_deltas(monkeypatch):
             "model": "auto", "stream": True, "builtin_tools": True,
             "messages": [{"role": "user", "content": "search the web for x"}],
         })
-        events = [json.loads(l[6:]) for l in r.text.split("\n") if l.startswith("data: {")]
+        events = [
+            json.loads(line[6:])
+            for line in r.text.split("\n")
+            if line.startswith("data: {")
+        ]
         deltas = [ch["delta"].get("content") for e in events for ch in e.get("choices", [])
                   if ch.get("delta", {}).get("content")]
         assert len(deltas) > 1, r.text
@@ -188,7 +203,9 @@ def test_markdown_fallback_extracts_trailing_sources():
     )
     fence = markdown_to_envelope(md)
     assert fence is not None
-    import json as _j, re as _re
+    import json as _j
+    import re as _re
+
     env = _j.loads(_re.search(r"```nova-response\n(.*?)\n```", fence, _re.S).group(1))
     assert len(env["sources"]) == 2
     assert env["sources"][0]["url"] == "https://example.com/a"

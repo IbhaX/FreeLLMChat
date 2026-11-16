@@ -187,7 +187,7 @@ class TestSync:
         )
         await svc.sync_ollama_provider(session, scan)
         await svc.sync_ollama_provider(session, scan)
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
         n = (await session.execute(
             select(func.count()).select_from(ApiKey)
         )).scalar_one()
@@ -217,6 +217,7 @@ class TestSync:
 class TestScanEndpoint:
     def test_admin_scan_reachable(self, monkeypatch):
         from fastapi.testclient import TestClient
+
         from app.main import app
 
         scan = svc.OllamaHostScan(
@@ -242,6 +243,7 @@ class TestScanEndpoint:
 
     def test_admin_scan_unreachable_disables(self, monkeypatch):
         from fastapi.testclient import TestClient
+
         from app.main import app
 
         async def fake_scan():
@@ -259,6 +261,7 @@ class TestScanEndpoint:
 
     def test_admin_scan_requires_token(self):
         from fastapi.testclient import TestClient
+
         from app.main import app
 
         with TestClient(app) as c:

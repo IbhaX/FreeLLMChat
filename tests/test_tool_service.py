@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import respx
 import httpx
 import pytest
+import respx
 
 from app.config import get_settings
 from app.services import tool_service as ts
