@@ -554,6 +554,68 @@ def test_qa_gate_passes_clean_report(monkeypatch):
     assert "## Report status" not in st.answer
 
 
+def test_canon_url_dedupes_tracking_params():
+    st = R.ResearchState()
+    id_map = {}
+    R._merge_findings_sources_only(st, [
+        {"id": "s1", "url": "https://www.Example.com/a/?utm_source=x&ref_src=y"},
+    ], "q1", id_map)
+    R._merge_findings_sources_only(st, [
+        {"id": "s2", "url": "https://example.com/a"},
+    ], "q2", id_map)
+    assert len(st.sources) == 1
+    assert id_map["s2"] == id_map["s1"] == "s1"
+    # authors/doi/access metadata captured
+    R._merge_findings_sources_only(st, [
+        {"id": "s3", "url": "https://doi.org/10.1/x", "authors": "Doe",
+         "doi": "10.1/x", "access": "open", "type": "academic"},
+    ], "q3", id_map)
+    s3 = st.sources["s3"]
+    assert s3.authors == "Doe" and s3.doi == "10.1/x" and s3.access == "open"
+
+
+def test_classify_evidence_classes():
+    st = R.ResearchState()
+    st.sources["dead"] = R.Source(id="dead", url="https://x",
+                                  fetched="unreachable")
+    st.sources["ok"] = R.Source(id="ok", url="https://y", fetched="fetched")
+    st.findings = [
+        R.Finding(claim="a", evidence="", source_id="ok",
+                  verdict="supported", corroborated_by=["s2"]),
+        R.Finding(claim="b", evidence="", source_id="ok",
+                  verdict="supported"),
+        R.Finding(claim="c", evidence="", source_id="ok",
+                  verdict="partially_supported"),
+        R.Finding(claim="d", evidence="", source_id="ok",
+                  verdict="contradicted"),
+        R.Finding(claim="e", evidence="", source_id="dead",
+                  verdict="cannot_verify"),
+        R.Finding(claim="f", evidence="", source_id="",
+                  verdict="cannot_verify"),
+        R.Finding(claim="g", evidence="", source_id="ok",
+                  verdict="cannot_verify"),
+    ]
+    R._classify_evidence(st)
+    got = {f.claim: f.evidence_class for f in st.findings}
+    assert got == {
+        "a": "corroborated", "b": "verified", "c": "partially_supported",
+        "d": "contradicted", "e": "inaccessible", "f": "not_found",
+        "g": "unverified",
+    }
+
+
+def test_score_sources_retrievability():
+    st = R.ResearchState()
+    st.sources["a"] = R.Source(id="a", url="https://x", type="news",
+                               fetched="fetched")
+    st.sources["b"] = R.Source(id="b", url="https://y", type="news",
+                               fetched="unreachable")
+    st.sources["c"] = R.Source(id="c", url="https://z", type="news")
+    R._score_sources(st)
+    assert st.sources["a"].score > st.sources["c"].score
+    assert st.sources["b"].score < st.sources["c"].score
+
+
 def test_research_one_notes_when_empty(monkeypatch):
     import asyncio
 
