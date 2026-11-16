@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Callable
 
 from pydantic_ai import Agent
 from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
@@ -38,9 +38,11 @@ from app.response_protocol import (
 class GatewayModel(Model):
     """A Pydantic AI Model that delegates to the FreeLLM Gateway's internal API."""
 
-    def __init__(self, model_name: str, gateway: Gateway) -> None:
+    def __init__(self, model_name: str, gateway: Gateway,
+                 emit: Callable[[dict[str, Any]], None] | None = None) -> None:
         self._model_name = model_name
         self._gateway = gateway
+        self._emit = emit
 
     @property
     def model_name(self) -> str:
@@ -74,7 +76,7 @@ class GatewayModel(Model):
                 payload[k] = v
         async with get_session_factory()() as session:
             result, provider, key, model = await self._gateway.chat(
-                session, payload
+                session, payload, on_event=self._emit
             )
         text = ""
         for choice in result.get("choices", []):
@@ -258,10 +260,11 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
 
 
 def _build_agent(
-    agent_cfg: AgentConfig, gateway: Gateway, custom: str = ""
+    agent_cfg: AgentConfig, gateway: Gateway, custom: str = "",
+    emit: Callable[[dict[str, Any]], None] | None = None,
 ) -> Agent:
     from pydantic_ai.output import PromptedOutput
-    model = GatewayModel(agent_cfg.model, gateway)
+    model = GatewayModel(agent_cfg.model, gateway, emit)
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":
         system_prompt = structured_system_prompt() + "\n\n" + system_prompt
@@ -347,6 +350,7 @@ def _messages(agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]
 async def _chat_with_tools(
     gateway: Gateway, agent_cfg: AgentConfig, messages: list[dict[str, Any]],
     conversation_id: str | None = None,
+    emit: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     from app.db import get_session_factory
     from app.services.tools import run_tool_loop
@@ -369,7 +373,8 @@ async def _chat_with_tools(
     max_rounds = min(int(execution.get("max_retries") or 5), 10)
     async with get_session_factory()() as session:
         return await run_tool_loop(gateway, session, payload, tool_names,
-                                   max_rounds=max_rounds, call_timeout=timeout_s)
+                                   max_rounds=max_rounds, call_timeout=timeout_s,
+                                   emit=emit)
 
 
 _TOOLISH_KEYS = {
@@ -422,6 +427,7 @@ _TOOL_BLOB_FALLBACK = (
 async def run_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
     *, custom_instructions: str = "", conversation_id: str | None = None,
+    emit: Callable[[dict[str, Any]], None] | None = None,
 ) -> str:
     """Run an agent with bounded context, relevant memory and execution limits."""
     history = _bounded_history(history)
@@ -430,7 +436,8 @@ async def run_agent(
     if _tool_names(agent_cfg):
         messages = _messages(agent_cfg, message, history, custom_instructions)
         result = await asyncio.wait_for(
-            _chat_with_tools(gateway, agent_cfg, messages, conversation_id), timeout=timeout_s
+            _chat_with_tools(gateway, agent_cfg, messages, conversation_id, emit=emit),
+            timeout=timeout_s,
         )
         content = ((result.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
         if _looks_like_tool_blob(content):
@@ -443,7 +450,7 @@ async def run_agent(
                             {"role": "assistant", "content": content},
                             {"role": "user", "content": _TOOL_BLOB_RETRY},
                         ],
-                        conversation_id,
+                        conversation_id, emit=emit,
                     ),
                     timeout=timeout_s,
                 )
@@ -455,7 +462,9 @@ async def run_agent(
                 content = _TOOL_BLOB_FALLBACK
         return _maybe_structured(agent_cfg, content)
     memory = await get_memory_text(str(message), conversation_id)
-    agent = _build_agent(agent_cfg, gateway, custom_instructions + ("\n\n" + memory if memory else ""))
+    agent = _build_agent(agent_cfg, gateway,
+                         custom_instructions + ("\n\n" + memory if memory else ""),
+                         emit=emit)
     try:
         result = await asyncio.wait_for(
             agent.run(message, message_history=_to_model_history(history)), timeout=timeout_s
@@ -474,7 +483,8 @@ async def run_agent(
         cfg2.output_format = "text"
         fallback = _build_agent(
             cfg2, gateway,
-            custom_instructions + ("\n\n" + memory if memory else ""))
+            custom_instructions + ("\n\n" + memory if memory else ""),
+            emit=emit)
         result = await asyncio.wait_for(
             fallback.run(
                 message, message_history=_to_model_history(history)),

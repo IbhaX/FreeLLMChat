@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import secrets
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -183,17 +184,30 @@ async def group_stream(
                 f"Answer the latest user message as {a.name}. Be thorough and well-structured: answer fully, cover the relevant substance, and use the component format for anything with more than one fact."
             )
         try:
-            return a, await run_agent(gw, a, prompt, [], custom_instructions=custom)
+            return a, await run_agent(gw, a, prompt, [], custom_instructions=custom,
+                                  emit=emit)
         except Exception as e:
             return a, f"*(error: {e})*"
 
     async def orchestrate(prompt: str) -> str:
         try:
-            return await run_agent(gw, orc, prompt, [], custom_instructions=custom)
+            return await run_agent(gw, orc, prompt, [], custom_instructions=custom,
+                             emit=emit)
         except Exception as e:
             return f"*(orchestrator error: {e})*"
 
+    evq: asyncio.Queue = asyncio.Queue()
+    emit = evq.put_nowait
+
     async def gen():
+        async def _live(task: asyncio.Task[Any]) -> AsyncIterator[bytes]:
+            while not task.done():
+                while not evq.empty():
+                    yield _meta(evq.get_nowait())
+                await asyncio.sleep(0.25)
+            while not evq.empty():
+                yield _meta(evq.get_nowait())
+
         try:
             names = ", ".join(a.name for a in agents)
             if body.mode == "pipeline":
@@ -231,8 +245,12 @@ async def group_stream(
                             "for anything with more than one fact."
                         )
                     try:
-                        text = await run_agent(
-                            gw, a, prompt, [], custom_instructions=custom)
+                        _t = asyncio.ensure_future(run_agent(
+                            gw, a, prompt, [], custom_instructions=custom,
+                            emit=emit))
+                        async for _f in _live(_t):
+                            yield _f
+                        text = _t.result()
                     except Exception as e:
                         text = f"*(error: {e})*"
                     transcript.append(
@@ -274,7 +292,10 @@ async def group_stream(
                     for a in agents}
                 while pending:
                     done, _ = await asyncio.wait(
-                        set(pending), return_when=asyncio.FIRST_COMPLETED)
+                        set(pending), return_when=asyncio.FIRST_COMPLETED,
+                        timeout=0.5)
+                    while not evq.empty():
+                        yield _meta(evq.get_nowait())
                     for t in done:
                         pending.pop(t)
                         a, text = t.result()
@@ -291,13 +312,16 @@ async def group_stream(
                     discussion = "\n".join(
                         f"{h.get('name') or h.get('role')}: {h.get('content', '')}"
                         for h in transcript[-30:])
-                    _, text = await solo(a, (
+                    _t = asyncio.ensure_future(solo(a, (
                         f"Debate topic (the user's message):\n{body.message}\n\n"
                         f"Debate so far (openings and rebuttals):\n{discussion}\n\n"
                         f"As {a.name}, defend your position and rebut the "
                         "strongest opposing arguments. Concede points you "
                         "cannot defend. Use the component format for anything "
-                        "with more than one fact."))
+                        "with more than one fact.")))
+                    async for _f in _live(_t):
+                        yield _f
+                    _, text = _t.result()
                     transcript.append(
                         {"role": "assistant", "name": a.name,
                          "content": f"[rebuttal] {text}"})
@@ -308,14 +332,17 @@ async def group_stream(
                 discussion = "\n".join(
                     f"{h.get('name') or h.get('role')}: {h.get('content', '')}"
                     for h in transcript[-30:])
-                final = await orchestrate(
+                _t = asyncio.ensure_future(orchestrate(
                     f"You are judging a debate. Topic (the user's message):\n"
                     f"{body.message}\n\nDebate transcript:\n{discussion}\n\n"
                     "Deliver the verdict: which positions were strongest and "
                     "why, where the debaters agreed, what remained unresolved, "
                     "and a balanced conclusion answering the user's message. "
                     "Reply ONLY with the nova-response envelope defined in "
-                    "your instructions.")
+                    "your instructions."))
+                async for _f in _live(_t):
+                    yield _f
+                final = _t.result()
                 transcript.append({"role": "assistant", "name": ORCHESTRATOR_NAME,
                                    "content": final})
                 if conv_id:
@@ -341,14 +368,17 @@ async def group_stream(
                     discussion = "\n".join(
                         f"{h.get('name') or h.get('role')}: {h.get('content', '')}"
                         for h in transcript[-30:])
-                    _, text = await solo(a, (
+                    _t = asyncio.ensure_future(solo(a, (
                         f"Roundtable discussion on the user's message:\n"
                         f"{body.message}\n\n"
                         f"Discussion so far:\n{discussion}\n\n"
                         f"Speak next as {a.name}: give your take on the topic "
                         "and respond to your colleagues' points — agree, push "
                         "back, or add what they missed. Use the component "
-                        "format for anything with more than one fact."))
+                        "format for anything with more than one fact.")))
+                    async for _f in _live(_t):
+                        yield _f
+                    _, text = _t.result()
                     transcript.append(
                         {"role": "assistant", "name": a.name, "content": text})
                     yield _meta({"event": "agent_message",
@@ -358,13 +388,16 @@ async def group_stream(
                 discussion = "\n".join(
                     f"{h.get('name') or h.get('role')}: {h.get('content', '')}"
                     for h in transcript[-30:])
-                final = await orchestrate(
+                _t = asyncio.ensure_future(orchestrate(
                     f"You moderated a roundtable on the user's message:\n"
                     f"{body.message}\n\nDiscussion transcript:\n{discussion}\n\n"
                     "Wrap up the roundtable: consensus points, remaining "
                     "disagreements, and the concrete takeaways that answer the "
                     "user's message. Reply ONLY with the nova-response "
-                    "envelope defined in your instructions.")
+                    "envelope defined in your instructions."))
+                async for _f in _live(_t):
+                    yield _f
+                final = _t.result()
                 transcript.append({"role": "assistant", "name": ORCHESTRATOR_NAME,
                                    "content": final})
                 if conv_id:
@@ -402,7 +435,10 @@ async def group_stream(
                     for a in agents}
                 while pending:
                     done, _ = await asyncio.wait(
-                        set(pending), return_when=asyncio.FIRST_COMPLETED)
+                        set(pending), return_when=asyncio.FIRST_COMPLETED,
+                        timeout=0.5)
+                    while not evq.empty():
+                        yield _meta(evq.get_nowait())
                     for t in done:
                         pending.pop(t)
                         a, text = t.result()
@@ -416,13 +452,16 @@ async def group_stream(
                     f"--- {h['name']} ---\n{h['content']}"
                     for h in transcript
                     if h.get("role") == "assistant" and h.get("name"))
-                final = await orchestrate(
+                _t = asyncio.ensure_future(orchestrate(
                     f"Brainstorm on the user's message:\n{body.message}\n\n"
                     f"Raw ideas from every participant:\n\n{ideas}\n\n"
                     "Curate the board: cluster related ideas, deduplicate, "
                     "rank by impact/feasibility, and mark the top picks. "
                     "Reply ONLY with the nova-response envelope defined in "
-                    "your instructions.")
+                    "your instructions."))
+                async for _f in _live(_t):
+                    yield _f
+                final = _t.result()
                 transcript.append({"role": "assistant", "name": ORCHESTRATOR_NAME,
                                    "content": final})
                 if conv_id:
@@ -448,8 +487,11 @@ async def group_stream(
             answers: list[tuple[AgentConfig, str]] = []
             while pending:
                 done, _ = await asyncio.wait(
-                    set(pending), return_when=asyncio.FIRST_COMPLETED
+                    set(pending), return_when=asyncio.FIRST_COMPLETED,
+                    timeout=0.5
                 )
+                while not evq.empty():
+                    yield _meta(evq.get_nowait())
                 for t in done:
                     a = pending.pop(t)
                     a, text = t.result()
@@ -479,7 +521,11 @@ async def group_stream(
                 "nova-response envelope defined in your instructions."
             )
             try:
-                final = await run_agent(gw, orc, synth, [], custom_instructions=custom)
+                _t = asyncio.ensure_future(run_agent(
+                    gw, orc, synth, [], custom_instructions=custom, emit=emit))
+                async for _f in _live(_t):
+                    yield _f
+                final = _t.result()
             except Exception as e:
                 final = f"*(orchestrator error: {e})*"
             transcript.append(
