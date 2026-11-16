@@ -345,10 +345,57 @@ async def fetch_page(
 
 # ---------------------------------------------------------------- search
 
+_DDG_DEAD = False  # skip DDG for the process once it proves unreachable
+
+
+async def _bing_search(query: str, num: int) -> list[dict[str, str]]:
+    """Bing HTML fallback — keyless, reachable where duckduckgo is blocked."""
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+        r = await c.get("https://www.bing.com/search",
+                        params={"q": query, "count": num},
+                        headers={"User-Agent": "Mozilla/5.0"})
+    if r.status_code != 200:
+        raise RuntimeError(f"bing HTTP {r.status_code}")
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(r.text, "lxml")
+    out: list[dict[str, str]] = []
+    for li in soup.select("li.b_algo"):
+        if len(out) >= num:
+            break
+        a = li.select_one("h2 a")
+        if not a:
+            continue
+        cap = li.select_one(".b_caption p")
+        out.append({
+            "title": a.get_text(" ", strip=True),
+            "url": _bing_real_url(a.get("href", "") or ""),
+            "snippet": cap.get_text(" ", strip=True) if cap else "",
+        })
+    return out
+
+
+def _bing_real_url(href: str) -> str:
+    """Bing wraps targets as bing.com/ck/a?…u=a1<base64url(url)> — decode."""
+    import base64
+
+    m = re.search(r"[?&]u=a1([^&]+)", href)
+    if not m:
+        return href
+    try:
+        return base64.urlsafe_b64decode(m.group(1) + "===").decode("utf-8", "replace")
+    except Exception:
+        return href
+
+
 async def _ddg_search(query: str, num: int) -> list[dict[str, str]]:
-    async with httpx.AsyncClient(timeout=15) as c:
+    async with httpx.AsyncClient(timeout=8) as c:
         r = await c.get("https://lite.duckduckgo.com/lite/",
                         params={"q": query}, headers={"User-Agent": "Mozilla/5.0"})
+    if r.status_code != 200:
+        raise RuntimeError(
+            f"duckduckgo HTTP {r.status_code} (rate-limited?)")
+    if "anomaly" in r.text[:2000].lower():
+        raise RuntimeError("duckduckgo rate-limited (anomaly check page)")
     links = re.findall(
         r"<a[^>]+href=\"([^\"]+)\"[^>]*class='result-link'[^>]*>(.*?)</a>",
         r.text)
@@ -399,18 +446,31 @@ async def search(
     if check_outbound_arg(query):
         result = _err("unsafe_url", "query rejected by exfiltration guard")
     else:
+        global _DDG_DEAD
         try:
             key = get_settings().brave_search_api_key
-            items = await (_brave_search(query, num, key) if key
-                           else _ddg_search(query, num))
+            provider = "ddg"
+            if key:
+                provider = "brave"
+                items = await _brave_search(query, num, key)
+            else:
+                try:
+                    if _DDG_DEAD:
+                        raise RuntimeError("ddg skipped (marked unreachable)")
+                    items = await _ddg_search(query, num)
+                except Exception:
+                    _DDG_DEAD = True
+                    provider = "bing"
+                    items = await _bing_search(query, num)
             for it in items:
                 it["domain"] = urlparse(it["url"]).hostname or ""
-            result = _ok({"query": query, "provider": "brave" if key else "ddg",
+            result = _ok({"query": query, "provider": provider,
                           "results": items})
         except httpx.TimeoutException:
-            result = _err("timeout", "search timed out")
+            result = _err("timeout", "search timed out (15s)")
         except Exception as e:
-            result = _err("internal", f"search error: {str(e)[:200]}")
+            result = _err("internal",
+                          f"search error: {type(e).__name__}: {str(e)[:180]}")
     await _log_call(session, run_id=run_id, actor=actor, tool="search",
                     args={"query": query, "num": num}, result=result,
                     latency_ms=int((time.monotonic() - t0) * 1000))

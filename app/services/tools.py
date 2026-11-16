@@ -117,46 +117,109 @@ async def _http_get(url: str, max_chars: int = 4000) -> str:
                 return f"HTTP {r.status_code}\n{r.text[:max_chars]}"
             return "error: too many redirects"
     except Exception as e:
-        return f"fetch error: {e}"
+        return f"fetch error: {type(e).__name__}: {e}"
+
+
+_DDG_DEAD = False  # set once DDG times out/errors — skip it for the process
+
+
+async def _ddg_search_text(query: str, max_results: int) -> str:
+    async with httpx.AsyncClient(timeout=8) as c:
+        r = await c.get(
+            "https://lite.duckduckgo.com/lite/",
+            params={"q": query},
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+    if r.status_code != 200:
+        return f"search error: duckduckgo HTTP {r.status_code} (rate-limited?)"
+    text = r.text
+    if "anomaly" in text[:2000].lower():
+        return "search error: duckduckgo rate-limited (anomaly check page)"
+    links = re.findall(
+        r"<a[^>]+href=\"([^\"]+)\"[^>]*class='result-link'[^>]*>(.*?)</a>", text
+    )
+    snippets = re.findall(r"<td class='result-snippet'>(.*?)</td>", text, re.S)
+
+    def _real_url(href: str) -> str:
+        # DDG wraps targets as //duckduckgo.com/l/?uddg=<urlencoded>
+        m = re.search(r"[?&]uddg=([^&]+)", href)
+        return unquote(m.group(1)) if m else href
+
+    def _clean(s: str) -> str:
+        return unescape(re.sub(r"<[^>]+>", "", s)).strip()
+
+    parts: list[str] = []
+    for i, (href, title) in enumerate(links[:max_results]):
+        snip = _clean(snippets[i]) if i < len(snippets) else ""
+        entry = f"{i + 1}. {_clean(title)}\n   {_real_url(href)}"
+        if snip:
+            entry += f"\n   {snip}"
+        parts.append(entry)
+    return "\n".join(parts) or "No results found."
+
+
+def _bing_real_url(href: str) -> str:
+    """Bing wraps targets as bing.com/ck/a?…u=a1<base64url(url)> — decode."""
+    import base64
+
+    m = re.search(r"[?&]u=a1([^&]+)", href)
+    if not m:
+        return href
+    try:
+        return base64.urlsafe_b64decode(m.group(1) + "===").decode("utf-8", "replace")
+    except Exception:
+        return href
+
+
+async def _bing_search_text(query: str, max_results: int) -> str:
+    """Bing HTML scrape — reachable where duckduckgo is blocked, still keyless."""
+    from bs4 import BeautifulSoup
+
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+        r = await c.get(
+            "https://www.bing.com/search",
+            params={"q": query, "count": max_results},
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+    if r.status_code != 200:
+        return f"search error: bing HTTP {r.status_code}"
+    soup = BeautifulSoup(r.text, "lxml")
+    parts: list[str] = []
+    for li in soup.select("li.b_algo"):
+        if len(parts) >= max_results:
+            break
+        a = li.select_one("h2 a")
+        if not a:
+            continue
+        cap = li.select_one(".b_caption p")
+        snip = cap.get_text(" ", strip=True) if cap else ""
+        title = a.get_text(" ", strip=True)
+        entry = f"{len(parts) + 1}. {title}\n   {_bing_real_url(a.get('href', ''))}"
+        if snip:
+            entry += f"\n   {snip}"
+        parts.append(entry)
+    return "\n".join(parts) or "No results found."
 
 
 async def _web_search(query: str, max_results: int = 5) -> str:
-    """DuckDuckGo lite HTML search — free, no key.
+    """Keyless web search: DuckDuckGo lite, falling back to Bing.
 
-    The instant-answer JSON API only covers a few encyclopedic queries, so we
-    scrape the lightweight result page instead: title, snippet and URL per hit.
+    Some networks block duckduckgo entirely — remember the failure for the
+    process and go straight to Bing instead of paying an 8s timeout per call.
     """
+    global _DDG_DEAD
+    if not _DDG_DEAD:
+        try:
+            out = await _ddg_search_text(query, max_results)
+            if not out.startswith("search error:"):
+                return out
+        except Exception:
+            pass
+        _DDG_DEAD = True
     try:
-        async with httpx.AsyncClient(timeout=15) as c:
-            r = await c.get(
-                "https://lite.duckduckgo.com/lite/",
-                params={"q": query},
-                headers={"User-Agent": "Mozilla/5.0"},
-            )
-        text = r.text
-        links = re.findall(
-            r"<a[^>]+href=\"([^\"]+)\"[^>]*class='result-link'[^>]*>(.*?)</a>", text
-        )
-        snippets = re.findall(r"<td class='result-snippet'>(.*?)</td>", text, re.S)
-
-        def _real_url(href: str) -> str:
-            # DDG wraps targets as //duckduckgo.com/l/?uddg=<urlencoded>
-            m = re.search(r"[?&]uddg=([^&]+)", href)
-            return unquote(m.group(1)) if m else href
-
-        def _clean(s: str) -> str:
-            return unescape(re.sub(r"<[^>]+>", "", s)).strip()
-
-        parts: list[str] = []
-        for i, (href, title) in enumerate(links[:max_results]):
-            snip = _clean(snippets[i]) if i < len(snippets) else ""
-            entry = f"{i + 1}. {_clean(title)}\n   {_real_url(href)}"
-            if snip:
-                entry += f"\n   {snip}"
-            parts.append(entry)
-        return "\n".join(parts) or "No results found."
+        return await _bing_search_text(query, max_results)
     except Exception as e:
-        return f"search error: {e}"
+        return f"search error: {type(e).__name__}: {e}"
 
 
 # ---------- media generation ----------
