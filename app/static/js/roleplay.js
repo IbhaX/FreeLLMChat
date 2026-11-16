@@ -4,7 +4,7 @@
   const $=s=>document.querySelector(s);
   const $$=s=>[...document.querySelectorAll(s)];
   let chars=[],rooms=[],room=null,mode='talk',beatOnly=false,
-      editId=null,castPicks=[],streaming=null,swipeIdx={};
+      editId=null,castPicks=[],streaming=null,swipeIdx={},summarizing=false;
 
   const toast2=(m,k)=>{const t=$('#toast');t.textContent=m;
     t.className='st-toast show';clearTimeout(t._t);
@@ -55,9 +55,45 @@
     ['dScenario','dMood','dNotes','dTools'].forEach(id=>{
       $('#'+id).addEventListener('change',patchRoom);});
     $('#dSummarize').onclick=async()=>{
-      try{const r=await v1Api(`/v1/roleplay/rooms/${room.id}/summary`,{method:'POST'});
-        room.summary=r.summary;renderDirector();toast2('Story recap updated');}
-      catch(e){toast2(e.message);}};
+      if(summarizing)return;summarizing=true;
+      const box=$('#dSummary');
+      box.innerHTML='<span class="sum-live">Summarizing…</span>';
+      let acc='';
+      try{
+        const r=await fetch(API_BASE+`/v1/roleplay/rooms/${room.id}/summary`,{
+          method:'POST',headers:apiHeaders(false)});
+        if(!r.ok||!r.body)throw new Error('summary failed: '+r.status);
+        const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
+        while(true){
+          const{value,done}=await rd.read();
+          if(done)break;
+          buf+=dec.decode(value,{stream:true});
+          let i;
+          while((i=buf.indexOf('\n\n'))>=0){
+            const part=buf.slice(0,i);buf=buf.slice(i+2);
+            for(const line of part.split('\n')){
+              if(!line.startsWith('data:'))continue;
+              const data=line.slice(5).trim();
+              if(data==='[DONE]'){summarizing=false;return;}
+              try{const j=JSON.parse(data);const ev=j.freellm;
+                if(!ev)continue;
+                if(ev.event==='sum_delta'){
+                  acc+=ev.text;box.textContent=acc;}
+                else if(ev.event==='note'){
+                  $('#queueLine').textContent=ev.text||'';}
+                else if(ev.event==='sum_end'){
+                  room.summary=ev.summary;renderDirector();
+                  if(ev.via&&ev.via.model)
+                    toast2('Story recap updated · '+ev.via.model);
+                  else toast2('Story recap updated');
+                  $('#queueLine').textContent='';}
+                else if(ev.event==='error'){box.textContent=ev.text||'failed';}
+              }catch{}}
+            }
+          }
+        }
+      catch(e){box.textContent='Recap failed: '+e.message;}
+      summarizing=false;};
     $('#dClear').onclick=async()=>{
       if(!room||!confirm('Clear the transcript and start the scene over?'))return;
       for(const m of[...(room.messages||[])])

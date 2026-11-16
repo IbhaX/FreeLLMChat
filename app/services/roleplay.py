@@ -495,6 +495,85 @@ async def beat_only(session_factory: Any, room_id: int, *,
         yield b"data: [DONE]\n\n"
 
 
+_SUMMARY_SYS = (
+    "Summarize this roleplay transcript in <=200 words: "
+    "setting, key events, relationships, open threads. "
+    "Third person, present tense.")
+
+
+async def summarize_stream(gateway: Any, session_factory: Any,
+                           room_id: int,
+                           emit: Any = None) -> AsyncIterator[bytes]:
+    """Stream the recap build live: routing events, then summary deltas."""
+    import asyncio
+
+    evq: asyncio.Queue = asyncio.Queue()
+    emit = emit or evq.put_nowait
+    async with session_factory() as session:
+        room = await session.get(RoleplayRoom, room_id)
+        if not room or not room.messages:
+            yield _sse({"event": "error", "text": "nothing to summarize yet"})
+            yield b"data: [DONE]\n\n"
+            return
+        lines = transcript_messages(room)
+        raw = "\n".join(m["content"] for m in lines)[-8000:]
+        yield _sse({"event": "note",
+                    "text": "📝 Summarizing the story so far…"})
+        payload: dict[str, Any] = {
+            "model": room.model or "auto",
+            "messages": [{"role": "system", "content": _SUMMARY_SYS},
+                         {"role": "user", "content": raw}],
+            "temperature": 0.3,
+            "stream": True,
+        }
+        acc = ""
+        via: dict[str, Any] = {}
+        try:
+            stream, _p, _k, _m = await gateway.chat_stream(
+                session, payload, on_event=emit)
+            if isinstance(getattr(_p, "name", None), str):
+                via["provider"] = _p.name
+            if isinstance(_m, str):
+                via["model"] = _m
+            if via.get("model"):
+                yield _sse({"event": "note",
+                            "text": f"📝 Recapping via "
+                                    f"{via['provider'] or '?'} · {via['model']}"})
+            async for chunk in stream:
+                for line in chunk.decode("utf-8", "ignore").splitlines():
+                    line = line.strip()
+                    if not line.startswith("data:") or \
+                            line == "data: [DONE]":
+                        continue
+                    try:
+                        j = json.loads(line[5:].strip())
+                    except Exception:
+                        continue
+                    delta = ((j.get("choices") or [{}])[0]
+                             .get("delta") or {}).get("content") or ""
+                    if delta:
+                        acc += delta
+                        while not evq.empty():
+                            yield _sse(evq.get_nowait())
+                        yield _sse({"event": "sum_delta", "text": delta})
+        except Exception:
+            pass
+        while not evq.empty():
+            yield _sse(evq.get_nowait())
+        text = acc.strip()[:2000]
+        if text:
+            room.summary = text
+            room._summarized_at = len(room.messages or [])
+            session.add(room)
+            await session.commit()
+            yield _sse({"event": "sum_end", "summary": text,
+                        "via": via if via.get("model") else None})
+        else:
+            yield _sse({"event": "error",
+                        "text": "recap failed — model returned nothing"})
+        yield b"data: [DONE]\n\n"
+
+
 async def summarize_room(gateway: Any, session_factory: Any,
                          room_id: int) -> None:
     """Compact the transcript into ``room.summary`` (best effort)."""

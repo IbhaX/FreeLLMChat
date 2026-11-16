@@ -255,6 +255,8 @@ async def summarize(rid: int, request: Request,
     if not room:
         raise HTTPException(404, "room not found")
     from app.db import get_session_factory
-    await rp.summarize_room(_gateway(request), get_session_factory(), rid)
-    room = await session.get(RoleplayRoom, rid)
-    return {"summary": room.summary or ""}
+    agen = rp.summarize_stream(_gateway(request), get_session_factory(), rid)
+    job = chat_jobs.start(f"rp-sum-{rid}", agen)
+    return StreamingResponse(
+        job.stream(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
