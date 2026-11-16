@@ -1,44 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Shared conversation — FreeLLM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<link rel="stylesheet" href="/static/css/render.css">
+<link rel="stylesheet" href="/static/css/activity.css">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-<link rel="stylesheet" href="/static/css/theme.css">
-<link rel="stylesheet" href="/static/css/render.css">
-<style>
-  body{display:block;overflow:auto}
-  .wrap{max-width:760px;margin:0 auto;padding:24px 16px 80px}
-  .sh-msg{margin:14px 0;display:flex;gap:12px}
-  .sh-av{width:34px;height:34px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
-  .sh-av.me{background:var(--accent,#7c6cf5);color:#fff}
-  .sh-av.ai{background:var(--bg-2,#1a1f2b);color:var(--text-1);border:1px solid var(--border-1)}
-  .sh-body{flex:1;min-width:0}
-  .sh-name{font-size:12.5px;color:var(--text-3);margin-bottom:4px;font-weight:600}
-  .sh-bubble{background:var(--bg-1);border:1px solid var(--border-1);border-radius:14px;padding:12px 16px}
-  .sh-msg.user .sh-bubble{background:var(--accent,#7c6cf5);color:#fff;border-color:transparent}
-  .sh-msg.user .sh-name{text-align:right}
-  .sh-msg.user{flex-direction:row-reverse}
-  .sh-bubble p{margin:0 0 8px}
-  .sh-bubble p:last-child{margin-bottom:0}
-  .sh-bubble pre{overflow-x:auto;font-size:12.5px}
-  .sh-empty{color:var(--text-3);text-align:center;padding:60px 0}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px">
-    <div>
-      <h1 id="title" style="font-size:20px;font-weight:700;margin:0">Shared conversation</h1>
-      <div id="sub" style="font-size:12.5px;color:var(--text-3);margin-top:4px"></div>
-    </div>
-    <a href="/chat" style="font-size:12.5px;color:var(--accent,#7c6cf5);text-decoration:none">Open chat →</a>
-  </div>
-  <div id="msgs"><div class="sh-empty">Loading…</div></div>
-</div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
+<!-- KaTeX for math rendering (lazy auto-detect by MarkdownRenderer) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<!-- Nova Render Engine (same set as the chat page) -->
 <script src="/static/js/render/ns.js"></script>
 <script src="/static/js/render/ComponentRegistry.js"></script>
 <script src="/static/js/render/ResponseClassifier.js"></script>
@@ -51,40 +30,133 @@
 <script src="/static/js/render/Cards.js"></script>
 <script src="/static/js/render/JsonViewer.js"></script>
 <script src="/static/js/render/StatusRenderers.js"></script>
+<script src="/static/js/render/ActivityLog.js"></script>
 <script src="/static/js/render/MediaRenderer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="/static/js/render/InteractiveRenderer.js"></script>
 <script src="/static/js/render/Visuals.js"></script>
+<script src="/static/js/render/DiagramRenderer.js"></script>
 <script src="/static/js/render/SuggestedPrompts.js"></script>
 <script src="/static/js/render/MessageActions.js"></script>
 <script src="/static/js/render/ResponseRenderer.js"></script>
+<script src="/static/js/render/StreamingRenderer.js"></script>
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  html,body{height:100%}
+  body{display:block;overflow:auto}
+  .sh-top{border-bottom:1px solid var(--border-1);background:var(--bg-1);
+    position:sticky;top:0;z-index:10}
+  .sh-top-in{max-width:780px;margin:0 auto;padding:10px 12px;
+    display:flex;align-items:center;gap:10px}
+  .logo{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;
+    background:var(--accent);color:var(--on-accent);font-weight:800;font-size:15px;flex:none}
+  .sh-title{font-weight:700;font-size:14px;letter-spacing:-.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sh-sub{font-size:10.5px;color:var(--text-3)}
+  .chat-inner{max-width:780px;margin:0 auto;padding:16px 12px 40px}
+  /* ---------- Messages — identical to chat.html ---------- */
+  .msg-row{display:flex;gap:10px;margin-bottom:20px}
+  .msg-av{width:28px;height:28px;border-radius:9px;flex:none;display:grid;
+    place-items:center;font-size:11px;font-weight:700;color:#fff;margin-top:2px;
+    box-shadow:var(--shadow-1)}
+  .msg-av.ai{background:var(--accent);color:var(--on-accent)}
+  .msg-av.me{background:var(--surface-3);color:var(--text-1);border:1px solid var(--border-2)}
+  .msg-col{flex:1;min-width:0}
+  .msg-meta{display:flex;align-items:baseline;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+  .msg-meta b{font-size:12.5px;font-weight:600}
+  .msg-meta time{font-size:10px;color:var(--text-3)}
+  .bubble{font-size:14px;line-height:1.6;word-wrap:break-word;overflow-wrap:anywhere}
+  .row-user .bubble{
+    background:var(--accent-soft);border:1px solid var(--accent-line);
+    padding:10px 14px;border-radius:var(--r-lg);display:inline-block;
+  }
+  .row-user{justify-content:flex-end}
+  .row-user .msg-av{order:2}
+  .row-user .msg-col{max-width:88%;display:flex;flex-direction:column;align-items:flex-end}
+  .bubble p{margin-bottom:8px}
+  .bubble p:last-child{margin-bottom:0}
+  .bubble code.ic{background:var(--surface-3);border:1px solid var(--border-1);
+    padding:1px 6px;border-radius:5px;font-family:var(--font-mono);font-size:12.5px}
+  .codeblock{background:var(--code-bg);border:1px solid var(--border-1);border-radius:var(--r-md);
+    margin:10px 0;overflow:hidden}
+  .codeblock code{color:#e6e6e6}
+  .codehead{display:flex;justify-content:space-between;align-items:center;
+    padding:6px 12px;background:rgba(255,255,255,.04);font-size:11px;color:var(--text-3);
+    border-bottom:1px solid var(--border-1)}
+  .codehead button{background:none;border:none;color:var(--text-3);cursor:pointer;font:inherit;font-size:11px}
+  .codehead button:hover{color:var(--text-1)}
+  .codeblock pre{padding:10px 12px;overflow-x:auto;margin:0;
+    font-family:var(--font-mono);font-size:12px;line-height:1.55;-webkit-overflow-scrolling:touch}
+  .bubble ul{margin:6px 0 8px 18px;list-style:none}
+  .bubble li{margin-bottom:4px;position:relative;padding-left:14px}
+  .bubble li::before{content:"·";position:absolute;left:0;color:var(--accent);font-weight:700}
+  .msg-actions{display:none}
+  .sh-empty{color:var(--text-3);text-align:center;padding:60px 0}
+  .sh-foot{text-align:center;padding:24px 0 8px;font-size:11px;color:var(--text-3)}
+  .sh-foot a{color:var(--accent)}
+  @media(min-width:768px){
+    .chat-inner{padding:24px 20px 40px}
+    .sh-top-in{padding:10px 20px}
+    .msg-row{gap:12px;margin-bottom:24px}
+    .msg-av{width:30px;height:30px;font-size:12px}
+    .msg-meta b{font-size:13px}
+    .row-user .msg-col{max-width:80%}
+    .codeblock pre{font-size:12.5px;padding:12px 14px}
+  }
+  @media(min-width:1024px){
+    .row-user .msg-col{max-width:78%}
+  }
+</style>
+</head>
+<body>
+<header class="sh-top">
+  <div class="sh-top-in">
+    <div class="logo">N</div>
+    <div style="min-width:0">
+      <div class="sh-title" id="title">Shared conversation</div>
+      <div class="sh-sub" id="sub"></div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" data-theme-btn title="Toggle theme"></button>
+      <a class="ui-btn ui-btn-primary" href="/chat">Open chat →</a>
+    </div>
+  </div>
+</header>
+<main class="chat-inner" id="msgs"><div class="sh-empty">Loading…</div></main>
+<div class="sh-foot">Shared via <a href="/chat">Nova Chat</a> · FreeLLM Gateway</div>
 <script>
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const md=t=>{try{return window.NovaRender?.MarkdownRenderer?.render(t)||esc(t)}catch(e){return esc(t)}};
 // Render each bubble through the same engine the chat uses (decodes
 // nova-response envelopes into components); fall back to plain markdown.
-const bubbleFor=m=>{
-  const b=document.createElement('div');b.className='sh-bubble';
-  if(!m.role||m.role==='user'){b.innerHTML=md(m.text||m.content||'');return b;}
+const fillBubble=(m,b)=>{
+  if(!m.role||m.role==='user'){b.innerHTML=md(m.text||m.content||'');return;}
   if(window.NovaRender?.ResponseRenderer){
-    try{NovaRender.ResponseRenderer.renderMessage(m,b,{showActions:false});return b;}catch(e){}
+    try{NovaRender.ResponseRenderer.renderMessage(m,b,{showActions:false});return;}catch(e){}
   }
-  b.innerHTML=md(m.text||m.content||'');return b;
+  b.innerHTML=md(m.text||m.content||'');
 };
 const id=location.pathname.split('/').pop();
 fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
   document.getElementById('title').textContent=d.title||'Shared conversation';
-  document.getElementById('sub').textContent=new Date(d.created_at).toLocaleString()+' · '+(d.messages||[]).length+' messages';
+  document.title=(d.title||'Shared conversation')+' — FreeLLM';
+  document.getElementById('sub').textContent=(d.created_at?new Date(d.created_at).toLocaleString()+' · ':'')+(d.messages||[]).length+' messages';
   const host=document.getElementById('msgs');
   const msgs=d.messages||[];
   if(!msgs.length){host.innerHTML='<div class="sh-empty">This conversation is empty.</div>';return;}
   host.innerHTML='';
   msgs.forEach(m=>{
     const isUser=m.role==='user';
-    const name=isUser?'You':(m.agentName||m.name||'Nova');
-    const av=isUser?'U':name[0].toUpperCase();
-    const row=document.createElement('div');row.className=`sh-msg ${isUser?'user':''}`;
-    row.innerHTML=`<div class="sh-av ${isUser?'me':'ai'}">${esc(av)}</div><div class="sh-body"><div class="sh-name">${esc(name)}</div></div>`;
-    row.querySelector('.sh-body').append(bubbleFor(m));
+    const name=m.role==='user'?'You':(m.agentName||m.name||'Nova');
+    const av=isUser?'A':((m.agentName)?'🤖':'N');
+    const row=document.createElement('div');
+    row.className='msg-row '+(isUser?'row-user':'row-ai');
+    row.innerHTML=`<div class="msg-av ${isUser?'me':'ai'}">${esc(av)}</div>
+      <div class="msg-col">
+        <div class="msg-meta"><b>${esc(name)}</b>${m.model?`<time>· ${esc(m.model)}</time>`:''}</div>
+        <div class="bubble"></div>
+      </div>`;
+    fillBubble(m,row.querySelector('.bubble'));
     host.append(row);
   });
   // suggested-prompt chips are interactive in the app; inert here
