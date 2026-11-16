@@ -172,6 +172,7 @@
         v.slots[i] = slot;
         v.comps.append(slot.node);
       }
+      slot.node.classList.toggle("nova-tile", !!(Nova.isTile && Nova.isTile(comp && comp.type)));
       if (slot.final) return;
       const sig = JSON.stringify(comp) + (final ? "!" : "");
       if (slot.sig === sig) return;

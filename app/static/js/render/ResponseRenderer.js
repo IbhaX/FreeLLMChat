@@ -129,8 +129,20 @@
       host.append(mdHost);
     }
 
-    // Components in order.
-    (env.components || []).forEach((c) => renderComponent(c, host));
+    // Components in order, laid out as widget tiles: small component
+    // types (see Nova.TILE_TYPES) pack side by side, wide ones span the
+    // full row.
+    const comps = env.components || [];
+    if (comps.length) {
+      const grid = el("div", { class: "nova-comp-grid" });
+      comps.forEach((c) => {
+        renderComponent(c, grid);
+        const slot = grid.lastElementChild;
+        if (slot && Nova.isTile && Nova.isTile(c && c.type))
+          slot.classList.add("nova-tile");
+      });
+      host.append(grid);
+    }
 
     // Top-level visualization hint.
     if (env.visualization) {

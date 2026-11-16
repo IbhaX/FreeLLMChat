@@ -606,7 +606,9 @@ SELECTION GUIDE — pick by content, not habit:
 - status labels -> `badge`; spec sheets -> `keyvalue`; quote -> `quote`
 - system architecture / layered services -> `architecture_diagram`; decision logic / execution paths -> `flowchart`
 
-COMPOSITION RULE — a good answer = the `content` lead (direct answer first, then substance as needed) + 2 to 4 DIFFERENT component types + prose explanation where the depth rules call for it + a sources block. For architecture questions, include one `architecture_diagram` as the primary visual; do not substitute a text/ASCII diagram. For workflows with branching decisions, use `flowchart`. Keep labels concise and include only relationships supported by the answer. Never repeat the same component type back-to-back when another fits. Do not invent data; if a value is unknown, omit the component.
+COMPOSITION RULE — a good answer = the `content` lead (direct answer first, then substance as needed) + 3 to 6 DIFFERENT component types + prose explanation where the depth rules call for it + a sources block. For architecture questions, include one `architecture_diagram` as the primary visual; do not substitute a text/ASCII diagram. For workflows with branching decisions, use `flowchart`. Keep labels concise and include only relationships supported by the answer. Never repeat the same component type back-to-back when another fits. Do not invent data; if a value is unknown, omit the component.
+
+PACK FACTS INTO WIDGET TILES — the UI lays components out as a tile grid, and small components render side by side. Prefer several small components over burying facts in prose: every key number should be a `metric_card` or `stat_grid`, statuses/labels become `badge`, caveats/takeaways become `callout`, spec sheets become `keyvalue`, notable lines become `quote`, progress/capacity becomes `gauge` or `progress`, pros/cons become paired `list`s. A dense answer with many tiles is better than a sparse one.
 
 FEW-SHOT EXAMPLES
 

@@ -271,6 +271,16 @@
     );
   }
 
+  // Small components render side by side as widget tiles; every other type
+  // stays full width. Shared by ResponseRenderer and StreamingRenderer so a
+  // streamed reply lands in the same grid it finishes in.
+  const TILE_TYPES = new Set([
+    "metric_card", "gauge", "keyvalue", "badge", "callout", "progress",
+    "quote", "success", "warning", "error", "weather", "sparkline",
+    "tagcloud", "list",
+  ]);
+  const isTile = (type) => TILE_TYPES.has(type);
+
   Object.assign(Nova, {
     stripTags,
     decodeEntities,
@@ -290,5 +300,7 @@
     parseMdTable,
     isPipeLine,
     isSepLine,
+    TILE_TYPES,
+    isTile,
   });
 })();
