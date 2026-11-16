@@ -359,6 +359,10 @@ class RoleplayRoom(Base):
     character_ids: Mapped[list] = mapped_column(JSON, default=list)
     messages: Mapped[list] = mapped_column(JSON, default=list)
     model: Mapped[str] = mapped_column(String(128), default="auto")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    mood: Mapped[str] = mapped_column(String(32), default="")
+    paused_ids: Mapped[list] = mapped_column(JSON, default=list)
+    director_notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow)

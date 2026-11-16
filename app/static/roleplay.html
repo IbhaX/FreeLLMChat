@@ -1,103 +1,162 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Roleplay — Nova</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Stage — FreeLLM</title>
 <link rel="stylesheet" href="/static/css/theme.css">
-<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
-<style>
-  .rp-tabs{display:flex;gap:6px;margin-bottom:16px}
-  .rp-tab{padding:7px 14px;border-radius:var(--r-md);font-size:var(--t-sm);font-weight:600;cursor:pointer;color:var(--text-2);border:1px solid transparent}
-  .rp-tab.active{background:var(--accent-soft);color:var(--text-1);border-color:var(--accent-line)}
-  .rp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-  .rp-card{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease}
-  .rp-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-3)}
-  .rp-face{width:44px;height:44px;border-radius:12px;background:var(--surface-3);display:grid;place-items:center;font-size:24px;flex:none}
-  .rp-tag{font-size:10px;padding:2px 7px;border-radius:99px;background:var(--surface-3);color:var(--text-3)}
-  .rp-room-list .rs-run{cursor:pointer}
-  .rp-msg{display:flex;gap:10px;margin-bottom:14px}
-  .rp-msg .av{width:34px;height:34px;border-radius:10px;background:var(--surface-3);display:grid;place-items:center;font-size:18px;flex:none}
-  .rp-msg .b{flex:1;min-width:0}
-  .rp-msg .who{font-size:var(--t-xs);font-weight:700;color:var(--text-3);margin-bottom:3px}
-  .rp-msg .txt{font-size:var(--t-md);line-height:1.55;white-space:pre-wrap}
-  .rp-msg.user .txt{background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--r-md);padding:8px 12px}
-  .rp-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .rp-edit-grid .full{grid-column:1/-1}
-  .rp-field label{display:block;font-size:var(--t-xs);font-weight:600;color:var(--text-3);margin-bottom:4px}
-</style>
+<link rel="stylesheet" href="/static/css/stage.css">
 </head>
 <body>
-<main class="ui-main">
-  <div class="ui-page" style="max-width:1100px">
-    <div class="ui-pagehead">
-      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
-      <div><h1>Roleplay Studio</h1><div class="sub">Characters, scenarios and multi-character rooms</div></div>
-      <div class="acts"><button class="ui-btn ui-btn-primary ui-btn-sm" id="newCharBtn">+ New character</button></div>
+<div class="stage">
+
+  <!-- top bar -->
+  <header class="st-top">
+    <a class="st-home" href="/chat" title="Back to chat">⌂</a>
+    <div class="st-title" id="sceneTitle" title="Click to rename">The Stage</div>
+    <div class="st-castchips" id="castChips"></div>
+    <div class="st-topbtns">
+      <button class="st-ibtn" id="btnScenes" title="Scenes">🎬</button>
+      <button class="st-ibtn" id="btnCast" title="Cast & characters">🎭</button>
+      <button class="st-ibtn" id="btnDirector" title="Director panel">🎚</button>
+      <button class="st-ibtn" id="btnSurprise" title="Surprise me — narrator beat">✨</button>
     </div>
+  </header>
 
-    <div class="rp-tabs">
-      <div class="rp-tab active" data-tab="chars">Characters</div>
-      <div class="rp-tab" data-tab="rooms">Rooms</div>
-    </div>
+  <div class="st-body">
 
-    <div id="tabChars"><div class="rp-grid" id="charGrid"></div></div>
+    <!-- cast rail -->
+    <aside class="st-cast" id="castRail" aria-label="Cast"></aside>
 
-    <div id="tabRooms" style="display:none">
-      <div class="rs-grid" style="display:grid;grid-template-columns:280px 1fr;gap:16px" id="roomLayout">
-        <div>
-          <button class="ui-btn ui-btn-primary" id="newRoomBtn" style="width:100%;margin-bottom:10px">+ New room</button>
-          <div class="ui-card" id="roomList" style="padding:6px"></div>
-        </div>
-        <div class="ui-card ui-card-pad" id="roomPane" style="display:none">
-          <div id="roomTitle" style="font-weight:700;margin-bottom:2px"></div>
-          <div id="roomChars" style="font-size:var(--t-xs);color:var(--text-3);margin-bottom:12px"></div>
-          <div id="transcript" style="max-height:52vh;overflow-y:auto;margin-bottom:12px"></div>
-          <div style="display:flex;gap:8px">
-            <select id="speakerSel" class="ui-select" style="width:160px"><option value="">Everyone replies</option></select>
-            <input id="roomInput" class="ui-input" style="flex:1" placeholder="Say something to the room…">
-            <button class="ui-btn ui-btn-primary" id="sendBtn">Send</button>
+    <!-- stage -->
+    <main class="st-stage">
+      <div class="st-backdrop" id="backdrop"></div>
+      <div class="st-scroll" id="scroll" aria-live="polite" aria-label="Scene transcript">
+        <div class="st-scenario" id="scenarioLine"></div>
+        <div id="transcript"></div>
+        <div class="st-empty" id="stageEmpty">
+          <div>
+            <div class="big">🎭</div>
+            <div id="emptyText">Pick a scene — or raise the curtain on a new one.</div>
+            <button class="st-begin" id="btnBegin" style="display:none">Begin the scene</button>
           </div>
         </div>
-        <div class="ui-card ui-card-pad tx-3" id="roomEmpty" style="display:grid;place-items:center;min-height:300px">Create or open a room.</div>
       </div>
-    </div>
-  </div>
-</main>
+    </main>
 
-<div class="ui-modal" id="charModal" style="display:none">
-  <div class="ui-modal-card" style="width:720px;max-width:calc(100vw - 24px);max-height:88vh;overflow-y:auto;padding:24px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h3 id="charModalTitle" style="margin:0">New character</h3>
-      <button class="ui-btn ui-btn-ghost ui-btn-icon" onclick="document.getElementById('charModal').style.display='none'">✕</button>
+    <!-- director panel -->
+    <aside class="st-director" id="director" aria-label="Director panel">
+      <div>
+        <h4>Scenario</h4>
+        <textarea id="dScenario" rows="3" placeholder="Where and when is this scene?"></textarea>
+      </div>
+      <div>
+        <h4>Mood</h4>
+        <select id="dMood">
+          <option value="">— natural —</option>
+          <option value="cozy">cozy & warm</option>
+          <option value="tense">tense</option>
+          <option value="mystic">mysterious</option>
+          <option value="dark">dark</option>
+          <option value="heroic">heroic</option>
+        </select>
+      </div>
+      <div>
+        <h4>Stage direction</h4>
+        <textarea id="dNotes" rows="2" placeholder="Private guidance every character obeys…"></textarea>
+        <div class="mini">e.g. "the inn is about to be robbed"</div>
+      </div>
+      <div>
+        <h4>Turn order</h4>
+        <div class="st-order" id="turnOrder"></div>
+        <div class="mini">Drag to reorder · ⏸ pauses a character</div>
+      </div>
+      <div>
+        <h4>Story so far</h4>
+        <div class="st-summary" id="dSummary">No recap yet — it builds as the scene runs.</div>
+        <button class="st-dbtn" id="dSummarize" style="margin-top:8px">Summarize now</button>
+      </div>
+      <button class="st-dbtn danger" id="dClear">Restart scene (clear transcript)</button>
+    </aside>
+  </div>
+
+  <!-- composer -->
+  <footer class="st-composer" id="composer">
+    <div class="st-modes">
+      <button class="st-mode on" data-mode="talk">💬 Talk</button>
+      <button class="st-mode" data-mode="narrate">🖋 Narrate</button>
+      <button class="st-mode" data-mode="ooc">(( OOC ))</button>
+      <button class="st-mode" data-mode="whisper">🤫 Whisper</button>
+      <select class="st-whisper-sel" id="whisperTo" style="display:none"></select>
+      <span style="flex:1"></span>
+      <button class="st-mode" id="beatOnly" title="Record without replies">✍ record only</button>
     </div>
-    <div class="rp-edit-grid">
-      <div class="rp-field"><label>Name *</label><input id="cf_name" class="ui-input"></div>
-      <div class="rp-field"><label>Emoji</label><input id="cf_emoji" class="ui-input" maxlength="4"></div>
-      <div class="rp-field full"><label>Tagline</label><input id="cf_tagline" class="ui-input" placeholder="Consulting detective"></div>
-      <div class="rp-field full"><label>Description</label><textarea id="cf_desc" class="ui-input" rows="2"></textarea></div>
-      <div class="rp-field full"><label>Personality</label><textarea id="cf_pers" class="ui-input" rows="2"></textarea></div>
-      <div class="rp-field"><label>Speaking style</label><textarea id="cf_speak" class="ui-input" rows="2"></textarea></div>
-      <div class="rp-field"><label>Category</label><select id="cf_cat" class="ui-select"><option>custom</option><option>fiction</option><option>historical</option><option>expert</option><option>educational</option><option>professional</option></select></div>
-      <div class="rp-field full"><label>Background</label><textarea id="cf_bg" class="ui-input" rows="2"></textarea></div>
-      <div class="rp-field"><label>Knowledge domain</label><textarea id="cf_know" class="ui-input" rows="2"></textarea></div>
-      <div class="rp-field"><label>Motivations</label><textarea id="cf_motiv" class="ui-input" rows="2"></textarea></div>
-      <div class="rp-field full"><label>Boundaries (what they never do)</label><textarea id="cf_bound" class="ui-input" rows="2"></textarea></div>
-      <div class="rp-field full"><label>Example dialogue</label><textarea id="cf_dlg" class="ui-input" rows="3" placeholder="User: …\nCharacter: …"></textarea></div>
-      <div class="rp-field full"><label>First greeting</label><textarea id="cf_greet" class="ui-input" rows="2"></textarea></div>
+    <div class="st-inputrow">
+      <textarea class="st-input" id="input" rows="1" data-mode="talk"
+        placeholder="Say something… (Enter to run, Shift+Enter for newline)"></textarea>
+      <button class="st-run" id="btnRun" title="Run the turn">▶</button>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="ui-btn" onclick="document.getElementById('charModal').style.display='none'">Cancel</button>
-      <button class="ui-btn ui-btn-primary" id="charSave">Save character</button>
+    <div class="st-queue" id="queueLine"></div>
+  </footer>
+</div>
+
+<!-- scenes drawer -->
+<div class="st-veil" id="scenesVeil">
+  <div class="st-sheet" style="width:min(520px,94vw)">
+    <h3>Scenes</h3>
+    <div class="sub">Your stages — pick one, or start a new act.</div>
+    <div class="st-scene-list" id="sceneList"></div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="st-btn" id="btnNewScene">＋ New scene</button>
+      <button class="st-btn ghost" data-close>Close</button>
     </div>
   </div>
 </div>
 
-<script src="/static/js/theme.js"></script>
+<!-- cast sheet -->
+<div class="st-veil" id="castVeil">
+  <div class="st-sheet">
+    <h3>The Cast Sheet</h3>
+    <div class="sub">Tap characters to add/remove them from this scene (max 6). Order on stage follows your picks.</div>
+    <div class="st-cards" id="castCards"></div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="st-btn" id="btnApplyCast">Apply cast</button>
+      <button class="st-btn ghost" id="btnNewChar">＋ Create character</button>
+      <button class="st-btn ghost" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- character editor -->
+<div class="st-veil" id="charVeil">
+  <div class="st-sheet" style="width:min(720px,94vw)">
+    <h3 id="charTitle">New character</h3>
+    <div class="sub">The more voice you give them, the more alive they feel.</div>
+    <div class="st-form">
+      <div><label>Name</label><input id="cf_name"></div>
+      <div><label>Emoji</label><input id="cf_emoji" placeholder="🦊"></div>
+      <div class="full"><label>Tagline</label><input id="cf_tagline" placeholder="sly fox spirit guide"></div>
+      <div class="full"><label>Description</label><textarea id="cf_desc"></textarea></div>
+      <div><label>Personality</label><textarea id="cf_pers"></textarea></div>
+      <div><label>Speaking style</label><textarea id="cf_speak" placeholder="short riddles, theatrical"></textarea></div>
+      <div><label>Background</label><textarea id="cf_bg"></textarea></div>
+      <div><label>Goals & motivations</label><textarea id="cf_motiv"></textarea></div>
+      <div><label>Knowledge domain</label><input id="cf_know"></div>
+      <div><label>Category</label><input id="cf_cat" value="custom"></div>
+      <div class="full"><label>Boundaries (never cross)</label><textarea id="cf_bound"></textarea></div>
+      <div class="full"><label>Example dialogue</label><textarea id="cf_dlg"></textarea></div>
+      <div class="full"><label>Greeting (scene opener)</label><textarea id="cf_greet" placeholder="The fire crackles. 'You came. I wondered if you would.'"></textarea></div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="st-btn" id="charSave">Save character</button>
+      <button class="st-btn ghost" data-close>Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="st-toast" id="toast"></div>
+
 <script src="/static/js/api.js"></script>
-<script src="/static/js/admin-shell.js"></script>
 <script src="/static/js/roleplay.js"></script>
 </body>
 </html>

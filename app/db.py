@@ -95,6 +95,22 @@ async def init_db() -> None:
             for r in (await conn.exec_driver_sql(
                 "PRAGMA table_info(characters)")).fetchall()
         }
+        rp_cols = {
+            r[1]
+            for r in (await conn.exec_driver_sql(
+                "PRAGMA table_info(roleplay_rooms)")).fetchall()
+        }
+        if rp_cols:
+            rp_adds = {
+                "summary": "TEXT DEFAULT ''",
+                "mood": "VARCHAR(32) DEFAULT ''",
+                "paused_ids": "JSON",
+                "director_notes": "TEXT DEFAULT ''",
+            }
+            for col, ddl in rp_adds.items():
+                if col not in rp_cols:
+                    await conn.exec_driver_sql(
+                        f"ALTER TABLE roleplay_rooms ADD COLUMN {col} {ddl}")
         char_adds = {
             "background": "TEXT DEFAULT ''",
             "knowledge_domain": "TEXT DEFAULT ''",
