@@ -19,7 +19,7 @@
   }
 
   async function init(){
-    loadModels();loadRuns();
+    loadModels();loadRuns();restoreRun();
     $('#runBtn').onclick=runResearch;
     $('#stopBtn').onclick=stopResearch;
     $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')runResearch();});
@@ -173,6 +173,86 @@
   let runId='';
   let stopCtl=null;
 
+  const RUN_KEY='research_active';
+  const saveRun=()=>sessionStorage.setItem(RUN_KEY,JSON.stringify({runId,q:$('#q').value.trim()}));
+  const clearRun=()=>sessionStorage.removeItem(RUN_KEY);
+
+  function beginRunUI(progressText){
+    running=true;$('#runBtn').disabled=true;
+    $('#runBtn').textContent=progressText||'Researching…';
+    $('#stopBtn').style.display='';$('#stopBtn').disabled=false;
+    $('#stages').innerHTML='';$('#rxpad').innerHTML='';
+    $('#report').innerHTML='<p class="tx-3" style="text-align:center;padding:48px 0">Research in progress — the report appears here when complete.</p>';
+    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create($('#stages')):null;
+    currentAnswer='';currentMeta=null;$('#exportBtn').disabled=true;$('#printBtn').disabled=true;
+  }
+
+  function endRunUI(){
+    if(actLog)actLog.finish();
+    running=false;$('#runBtn').disabled=false;$('#runBtn').textContent='Run research';
+    $('#stopBtn').style.display='none';
+    clearRun();
+  }
+
+  async function consumeStream(resp){
+    const reader=resp.body.getReader();const dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let idx;
+      while((idx=buf.indexOf('\n\n'))>=0){
+        const frame=buf.slice(0,idx);buf=buf.slice(idx+2);
+        for(const line of frame.split('\n')){
+          if(!line.startsWith('data:'))continue;
+          const data=line.slice(5).trim();
+          if(data==='[DONE]')continue;
+          try{
+            const ev=JSON.parse(data);
+            if(ev.freellm){
+              const e=ev.freellm;
+              if(e.event==='research_done'){
+                currentMeta={...e,question:$('#q').value.trim(),model:$('#model').value,
+                  created_at:new Date().toISOString()};
+                continue;
+              }
+              if(e.event==='research_answer')continue;
+              addStage(e);
+            }else if(ev.choices&&ev.choices[0]&&ev.choices[0].delta&&ev.choices[0].delta.content){
+              renderAnswer(ev.choices[0].delta.content);
+              loadRuns();
+            }
+          }catch(_){}
+        }
+      }
+    }
+  }
+
+  // Refresh-safe resume: the detached job keeps running server-side; we
+  // re-attach to its buffered stream and restore the live UI.
+  async function restoreRun(){
+    let saved=null;
+    try{saved=JSON.parse(sessionStorage.getItem(RUN_KEY)||'null');}catch(_){}
+    if(!saved||!saved.runId)return;
+    try{
+      const st=await v1Api('/v1/research/live/'+encodeURIComponent(saved.runId));
+      if(!st.running){clearRun();return;}
+      runId=saved.runId;
+      $('#q').value=saved.q||'';
+      stopCtl=new AbortController();
+      beginRunUI('Resuming…');
+      try{
+        const resp=await fetch(API_BASE+'/v1/research/live/'+encodeURIComponent(runId)+'/stream',
+          {headers:apiHeaders(false),signal:stopCtl.signal});
+        if(!resp.ok)throw new Error('resume failed: '+resp.status);
+        await consumeStream(resp);
+      }catch(e){
+        if(e.name!=='AbortError'){if(actLog)actLog.fail(e.message);else addStage('Error: '+e.message);}
+      }finally{endRunUI();}
+    }catch(_){clearRun();}
+  }
+
   async function stopResearch(){
     const btn=$('#stopBtn');btn.disabled=true;
     try{
@@ -185,13 +265,10 @@
   async function runResearch(){
     const q=$('#q').value.trim();
     if(!q||running)return;
-    running=true;$('#runBtn').disabled=true;$('#runBtn').textContent='Researching…';
-    $('#stopBtn').style.display='';$('#stopBtn').disabled=false;
     runId='research-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
     stopCtl=new AbortController();
-    $('#stages').innerHTML='';$('#rxpad').innerHTML='';$('#report').innerHTML='<p class="tx-3" style="text-align:center;padding:48px 0">Research in progress — the report appears here when complete.</p>';
-    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create($('#stages')):null;
-    currentAnswer='';currentMeta=null;$('#exportBtn').disabled=true;
+    beginRunUI();
+    saveRun();
     try{
       const modeHints={academic:' Focus on academic and peer-reviewed sources — prefer papers, journals, and .edu domains.',
         technical:' Focus on official documentation, GitHub repositories, and technical specifications.',
@@ -202,38 +279,7 @@
         body:JSON.stringify({message:msg,model:$('#model').value,depth:$('#depth').value||null,save:true,conversation_id:runId})
       });
       if(!resp.ok)throw new Error('research failed: '+resp.status);
-      const reader=resp.body.getReader();const dec=new TextDecoder();
-      let buf='';
-      while(true){
-        const{done,value}=await reader.read();
-        if(done)break;
-        buf+=dec.decode(value,{stream:true});
-        let idx;
-        while((idx=buf.indexOf('\n\n'))>=0){
-          const frame=buf.slice(0,idx);buf=buf.slice(idx+2);
-          for(const line of frame.split('\n')){
-            if(!line.startsWith('data:'))continue;
-            const data=line.slice(5).trim();
-            if(data==='[DONE]')continue;
-            try{
-              const ev=JSON.parse(data);
-              if(ev.freellm){
-                const e=ev.freellm;
-                if(e.event==='research_done'){
-                  currentMeta={...e,question:q,model:$('#model').value,
-                    created_at:new Date().toISOString()};
-                  continue;
-                }
-                if(e.event==='research_answer')continue;
-                addStage(e);
-              }else if(ev.choices&&ev.choices[0]&&ev.choices[0].delta&&ev.choices[0].delta.content){
-                renderAnswer(ev.choices[0].delta.content);
-                loadRuns();
-              }
-            }catch(_){}
-          }
-        }
-      }
+      await consumeStream(resp);
     }catch(e){
       if(e.name==='AbortError'){
         addStage('Research stopped by user.');
@@ -241,10 +287,6 @@
         if(actLog)actLog.fail(e.message);else addStage('Error: '+e.message);
         toast(e.message,'err');
       }
-    }finally{
-      if(actLog)actLog.finish();
-      running=false;$('#runBtn').disabled=false;$('#runBtn').textContent='Run research';
-      $('#stopBtn').style.display='none';
-    }
+    }finally{endRunUI();}
   }
 })();

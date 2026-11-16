@@ -234,6 +234,33 @@ async def research_stream(
     )
 
 
+@router.get("/research/live/{conv_id}")
+async def research_live_status(conv_id: str) -> dict[str, Any]:
+    """Job status for a research run key — lets a refreshed page decide
+    whether to re-attach or show the run as interrupted."""
+    from app.services import chat_jobs
+
+    return chat_jobs.status(chat_jobs.get(conv_id))
+
+
+@router.get("/research/live/{conv_id}/stream")
+async def research_live_stream(conv_id: str) -> StreamingResponse:
+    """Re-attach to a detached research run: replays buffered SSE frames
+    then tails live, ending with [DONE]."""
+    from app.services import chat_jobs
+
+    job = chat_jobs.get(conv_id)
+
+    async def _empty() -> Any:
+        yield b"data: [DONE]\n\n"
+
+    return StreamingResponse(
+        job.stream() if job else _empty(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @router.post("/research/stop")
 async def research_stop(body: dict[str, Any]):
     """Cancel the running research job for a conversation key.
