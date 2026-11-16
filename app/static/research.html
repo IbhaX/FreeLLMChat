@@ -26,6 +26,32 @@
   .rs-report{font-size:var(--t-md);line-height:1.65}
   .rs-report h2{margin:1.4em 0 .5em;font-size:var(--t-xl)}
   .rs-report h3{margin:1.2em 0 .4em;font-size:var(--t-lg)}
+
+  /* ℞ prescription-pad metadata card */
+  .rx-pad{border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:18px;
+    background:color-mix(in srgb,var(--bg-1) 96%,var(--accent));overflow:hidden}
+  .rx-head{display:flex;align-items:center;gap:14px;padding:14px 18px;
+    border-bottom:3px double var(--line)}
+  .rx-sigil{font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:1;
+    color:var(--accent);font-weight:700}
+  .rx-title{font-size:var(--t-xs);letter-spacing:.18em;text-transform:uppercase;
+    color:var(--text-3);font-weight:700}
+  .rx-topic{font-size:var(--t-md);font-weight:600;line-height:1.35;margin-top:2px}
+  .rx-no{margin-left:auto;text-align:right;font-family:Georgia,serif;
+    color:var(--text-3);font-size:var(--t-sm);white-space:nowrap}
+  .rx-no b{display:block;color:var(--tx);font-size:var(--t-md)}
+  .rx-body{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;padding:12px 18px}
+  @media(max-width:560px){.rx-body{grid-template-columns:1fr}}
+  .rx-row{display:flex;align-items:baseline;gap:8px;padding:6px 0;
+    border-bottom:1px dotted var(--line)}
+  .rx-row:last-child{border-bottom:0}
+  .rx-k{font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--text-3);font-weight:700;flex:none;min-width:74px}
+  .rx-v{font-family:Georgia,'Times New Roman',serif;font-size:var(--t-sm);
+    color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rx-foot{padding:8px 18px;border-top:1px solid var(--line);
+    font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);
+    display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -74,6 +100,7 @@
       <div>
         <div class="sec-title">Report</div>
         <div class="ui-card ui-card-pad">
+          <div id="rxpad"></div>
           <div id="report" class="rs-report">
             <p class="tx-3" style="text-align:center;padding:48px 0">Run a research query or open a saved report.</p>
           </div>

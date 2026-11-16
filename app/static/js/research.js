@@ -2,6 +2,7 @@
 (function(){
   const $=s=>document.querySelector(s);
   let currentAnswer='';
+  let currentMeta=null;
   let running=false;
   let actLog=null;
 
@@ -63,12 +64,51 @@
     if(el)el.classList.add('active');
     try{
       const r=await v1Api('/v1/research/runs/'+id);
-      renderAnswer(r.answer||'');
+      renderAnswer(r.answer||'',{
+        ...(r.meta||{}),
+        question:r.question,run_id:r.id,created_at:r.created_at,
+        sources:(r.meta&&r.meta.sources!=null)?r.meta.sources:(r.sources||[]).length,
+        findings:(r.meta&&r.meta.findings!=null)?r.meta.findings:(r.findings||[]).length,
+      });
     }catch(e){toast(e.message,'err');}
   }
 
-  function renderAnswer(text){
+  function rxRow(k,v){
+    if(v==null||v==='')return '';
+    return `<div class="rx-row"><span class="rx-k">${k}</span><span class="rx-v" title="${esc(String(v))}">${esc(String(v))}</span></div>`;
+  }
+
+  function renderRx(meta){
+    if(!meta)return '';
+    const q=meta.quality||{};
+    const dur=meta.seconds!=null?meta.seconds+'s':null;
+    const findings=meta.findings!=null
+      ?(meta.verified!=null?`${meta.verified}/${meta.findings} verified`:String(meta.findings)):null;
+    const date=(meta.created_at||'').slice(0,10)||new Date().toISOString().slice(0,10);
+    const cites=q.citations!=null
+      ?`${q.citations} checked${q.dead_urls&&q.dead_urls.length?` · ${q.dead_urls.length} dead`:''}`:null;
+    const rows=[
+      rxRow('Date',date),rxRow('Depth',meta.depth),
+      rxRow('Model',meta.model),rxRow('Sources',meta.sources),
+      rxRow('Findings',findings),rxRow('Rounds',meta.rounds),
+      rxRow('Duration',dur),rxRow('Citations',cites),
+    ].join('');
+    if(!rows&&!meta.question)return '';
+    return `<div class="rx-pad">
+      <div class="rx-head"><span class="rx-sigil">℞</span>
+        <div><div class="rx-title">Research Report</div>
+          <div class="rx-topic">${esc(meta.question||'Untitled query')}</div></div>
+        ${meta.run_id?`<div class="rx-no">№<b>${esc(String(meta.run_id))}</b></div>`:''}
+      </div>
+      ${rows?`<div class="rx-body">${rows}</div>`:''}
+      <div class="rx-foot"><span>Verified research</span><span>FreeLLM Research Center</span></div>
+    </div>`;
+  }
+
+  function renderAnswer(text,meta){
     currentAnswer=text;
+    if(meta!==undefined)currentMeta=meta;
+    $('#rxpad').innerHTML=renderRx(currentMeta);
     const host=$('#report');host.innerHTML='';
     const Nova=window.NovaRender||{};
     if(Nova.ResponseRenderer&&Nova.ResponseRenderer.renderMessage){
@@ -114,9 +154,9 @@
     $('#stopBtn').style.display='';$('#stopBtn').disabled=false;
     runId='research-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
     stopCtl=new AbortController();
-    $('#stages').innerHTML='';$('#report').innerHTML='<p class="tx-3" style="text-align:center;padding:48px 0">Research in progress — the report appears here when complete.</p>';
+    $('#stages').innerHTML='';$('#rxpad').innerHTML='';$('#report').innerHTML='<p class="tx-3" style="text-align:center;padding:48px 0">Research in progress — the report appears here when complete.</p>';
     actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create($('#stages')):null;
-    currentAnswer='';$('#exportBtn').disabled=true;
+    currentAnswer='';currentMeta=null;$('#exportBtn').disabled=true;
     try{
       const modeHints={academic:' Focus on academic and peer-reviewed sources — prefer papers, journals, and .edu domains.',
         technical:' Focus on official documentation, GitHub repositories, and technical specifications.',
@@ -144,7 +184,12 @@
               const ev=JSON.parse(data);
               if(ev.freellm){
                 const e=ev.freellm;
-                if(e.event==='research_answer'||e.event==='research_done')continue;
+                if(e.event==='research_done'){
+                  currentMeta={...e,question:q,model:$('#model').value,
+                    created_at:new Date().toISOString()};
+                  continue;
+                }
+                if(e.event==='research_answer')continue;
                 addStage(e);
               }else if(ev.choices&&ev.choices[0]&&ev.choices[0].delta&&ev.choices[0].delta.content){
                 renderAnswer(ev.choices[0].delta.content);

@@ -1398,7 +1398,8 @@ async def run_research(
                 id=f"q{i + 1}", url=u, title=u, type="web", score=1.0)
         state.answer = _ensure_envelope(
             _repair_envelope(_clean_answer(answer, state), state), state)
-        state.meta = {"depth": "quick", "sources": len(state.sources), "findings": 0, "rounds": 0}
+        state.meta = {"depth": "quick", "model": model,
+                      "sources": len(state.sources), "findings": 0, "rounds": 0}
         emit({"event": "research_done", "text": "Quick answer ready",
               **state.meta})
         return state
@@ -1488,6 +1489,7 @@ async def run_research(
 
     meta = {
         "depth": state.depth,
+        "model": model,
         "sources": len(state.sources),
         "findings": len(state.findings),
         "verified": sum(1 for f in state.findings if f.verdict and f.verdict.lower() not in
