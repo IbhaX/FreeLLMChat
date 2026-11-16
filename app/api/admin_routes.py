@@ -549,41 +549,19 @@ async def test_raw_keys(
 
 @router.get("/conversations")
 async def list_conversations(session: AsyncSession = Depends(get_session)) -> list[dict]:
-    from app.models import Conversation
+    from app.services import conversations as convs
 
-    rows = (
-        await session.execute(
-            select(Conversation).order_by(Conversation.updated_at.desc()).limit(200)
-        )
-    ).scalars().all()
-    return [
-        {"client_id": c.client_id, "name": c.name,
-         "updated_at": c.updated_at.isoformat() if c.updated_at else None}
-        for c in rows
-    ]
+    return await convs.list_summaries(session)
 
 
 @router.put("/conversations/{client_id}")
 async def upsert_conversation(
     client_id: str, body: dict, session: AsyncSession = Depends(get_session)
 ) -> dict:
-    from datetime import datetime, timezone
-    from app.models import Conversation
+    from app.services import conversations as convs
 
-    conv = (
-        await session.execute(
-            select(Conversation).where(Conversation.client_id == client_id)
-        )
-    ).scalar_one_or_none()
-    name = (body.get("name") or "")[:200]
-    msgs = body.get("messages") or []
-    if conv is None:
-        conv = Conversation(client_id=client_id)
-        session.add(conv)
-    conv.name = name
-    conv.messages = msgs
-    conv.updated_at = datetime.now(timezone.utc)
-    await session.commit()
+    await convs.upsert(session, client_id, body.get("name") or "",
+                       body.get("messages") or [])
     return {"ok": True}
 
 
@@ -591,13 +569,9 @@ async def upsert_conversation(
 async def get_conversation(
     client_id: str, session: AsyncSession = Depends(get_session)
 ) -> dict:
-    from app.models import Conversation
+    from app.services import conversations as convs
 
-    conv = (
-        await session.execute(
-            select(Conversation).where(Conversation.client_id == client_id)
-        )
-    ).scalar_one_or_none()
+    conv = await convs.get(session, client_id)
     if conv is None:
         raise HTTPException(404, "conversation not found")
     return {"client_id": conv.client_id, "name": conv.name,
@@ -608,16 +582,9 @@ async def get_conversation(
 async def delete_conversation(
     client_id: str, session: AsyncSession = Depends(get_session)
 ) -> None:
-    from app.models import Conversation
+    from app.services import conversations as convs
 
-    conv = (
-        await session.execute(
-            select(Conversation).where(Conversation.client_id == client_id)
-        )
-    ).scalar_one_or_none()
-    if conv is not None:
-        await session.delete(conv)
-        await session.commit()
+    await convs.remove(session, client_id)
 
 
 # ---------- settings (custom instructions) ----------

@@ -51,13 +51,21 @@ function saveState(){
   try{
     if(state.current)state.current.t=Date.now();
     const cur=state.current?state.current.id:null;
-    localStorage.setItem(STORE_KEY,JSON.stringify({
+    const payload={
       modelId:state.model.id,depth:state.depth,conversations:state.conversations,currentId:cur,
       researchMode:pendingMode?pendingMode.researchMode:!!state.researchMode,
       agentId:pendingMode?pendingMode.agentId:(state.agent?state.agent.id:null),
       multiMode:pendingMode?pendingMode.multiMode:state.multiMode,
       groupMode:pendingMode?pendingMode.groupMode:!!state.groupMode,
-      groupIds:pendingMode?pendingMode.groupIds:(state.group?state.group.agents.map(a=>a.id):[])}));
+      groupIds:pendingMode?pendingMode.groupIds:(state.group?state.group.agents.map(a=>a.id):[])};
+    try{localStorage.setItem(STORE_KEY,JSON.stringify(payload));}
+    catch(_){
+      // Quota exceeded — cached html and image dataURLs are the bulk.
+      // Persist a text-only copy; messages re-render on load.
+      payload.conversations=payload.conversations.map(c=>({...c,
+        msgs:(c.msgs||[]).map(m=>({...m,html:undefined,images:undefined}))}));
+      try{localStorage.setItem(STORE_KEY,JSON.stringify(payload));}catch(_){}
+    }
   }catch(_){}
   syncToServer();
 }
@@ -67,37 +75,48 @@ let _syncT=null;
 function syncToServer(){
   clearTimeout(_syncT);
   _syncT=setTimeout(async()=>{
-    if(!ADMIN_TOKEN)return; // admin token needed for /admin/conversations
     for(const c of state.conversations){
       try{
-        await fetch(API_BASE+'/admin/conversations/'+c.id,{
-          method:'PUT',headers:apiHeaders(true),
-          body:JSON.stringify({name:c.name,messages:c.msgs})});
+        // Text-only payload — html/images are render caches, not data.
+        const msgs=(c.msgs||[]).map(m=>({
+          role:m.role,text:m.text,t:m.t,model:m.model,
+          agentName:m.agentName,person:m.person||null,failed:!!m.failed}));
+        await fetch(API_BASE+'/v1/conversations/'+c.id,{
+          method:'PUT',headers:apiHeaders(),
+          body:JSON.stringify({name:c.name,messages:msgs})});
       }catch(_){/* offline */}
     }
   },800);
 }
 async function fetchServerConversations(){
-  if(!ADMIN_TOKEN)return;
   try{
-    const r=await fetch(API_BASE+'/admin/conversations',{headers:apiHeaders(true)});
+    const r=await fetch(API_BASE+'/v1/conversations',{headers:apiHeaders()});
     if(!r.ok)return;
     const remote=await r.json();
     const localIds=new Set(state.conversations.map(c=>c.id));
+    let added=0;
     for(const rc of remote){
       if(localIds.has(rc.client_id))continue;
       try{
-        const fr=await fetch(API_BASE+'/admin/conversations/'+rc.client_id,{headers:apiHeaders(true)});
+        const fr=await fetch(API_BASE+'/v1/conversations/'+rc.client_id,{headers:apiHeaders()});
         if(!fr.ok)continue;
         const d=await fr.json();
         if(d.messages&&d.messages.length){
           state.conversations.push({id:d.client_id,name:d.name||'Chat',
             msgs:d.messages.map(m=>({role:m.role,text:m.text||'',html:m.html||'',t:m.t||Date.now(),model:m.model,agentName:m.agentName,person:m.person||null})),
-            t:Date.now()});
+            t:Date.parse(d.updated_at||'')||Date.now()});
+          added++;
         }
       }catch(_){}
     }
     if(!state.current&&state.conversations.length)state.current=state.conversations[0];
+    // Fresh browser (seed welcome only) + server transcripts → open the
+    // newest real conversation instead of the empty welcome chat.
+    else if(added&&state.current&&state.current.name==='Welcome chat'
+      &&(state.current.msgs||[]).length<=1){
+      state.current=[...state.conversations]
+        .sort((a,b)=>(b.t||0)-(a.t||0))[0];
+    }
   }catch(_){}
 }
 function loadState(){
@@ -261,7 +280,7 @@ function renderSidebar(filter=''){
 }
 function delConv(c){
   state.conversations=state.conversations.filter(x=>x!==c);
-  if(ADMIN_TOKEN)fetch(API_BASE+'/admin/conversations/'+c.id,{method:'DELETE',headers:apiHeaders(true)}).catch(()=>{});
+  fetch(API_BASE+'/v1/conversations/'+c.id,{method:'DELETE',headers:apiHeaders()}).catch(()=>{});
   if(state.current===c)state.current=state.conversations[0]||null;
   if(!state.conversations.length){const n=mkConv('New conversation');state.conversations.push(n);state.current=n;}
   renderAll();
@@ -507,6 +526,13 @@ async function checkLive(c){
       c.msgs.push({role:'assistant',text:j.reply,t:Date.now(),model:j.model||state.model.name});
       renderAll();
     }
+    return;
+  }
+  // No live job and nothing to merge — a trailing empty assistant
+  // placeholder is a fossil of an interrupted run; drop it.
+  const tail=c.msgs[c.msgs.length-1];
+  if(tail&&tail.role==='assistant'&&!tail.text){
+    c.msgs.pop();renderAll();
   }
 }
 function resumeLive(c){

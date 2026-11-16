@@ -902,3 +902,53 @@ async def conversation_live_cancel(client_id: str) -> dict[str, bool]:
     if job is not None:
         job.cancel()
     return {"ok": True}
+
+
+# ---------- conversation transcripts (per-user chat persistence) ----------
+# Same CRUD as /admin/conversations but behind the gateway key so every
+# chat session can sync its transcripts — not just admin-token holders.
+
+@router.get("/conversations")
+async def v1_list_conversations(
+    session: AsyncSession = Depends(get_session),
+) -> list[dict[str, Any]]:
+    from app.services import conversations as convs
+
+    return await convs.list_summaries(session)
+
+
+@router.put("/conversations/{client_id}")
+async def v1_upsert_conversation(
+    client_id: str, body: dict[str, Any],
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, bool]:
+    from app.services import conversations as convs
+
+    msgs = body.get("messages") or []
+    if not isinstance(msgs, list):
+        raise HTTPException(400, "messages must be a list")
+    await convs.upsert(session, client_id, body.get("name") or "",
+                       [m for m in msgs if isinstance(m, dict)])
+    return {"ok": True}
+
+
+@router.get("/conversations/{client_id}")
+async def v1_get_conversation(
+    client_id: str, session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from app.services import conversations as convs
+
+    conv = await convs.get(session, client_id)
+    if conv is None:
+        raise HTTPException(404, "conversation not found")
+    return {"client_id": conv.client_id, "name": conv.name,
+            "messages": conv.messages or []}
+
+
+@router.delete("/conversations/{client_id}", status_code=204)
+async def v1_delete_conversation(
+    client_id: str, session: AsyncSession = Depends(get_session),
+) -> None:
+    from app.services import conversations as convs
+
+    await convs.remove(session, client_id)
