@@ -33,6 +33,8 @@
       const main=document.querySelector('.ui-main');
       document.body.insertBefore(shell,document.body.firstChild);
       shell.appendChild(nav);shell.appendChild(main);
+      // Warm every nav destination — sidebar links feel instant on click.
+      if(window.AppNav&&AppNav.prefetch)NAV.forEach(n=>{if(n.href)AppNav.prefetch(n.href);});
       // login card
       const login=document.createElement('div');
       login.id='loginGate';

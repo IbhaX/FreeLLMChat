@@ -19,18 +19,35 @@
 
   const GRID='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
 
+  const _prefetched=new Set();
+  /* Warm the browser cache for a destination so the click feels instant.
+     Cheap: each page is a small HTML shell; the JS/CSS are already shared. */
+  function prefetch(href){
+    if(!href||href.startsWith('#')||_prefetched.has(href))return;
+    _prefetched.add(href);
+    const l=document.createElement('link');
+    l.rel='prefetch';l.href=href;l.as='document';
+    document.head.appendChild(l);
+  }
+
   function buildMenu(active){
     const menu=document.createElement('div');
     menu.className='ui-menu';
     menu.innerHTML=NAV.map(n=>n.sec
       ?`<div class="mi-head">${n.sec}</div>`
       :`<a class="mi appnav-mi ${n.id===active?'sel':''}" href="${n.href}">${n.ico}<span class="tb-tx">${n.label}</span></a>`).join('');
+    // Hover prefetch: warm each destination as the pointer travels the menu.
+    menu.addEventListener('pointerover',e=>{
+      const a=e.target.closest('a.mi');
+      if(a)prefetch(a.getAttribute('href'));
+    });
     return menu;
   }
 
   window.AppNav={
     NAV,
     GRID,
+    prefetch,
     /* Toggle an anchored app-switcher popover on a button click.
        Empty buttons get the grid glyph so any page can wire just an
        <button id="appNavBtn"></button> in the top-left corner. */
@@ -56,6 +73,9 @@
         menu.style.left=Math.max(8,Math.min(r.left,innerWidth-mw-12))+'px';
         menu.style.top=(r.top>mh+60?r.top-mh-8:r.bottom+8)+'px';
         document.addEventListener('click',onDoc,true);
+        // Warm every destination once the switcher opens — by the time the
+        // user picks one it's usually already in cache.
+        NAV.forEach(n=>{if(n.href)prefetch(n.href);});
       });
       return btn;
     },

@@ -117,6 +117,7 @@
       <div class="sh-sub" id="sub"></div>
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="appNavBtn" title="Apps — all pages"></button>
       <button class="ui-btn ui-btn-ghost ui-btn-icon" data-theme-btn title="Toggle theme"></button>
       <a class="ui-btn ui-btn-primary" href="/chat">Open chat →</a>
     </div>
@@ -163,6 +164,8 @@ fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(
   host.querySelectorAll('[data-q]').forEach(n=>n.removeAttribute('data-q'));
 }).catch(()=>{document.getElementById('msgs').innerHTML='<div class="sh-empty">Shared conversation not found.</div>';});
 </script>
+<script src="/static/js/app-nav.js"></script>
 <script src="/static/js/theme.js"></script>
+<script>if(window.AppNav)AppNav.attach(document.getElementById('appNavBtn'),null);</script>
 </body>
 </html>
