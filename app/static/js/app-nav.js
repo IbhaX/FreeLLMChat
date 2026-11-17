@@ -18,6 +18,59 @@
   ];
 
   const GRID='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
+  const BACK='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m7-7-7 7 7 7"/></svg>';
+
+  /* History-back with a safe fallback: only goes back when the previous
+     entry is same-origin, otherwise lands on the page's fallback route. */
+  function goBack(fallback){
+    try{
+      if(document.referrer){
+        const same=new URL(document.referrer).origin===location.origin;
+        if(same&&history.length>1){history.back();return;}
+      }
+    }catch(_){}
+    location.href=fallback||'/';
+  }
+
+  /* Auto-wire every <button data-app-back="/fallback"> in the page. */
+  function initBack(){
+    document.querySelectorAll('[data-app-back]').forEach(b=>{
+      if(!b.innerHTML.trim())b.innerHTML=BACK;
+      b.title=b.title||'Back';
+      b.addEventListener('click',()=>goBack(b.getAttribute('data-app-back')||'/'));
+    });
+  }
+  if(document.readyState==='loading')
+    document.addEventListener('DOMContentLoaded',initBack);
+  else initBack();
+
+  /* Top navbar — horizontal destination strip injected into every page.
+     Hidden on desktop where the admin sidebar exists (body.has-shell);
+     always visible on immersive pages and on mobile. */
+  const PATH_MAP={'/':'dashboard','/chat':'chat','/research':'research',
+    '/roleplay':'roleplay','/agents':'agents','/skills':'skills',
+    '/library':'library','/keys':'keys','/settings':'settings'};
+  function initTopnav(){
+    if(document.querySelector('.app-topnav'))return;
+    const active=PATH_MAP[location.pathname]||null;
+    const nav=document.createElement('nav');
+    nav.className='app-topnav';
+    nav.innerHTML='<a class="tb-brand" href="/">Nova</a>'
+      +NAV.filter(n=>n.href).map(n=>
+        `<a href="${n.href}" class="${n.id===active?'sel':''}">${n.ico}${n.label}</a>`).join('');
+    nav.addEventListener('pointerover',e=>{
+      const a=e.target.closest('a[href]');
+      if(a)prefetch(a.getAttribute('href'));
+    });
+    const host=document.querySelector('.ui-main')
+      ||document.querySelector('.stage')
+      ||document.querySelector('main.main')
+      ||document.body;
+    host.insertBefore(nav,host.firstChild);
+  }
+  if(document.readyState==='loading')
+    document.addEventListener('DOMContentLoaded',initTopnav);
+  else initTopnav();
 
   const _prefetched=new Set();
   /* Warm the browser cache for a destination so the click feels instant.
@@ -47,7 +100,9 @@
   window.AppNav={
     NAV,
     GRID,
+    BACK,
     prefetch,
+    goBack,
     /* Toggle an anchored app-switcher popover on a button click.
        Empty buttons get the grid glyph so any page can wire just an
        <button id="appNavBtn"></button> in the top-left corner. */

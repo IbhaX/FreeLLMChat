@@ -24,6 +24,7 @@
 
   window.AdminShell={
     mount(active){
+      document.body.classList.add('has-shell');
       const nav=document.createElement('aside');
       nav.className='ui-sidenav';nav.id='adminSide';
       nav.innerHTML=sidebarHtml(active);
