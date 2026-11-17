@@ -792,3 +792,566 @@ INFO:     127.0.0.1:62410 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Mod
 INFO:     127.0.0.1:55885 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
 INFO:     127.0.0.1:62410 - "GET /chat HTTP/1.1" 200 OK
 INFO:     127.0.0.1:55885 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56887 - "GET /static/js/research.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57628 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62410 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54075 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /v1/research/runs?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /v1/research/runs?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57297 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49806 - "POST /v1/research/stream HTTP/1.1" 200 OK
+{"ts": "2026-11-18T00:53:11", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:12", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:13", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:13", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:13", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:14", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:15", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:18", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:21", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:21", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:21", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:21", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:21", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:23", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:23", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:23", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:23", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:24", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:24", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:24", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:25", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:25", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:25", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:25", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:29", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:29", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:29", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:30", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:30", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:30", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:30", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:30", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:31", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:31", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:31", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:31", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:35", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:35", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:35", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:35", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:36", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:36", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:36", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:39", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:53:39", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:01", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:01", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:01", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:03", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:04", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:05", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:05", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:07", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:09", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:09", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:11", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:14", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:16", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:19", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:19", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:22", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+{"ts": "2026-11-18T00:54:22", "level": "INFO", "logger": "freellm.agent.tools", "msg": "tool execution completed", "request_id": "-"}
+INFO:     127.0.0.1:56927 - "GET /v1/research/runs?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56536 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56536 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58530 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50904 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57287 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55603 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53406 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56536 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53406 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58530 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57287 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56536 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50904 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55603 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53406 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56536 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58530 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57287 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50904 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55603 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53406 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57287 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50904 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56536 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55603 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58530 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57287 - "GET /static/js/research.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53406 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50904 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50904 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58530 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56536 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55603 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55603 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58530 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56536 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56536 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /v1/research/runs?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50904 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50904 - "GET /v1/research/runs?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57287 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50904 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50904 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50904 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57287 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53406 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56536 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58530 - "GET /static/js/settings.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55603 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58530 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55603 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50904 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57287 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57287 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58530 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55603 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50904 - "GET /v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56536 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50904 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57287 - "GET /admin/memories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58530 - "GET /admin/settings/custom-instructions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56536 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55603 - "GET /admin/stats HTTP/1.1" 200 OK

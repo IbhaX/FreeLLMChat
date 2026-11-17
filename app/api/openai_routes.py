@@ -390,12 +390,16 @@ async def chat_completions(
     from app.api.deps import optional_user, subject_for
     from app.services import usage as _usage
     _user = await optional_user(request)
-    ok, reason = await _usage.check_quota(
-        session, subject_for(_user), "chat", _user.plan if _user else "free")
-    if not ok:
-        raise HTTPException(status_code=429, detail=reason)
-    await _usage.record(session, subject_for(_user), "chat",
-                        model=str(payload.get("model") or ""))
+    # Quotas/metrics are per-user billing; anonymous local traffic is
+    # unlimited so single-tenant installs aren't throttled by shared
+    # 'anon' counters.
+    if _user is not None:
+        ok, reason = await _usage.check_quota(
+            session, subject_for(_user), "chat", _user.plan)
+        if not ok:
+            raise HTTPException(status_code=429, detail=reason)
+        await _usage.record(session, subject_for(_user), "chat",
+                            model=str(payload.get("model") or ""))
     # Commit now: the flush holds SQLite's single write lock, and the
     # memory lookup below is a network call. Holding it any longer locks
     # out every other writer (including this request's own job session).
