@@ -119,6 +119,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def no_cache_html(request, call_next):
+    """HTML pages must revalidate — heuristic caching serves stale UI
+    after deploys. Static assets keep normal caching."""
+    resp = await call_next(request)
+    if "text/html" in resp.headers.get("content-type", ""):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
 app.include_router(openai_router)
 app.include_router(admin_router)
 app.include_router(auth_router)
