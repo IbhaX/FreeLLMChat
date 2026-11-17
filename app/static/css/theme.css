@@ -685,3 +685,15 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.2}
 .app-topnav a svg{width:14px;height:14px;flex:none}
 body:not(.has-shell) .app-topnav{display:flex}
 @media(max-width:820px){.app-topnav{display:flex}}
+/* Mobile: collapse link strip to brand + hamburger */
+.app-topnav .tn-burger{display:none;margin-left:auto;flex:none}
+@media(max-width:820px){
+  .app-topnav .tn-link{display:none}
+  .app-topnav .tn-burger{display:grid}
+}
+
+/* The topnav strip replaces the per-page grid switcher buttons —
+   hide them so pages don't show two app bars. */
+body:has(.app-topnav) .topbar>#appNavBtn,
+body:has(.app-topnav) .st-top>#appNavBtn,
+body:has(.app-topnav) .sh-top-in>#appNavBtn{display:none}

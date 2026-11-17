@@ -1,0 +1,794 @@
+INFO:     Started server process [2164]
+INFO:     Waiting for application startup.
+{"ts": "2026-11-18T00:47:43", "level": "INFO", "logger": "freellm.ollama", "msg": "Ollama found at http://localhost:11434 (v0.40.16) with 3 models", "request_id": "-"}
+{"ts": "2026-11-18T00:47:43", "level": "INFO", "logger": "freellm", "msg": "Seeded/refreshed 21 built-in expert agents", "request_id": "-"}
+C:\Users\albinanthony\AppData\Local\Programs\Python\Python312\Lib\site-packages\astrapy\admin\admin.py:67: UserWarning: SSL connection reuse disabled due to a Python 3.12.[0-11] bug. This may reduce performance under certain workloads. Please upgrade to Python 3.12.12 or newer if possible.
+  from astrapy.utils.api_commander import APICommander
+{"ts": "2026-11-18T00:47:44", "level": "INFO", "logger": "astrapy.data.database", "msg": "findCollections", "request_id": "-"}
+{"ts": "2026-11-18T00:47:46", "level": "INFO", "logger": "astrapy.data.database", "msg": "finished findCollections", "request_id": "-"}
+{"ts": "2026-11-18T00:47:46", "level": "INFO", "logger": "freellm.jobs", "msg": "job runner IN-5CD5127Q8L-3508ce started (poll 1.0s, lease 30s)", "request_id": "-"}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:5000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55377 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55377 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:65284 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58574 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56862 - "GET /static/css/theme.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62533 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50647 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58574 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55377 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62533 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:65284 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50647 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62533 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58574 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:65284 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55377 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50647 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56862 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58574 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62533 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50647 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55377 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:65284 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56862 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:65284 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55377 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62533 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58574 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56862 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50647 - "GET /static/js/app-nav.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62536 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62535 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62537 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62534 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50647 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50647 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58574 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58574 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50647 - "GET /v1/conversations/1jklnuy/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50647 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62545 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50647 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62547 - "HEAD /chat HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:56862 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56862 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56862 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56862 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56862 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56862 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56862 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62564 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62583 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62582 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62584 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62583 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62582 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62585 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62586 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62587 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62584 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62583 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62582 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62585 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62586 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62584 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62583 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62587 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62587 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62583 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62585 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62584 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62582 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62586 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62585 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62583 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62587 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62584 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62586 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62585 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62582 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62582 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62584 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62586 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62585 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62585 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62586 - "GET /v1/conversations/k97tgjr/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62586 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62582 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62582 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62582 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62582 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62582 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62582 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62582 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62582 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62645 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62324 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62324 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62345 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62347 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62350 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62348 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62351 - "GET /static/js/keys.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62351 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62348 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62351 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62348 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57383 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57384 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57385 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57386 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57387 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57388 - "GET /static/js/settings.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57388 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57387 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57386 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57388 - "GET /v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57384 - "GET /admin/memories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57387 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57383 - "GET /admin/settings/custom-instructions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57385 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51673 - "GET /share/LhOHwSQ2EbqP HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51674 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51673 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51676 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51678 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51677 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51679 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51674 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51673 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51676 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51677 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51674 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51673 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51679 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51678 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51676 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51674 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51677 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51679 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51673 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51678 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51676 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51673 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51677 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51679 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51678 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51674 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51674 - "GET /v1/share/LhOHwSQ2EbqP HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49724 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49725 - "GET /static/css/theme.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49726 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49727 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49728 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49729 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49724 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49727 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49726 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49728 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49729 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49724 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49727 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49726 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49725 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49729 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49728 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49724 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49727 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49725 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49726 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49729 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49724 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49728 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49727 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49725 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49724 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49726 - "GET /static/js/app-nav.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49729 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49728 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49728 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49724 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49729 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49729 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49729 - "GET /v1/conversations/k97tgjr/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49726 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49726 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49783 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49784 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49785 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49788 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49786 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49786 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49788 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49786 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49785 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49784 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49788 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49785 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49783 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49788 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49786 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49728 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49784 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49728 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49784 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49786 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49788 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49728 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49784 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49838 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49839 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49840 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49841 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49842 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49843 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49841 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49839 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49838 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49840 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49842 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49838 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49841 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49843 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49840 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49839 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49843 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49842 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49838 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49840 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49841 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49839 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49840 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49843 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49841 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49842 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49838 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49843 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49839 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49840 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:49840 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49838 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49843 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49839 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49839 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49843 - "GET /v1/conversations/k97tgjr/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49843 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49843 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49840 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49840 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49840 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49840 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49840 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49840 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49840 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62086 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62086 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62091 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62092 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62093 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62095 - "GET /static/js/skills.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62093 - "GET /admin/tools HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62094 - "GET /v1/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62094 - "GET /v1/skills/manage HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /admin/tools HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /v1/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /v1/skills/manage HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62091 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62095 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62092 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /static/css/stage.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62093 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62086 - "GET /static/js/roleplay.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62086 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62086 - "GET /v1/roleplay/rooms HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62093 - "GET /v1/roleplay/rooms/1/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62086 - "GET /v1/roleplay/rooms/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62086 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62095 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62091 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62093 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62092 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62086 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62095 - "GET /static/js/agents.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /v1/experts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62086 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62086 - "GET /v1/experts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "GET /v1/agents/runs?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62086 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62093 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62091 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62092 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62095 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62086 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62093 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62092 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62091 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62095 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62086 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62092 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62091 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62093 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62086 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62095 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62092 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62091 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62093 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62086 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62094 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62095 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62091 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62092 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62092 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62094 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62091 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62094 - "GET /v1/conversations/k97tgjr/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /static/css/theme.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/k97tgjr/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/k97tgjr/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/k97tgjr/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /v1/conversations/k97tgjr/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/research.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /v1/research/runs?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/research/runs?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/css/stage.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/roleplay.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/roleplay/rooms HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /v1/roleplay/rooms/1/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/roleplay/rooms/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/agents.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /v1/experts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/experts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/agents/runs?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/skills.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /admin/tools HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /v1/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /v1/skills/manage HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /admin/tools HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/skills/manage HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/library.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /v1/knowledge/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/knowledge/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /v1/knowledge/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/knowledge/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/keys.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/settings.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /admin/settings/custom-instructions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /admin/memories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57967 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57961 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57967 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57961 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57969 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57968 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57960 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57966 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57969 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57960 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/k97tgjr/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57968 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57966 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51573 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET /static/css/theme.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51573 - "GET /static/css/render.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63958 - "GET /static/css/activity.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62109 - "GET /static/js/render/ns.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58603 - "GET /static/js/render/MarkdownRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56188 - "GET /static/js/render/ComponentRegistry.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51573 - "GET /static/js/render/ResponseClassifier.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51357 - "GET /static/js/render/CodeRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63958 - "GET /static/js/render/ChartRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56188 - "GET /static/js/render/PersonCard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62109 - "GET /static/js/render/TableRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58603 - "GET /static/js/render/ListRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51573 - "GET /static/js/render/Cards.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51357 - "GET /static/js/render/JsonViewer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56188 - "GET /static/js/render/StatusRenderers.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63958 - "GET /static/js/render/ActivityLog.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51357 - "GET /static/js/render/DiagramRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58603 - "GET /static/js/render/InteractiveRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62109 - "GET /static/js/render/MediaRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51573 - "GET /static/js/render/Visuals.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58603 - "GET /static/js/render/StreamingRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63958 - "GET /static/js/render/MessageActions.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51573 - "GET /static/js/app-nav.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET /static/js/render/ResponseRenderer.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56188 - "GET /static/js/render/SuggestedPrompts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62109 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51357 - "GET /static/js/wizard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:58603 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63958 - "GET /static/js/chat.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63958 - "GET /v1/characters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58603 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET /v1/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58603 - "GET /v1/conversations/1jklnuy/live HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET /v1/conversations/1kjej04 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET /v1/conversations/buxxor0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51357 - "GET /v1/conversations/16h49gj HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63958 - "GET /v1/models?usable=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63958 - "PUT /v1/conversations/1jklnuy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63958 - "PUT /v1/conversations/bevccar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63958 - "PUT /v1/conversations/4e27roc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63958 - "PUT /v1/conversations/k97tgjr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63958 - "PUT /v1/conversations/l9ey79k HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63958 - "PUT /v1/conversations/atd2vea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52034 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52034 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:50237 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56845 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62690 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:65258 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51192 - "GET /static/js/admin-shell.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51192 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65258 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62690 - "GET /agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56845 - "GET /research HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50237 - "GET /roleplay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52034 - "GET /skills HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51192 - "GET /library HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62690 - "GET /keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50237 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54723 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59096 - "GET /admin/keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53255 - "GET /admin/requests?limit=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60566 - "GET /admin/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54723 - "GET /admin/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56887 - "GET /static/css/theme.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57628 - "GET /static/js/theme.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:54075 - "GET /static/js/api.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57297 - "GET /static/js/app-nav.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /static/js/admin-shell.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55885 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:62410 - "GET /chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55885 - "GET / HTTP/1.1" 200 OK

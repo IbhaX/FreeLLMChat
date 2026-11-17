@@ -228,6 +228,77 @@ async def _web_search(query: str, max_results: int = 5) -> str:
         return f"search error: {type(e).__name__}: {e}"
 
 
+# ---------- Exa neural search (keyed, low-cost tier) ----------
+
+_EXA_KEY_CACHE: str | None = None
+
+
+async def _exa_api_key() -> str:
+    """Resolve the Exa key: EXA_API_KEY env first, then the settings table
+    key ``exa_api_key`` (admin-set via /admin/settings if present)."""
+    global _EXA_KEY_CACHE
+    import os
+    env = os.environ.get("EXA_API_KEY", "").strip()
+    if env:
+        return env
+    if _EXA_KEY_CACHE is not None:
+        return _EXA_KEY_CACHE
+    try:
+        from app.db import get_session_factory
+        from sqlalchemy import select
+        from app.models import Setting
+        async with get_session_factory()() as s:
+            row = (await s.execute(
+                select(Setting).where(Setting.key == "exa_api_key"))
+            ).scalar_one_or_none()
+            _EXA_KEY_CACHE = (row.value or "") if row else ""
+    except Exception:
+        _EXA_KEY_CACHE = ""
+    return _EXA_KEY_CACHE
+
+
+async def _exa_search(query: str, num_results: int = 5,
+                      contents: str = "none") -> str:
+    """Exa neural/semantic web search — higher-quality results than
+    keyword scraping. Default ``contents=none`` keeps it on Exa's
+    cheapest metadata-only tier; pass ``highlights`` or ``text`` only
+    when snippets/page text are actually needed."""
+    key = await _exa_api_key()
+    if not key:
+        return ("exa_search unavailable: no EXA_API_KEY configured. "
+                "Use web_search instead.")
+    body: dict[str, Any] = {
+        "query": query,
+        "numResults": max(1, min(int(num_results or 5), 10)),
+        "type": "auto",
+    }
+    if contents in ("highlights", "text"):
+        body["contents"] = {contents: {"maxCharacters": 1000}}
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(
+                "https://api.exa.ai/search", json=body,
+                headers={"x-api-key": key, "Content-Type": "application/json"})
+        if r.status_code != 200:
+            return f"exa_search error: HTTP {r.status_code} {r.text[:200]}"
+        data = r.json()
+        parts: list[str] = []
+        for i, res in enumerate(data.get("results") or [], 1):
+            title = res.get("title") or res.get("url") or "untitled"
+            entry = f"{i}. {title}\n   {res.get('url')}"
+            if res.get("publishedDate"):
+                entry += f"\n   {res['publishedDate'][:10]}"
+            for h in (res.get("highlights") or [])[:2]:
+                entry += f"\n   {h[:240]}"
+            txt = (res.get("text") or "")[:400]
+            if txt:
+                entry += f"\n   {txt}"
+            parts.append(entry)
+        return "\n".join(parts) or "No results found."
+    except Exception as e:
+        return f"exa_search error: {type(e).__name__}: {e}"
+
+
 # ---------- media generation ----------
 
 _MEDIA_DIR = None
@@ -355,6 +426,29 @@ TOOLS: dict[str, Tool] = {
                 "required": ["query"],
             },
             execute=_web_search,
+        ),
+        Tool(
+            name="exa_search",
+            icon="🔎",
+            description=(
+                "Exa neural/semantic web search — higher-quality results "
+                "than keyword scraping. Requires EXA_API_KEY; cheapest "
+                "metadata-only tier by default (no page contents). Use "
+                "web_search when no key is configured."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "search query"},
+                    "num_results": {"type": "integer", "default": 5},
+                    "contents": {
+                        "type": "string", "default": "none",
+                        "enum": ["none", "highlights", "text"],
+                        "description": "none=cheapest; highlights/text cost more"},
+                },
+                "required": ["query"],
+            },
+            execute=_exa_search,
         ),
         Tool(
             name="http_get",

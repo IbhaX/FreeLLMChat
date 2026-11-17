@@ -57,9 +57,11 @@
     nav.className='app-topnav';
     nav.innerHTML='<a class="tb-brand" href="/">Nova</a>'
       +NAV.filter(n=>n.href).map(n=>
-        `<a href="${n.href}" class="${n.id===active?'sel':''}">${n.ico}${n.label}</a>`).join('');
+        `<a class="tn-link${n.id===active?' sel':''}" href="${n.href}">${n.ico}${n.label}</a>`).join('')
+      +'<button class="tn-burger ui-btn ui-btn-ghost ui-btn-icon" title="Apps — all pages"></button>';
+    AppNav.attach(nav.querySelector('.tn-burger'),active);
     nav.addEventListener('pointerover',e=>{
-      const a=e.target.closest('a[href]');
+      const a=e.target.closest('a.tn-link');
       if(a)prefetch(a.getAttribute('href'));
     });
     const host=document.querySelector('.ui-main')
