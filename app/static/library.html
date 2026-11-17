@@ -9,7 +9,7 @@
 <script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
 <style>
   .lb-grid{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
-  @media(max-width:860px){.lb-grid{grid-template-columns:1fr}}
+  @media(max-width:860px){.lb-grid{grid-template-columns:minmax(0,1fr)}}
   .lb-hit{border-left:3px solid var(--accent-line);padding:8px 12px;margin-bottom:8px;background:var(--surface-2);border-radius:0 var(--r-md) var(--r-md) 0}
 </style>
 </head>
