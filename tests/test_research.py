@@ -21,6 +21,30 @@ def test_extract_json_variants():
     assert R._extract_json('[{"verdict": "supported"}]') == {"items": [{"verdict": "supported"}]}
 
 
+def test_merge_findings_does_not_borrow_other_workers_source_ids() -> None:
+    st = R.ResearchState()
+
+    def finding(sources: list[dict[str, str]]) -> dict[str, object]:
+        return {"findings": [{"claim": "c", "evidence": "e", "source_id": "s1"}],
+                "sources": sources}
+
+    R._merge_findings(st, finding(
+        [{"id": "s1", "url": "https://example.org/one"}]), "q1")
+    R._merge_findings(st, finding([]), "q2")
+    nested = finding([])
+    R._merge_findings(st, {
+        "answer": {"findings": nested["findings"]},
+        "sources": [{"id": "s1", "url": "https://example.org/three"}],
+    }, "q3")
+
+    by_q = {f.sub_question: f.source_id for f in st.findings}
+    assert by_q["q1"] == "s1"
+    assert by_q["q2"] == ""
+    assert by_q["q3"] == "q3:s1"
+    assert st.sources["q3:s1"].url == "https://example.org/three"
+    assert st.sources["s1"].url == "https://example.org/one"
+
+
 def test_merge_and_score_sources():
     st = R.ResearchState()
     R._merge_findings(st, {
@@ -254,6 +278,43 @@ def test_research_one_reraises_outage(monkeypatch):
     assert not st.findings
 
 
+def _failover_calls(monkeypatch, status):
+    import asyncio
+    from app.gateway import GatewayExhausted
+    import app.services.tools as tools
+
+    calls: list[str] = []
+
+    async def _tool_loop(gateway, session, payload, *a, **kw):
+        calls.append(payload["model"])
+        if payload["model"] == "groq/a":
+            raise GatewayExhausted("boom", status)
+        return {"choices": [{"message": {"content":
+            '{"findings": [{"claim": "ok", "evidence": "e", "source_id": "",'
+            ' "confidence": "low"}], "sources": []}'}}]}
+    monkeypatch.setattr(tools, "run_tool_loop", _tool_loop)
+    models = ["groq/a", "groq/b", "openrouter/free", "auto"]
+    unavailable: set[str] = set()
+    for qid in ("q1", "q2"):
+        asyncio.run(R._research_one(
+            _FakeGateway(), None, models, {"id": qid, "question": "why?"},
+            "standard", R.ResearchState(), lambda ev: None,
+            unavailable=unavailable))
+    return calls, unavailable
+
+
+def test_research_one_429_skips_provider_for_next_worker(monkeypatch):
+    calls, unavailable = _failover_calls(monkeypatch, 429)
+    assert calls == ["groq/a", "openrouter/free", "openrouter/free"]
+    assert unavailable == {"groq/a", "groq/b"}
+
+
+def test_research_one_404_skips_only_affected_model(monkeypatch):
+    calls, unavailable = _failover_calls(monkeypatch, 404)
+    assert calls == ["groq/a", "groq/b", "groq/b"]
+    assert unavailable == {"groq/a"}
+
+
 def test_clean_answer_fallback_groups_with_numbered_citations():
     st = R.ResearchState()
     st.plan = {"sub_questions": [{"id": "q1", "question": "How does REST work?"},
@@ -349,25 +410,35 @@ def test_merge_findings_alternate_shapes():
     assert "s1" in st2.sources
 
 
-def test_research_one_salvages_wrong_shape_json(monkeypatch):
+@pytest.mark.parametrize("reply,expect_finding,expect_unverified", [
+    ('{"findings": [], "sources": [], "not_found": ["x"]}', False, False),
+    ('{"findings": [{"claim": "cut off', False, False),
+    ('{"report": "Plato wrote about love."}', False, False),
+    ("Plato wrote about love in the Symposium.", True, True),
+])
+def test_research_one_raw_json_never_becomes_finding(
+        monkeypatch, reply, expect_finding, expect_unverified):
     import asyncio
 
     async def _tool_loop(*a, **kw):
-        return {"choices": [{"message": {"content":
-            '{"report": "Plato wrote about love in the Symposium.",'
-            ' "notes": ["eros vs agape"]}'}}]}
+        return {"choices": [{"message": {"content": reply}}]}
     import app.services.tools as tools
     monkeypatch.setattr(tools, "run_tool_loop", _tool_loop)
 
     st = R.ResearchState()
-    notes = []
+    events = []
     asyncio.run(R._research_one(
         _FakeGateway(), None, ["m1"],
         {"id": "q1", "question": "love in Greek philosophy?"}, "standard",
-        st, lambda ev: notes.append(ev)))
-    assert st.findings, "valid-but-wrong-shape JSON must still salvage a finding"
-    assert "Plato" in st.findings[0].claim
-    assert any("no findings key" in u for u in st.unverified)
+        st, events.append))
+    assert bool(st.findings) == expect_finding
+    assert any("non-JSON" in u for u in st.unverified) == expect_unverified
+    assert any(e.get("event") == "finding" or "finding" in str(e.get("event"))
+               for e in events) == expect_finding
+    if expect_finding:
+        assert "Plato" in st.findings[0].claim
+    else:
+        assert any("no usable findings" in str(e.get("text")) for e in events)
 
 
 def test_atomize_findings_splits_and_dedupes():

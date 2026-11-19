@@ -1,0 +1,10 @@
+<script>
+(function(){
+  const root=document.documentElement;
+  const fallback={{default_theme}};
+  root.dataset.defaultTheme=fallback;
+  let selected=fallback;
+  try{selected=localStorage.getItem('ui-theme')||fallback;}catch(error){}
+  root.dataset.theme=selected;
+})();
+</script>

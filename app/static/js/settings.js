@@ -6,11 +6,24 @@ let PROVIDERS=[];
 
 // theme segmented control
 function syncThemeSeg(){
-  document.querySelectorAll('#themeSeg button').forEach(b=>
-    b.classList.toggle('sel',b.dataset.t===UITheme.get()));
+  document.querySelectorAll('#themeSeg button').forEach(b=>{
+    const selected=b.dataset.t===UITheme.get();
+    b.classList.toggle('sel',selected);
+    b.setAttribute('aria-pressed',String(selected));
+  });
 }
-document.querySelectorAll('#themeSeg button').forEach(b=>
-  b.onclick=()=>{UITheme.set(b.dataset.t);syncThemeSeg();});
+const themeSeg=document.getElementById('themeSeg');
+if(themeSeg){
+  themeSeg.replaceChildren(...UITheme.registry.map(theme=>{
+    const button=document.createElement('button');
+    button.type='button';
+    button.dataset.t=theme.id;
+    button.textContent=theme.label;
+    button.onclick=()=>UITheme.set(theme.id);
+    return button;
+  }));
+}
+window.addEventListener('nova:themechange',syncThemeSeg);
 syncThemeSeg();
 
 // connection

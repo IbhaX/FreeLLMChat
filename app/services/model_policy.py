@@ -30,8 +30,8 @@ _PREFERRED: dict[str, tuple[str, ...]] = {
     # General internal work (researcher, synthesist, default expert).
     "general": (
         "groq/llama-3.3-70b-versatile",
-        "groq/openai/gpt-oss-120b",
         "openrouter/openrouter/free",
+        "groq/openai/gpt-oss-120b",
     ),
     # Code generation / review / debugging.
     "coding": (

@@ -643,10 +643,31 @@ async def _plan(
     return plan
 
 
+def _unavailable_after(
+    err: BaseException, cand: str, candidates: list[str],
+) -> set[str]:
+    """Candidates a sibling researcher can skip after ``err`` on ``cand``:
+    the whole provider for exhausted/unavailable (429/503), only the model
+    for not-found (404). ``auto*`` is never marked."""
+    from app.gateway import GatewayExhausted
+
+    if not isinstance(err, GatewayExhausted) or cand.startswith("auto"):
+        return set()
+    if err.last_status == 404:
+        return {cand}
+    if err.last_status in (429, 503) and "/" in cand:
+        provider = cand.split("/", 1)[0]
+        return {c for c in candidates
+                if not c.startswith("auto") and c.split("/", 1)[0] == provider
+                and "/" in c}
+    return set()
+
+
 async def _research_one(
     gateway: Any, session: Any, model: str | list[str], sq: dict[str, Any],
     depth: str, state: ResearchState, emit: Emit,
     task_ns: str = "sq",
+    unavailable: set[str] | None = None,
 ) -> None:
     from app.services.tools import run_tool_loop
 
@@ -707,6 +728,8 @@ async def _research_one(
     result: dict[str, Any] | None = None
     outage: Exception | None = None
     for cand in candidates:
+        if unavailable is not None and cand in unavailable:
+            continue
         payload["model"] = cand
         try:
             if factory is not None:
@@ -734,6 +757,8 @@ async def _research_one(
         except Exception as e:
             if _is_outage(e):
                 outage = e
+            if unavailable is not None:
+                unavailable.update(_unavailable_after(e, cand, candidates))
             emit({"event": "note",
                   "text": f"{qid} failed ({cand}): {str(e)[:120]}"})
     if result is None:
@@ -753,20 +778,15 @@ async def _research_one(
     merged_before = len(state.findings)
     if data is not None:
         _merge_findings(state, data, qid)
-    if len(state.findings) == merged_before and text.strip():
-        # Weak model ignored the JSON contract — or returned VALID JSON in a
-        # different shape ({\"results\": …}, {\"answer\": …}). Keep the reply
-        # as an unverified finding instead of dropping the research; also
-        # carry any sources the JSON did give so citations still resolve.
-        salvage = {
-            "findings": [{"claim": text.strip()[:600], "evidence": "",
-                          "source_id": "", "confidence": "low"}],
-            "sources": (data or {}).get("sources") or [],
-        }
-        _merge_findings(state, salvage, qid)
-        state.unverified.append(
-            f"{qid}: researcher output had no findings key" if data is not None
-            else f"{qid}: researcher returned non-JSON output")
+    prose = text.strip()
+    if (data is None and len(state.findings) == merged_before and prose
+            and not prose.startswith(('{', '[', '```'))
+            and not re.search(r'"(?:findings|sources|conflicts|not_found)"\s*:', prose)):
+        _merge_findings(state, {"findings": [{
+            "claim": prose[:600], "evidence": "", "source_id": "",
+            "confidence": "low",
+        }]}, qid)
+        state.unverified.append(f"{qid}: researcher returned non-JSON output")
     if len(state.findings) == merged_before:
         emit({"event": "note",
               "text": f"{qid}: researcher returned no usable findings"})
@@ -851,8 +871,12 @@ def _merge_findings_sources_only(
                 canon_to_id[canon] = ns
 
 
-def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> None:
-    id_map: dict[str, str] = {}
+def _merge_findings(
+    state: ResearchState, data: dict[str, Any], qid: str,
+    *, id_map: dict[str, str] | None = None,
+) -> None:
+    if id_map is None:
+        id_map = {}
     _merge_findings_sources_only(state, data.get("sources") or [], qid, id_map)
     # Accept alternate shapes too — models often nest findings under
     # "results"/"items"/"claims" or inside an "answer"/"data" object.
@@ -867,7 +891,7 @@ def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> Non
                     "response", "output"):
             v = data.get(key)
             if isinstance(v, dict):
-                _merge_findings(state, v, qid)
+                _merge_findings(state, v, qid, id_map=id_map)
                 return
             if isinstance(v, list) and v and all(
                     isinstance(x, dict) for x in v):
@@ -889,7 +913,7 @@ def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> Non
             raw_sid = str(f.get("source_id") or f.get("source") or "")
             state.findings.append(Finding(
                 claim=str(claim), evidence=str(f.get("evidence") or f.get("detail") or ""),
-                source_id=id_map.get(raw_sid, raw_sid),
+                source_id=id_map.get(raw_sid, ""),
                 confidence=str(f.get("confidence") or ""), sub_question=qid,
                 result_id=f"find:{qid}:{len(state.findings) + 1:03d}",
             ))
@@ -2143,12 +2167,15 @@ async def run_research(
                              messages[:-1], emit, prior=prior)
     _cache_put(conv, "plan", question, state.plan)
 
+    unavailable: set[str] = set()
+
     async def research_round(sqs: list[dict[str, Any]],
                              ns: str = "sq") -> None:
         tasks = [
             asyncio.create_task(_research_one(
                 gateway, session, researcher_model, sq, state.depth,
-                state, emit, task_ns=ns))
+                state, emit, task_ns=ns,
+                unavailable=unavailable))
             for sq in sqs
         ]
         try:

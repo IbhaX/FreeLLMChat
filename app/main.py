@@ -10,7 +10,6 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
-from fastapi.staticfiles import StaticFiles
 
 from app.api.admin_routes import router as admin_router
 from app.api.agent_routes import admin_router as agent_admin_router
@@ -31,6 +30,7 @@ from app.db import close_db, get_session_factory, init_db
 from app.gateway import Gateway
 from app.logging_config import setup_logging
 from app.providers.registry import seed_providers
+from app.web.pages import VersionedStaticFiles, render_page
 
 
 @asynccontextmanager
@@ -165,7 +165,7 @@ static_dir = BASE_DIR / "app" / "static"
 static_dir.mkdir(parents=True, exist_ok=True)
 
 
-class RevalidatingStaticFiles(StaticFiles):
+class RevalidatingStaticFiles(VersionedStaticFiles):
     """Static files that browsers must revalidate on every load.
 
     ETag/Last-Modified still yield cheap 304s, but edits to JS/CSS are picked
@@ -198,53 +198,53 @@ async def media_file(fname: str):
 
 
 @app.get("/", include_in_schema=False)
-async def dashboard():
-    return FileResponse(static_dir / "dashboard.html")
+async def dashboard() -> Response:
+    return render_page(static_dir=static_dir, name="dashboard.html")
 
 
 @app.get("/chat", include_in_schema=False)
-async def chat():
-    return FileResponse(static_dir / "chat.html")
+async def chat() -> Response:
+    return render_page(static_dir=static_dir, name="chat.html")
 
 
 @app.get("/keys", include_in_schema=False)
-async def keys_page():
-    return FileResponse(static_dir / "keys.html")
+async def keys_page() -> Response:
+    return render_page(static_dir=static_dir, name="keys.html")
 
 
 @app.get("/settings", include_in_schema=False)
-async def settings_page():
-    return FileResponse(static_dir / "settings.html")
+async def settings_page() -> Response:
+    return render_page(static_dir=static_dir, name="settings.html")
 
 
 @app.get("/research", include_in_schema=False)
-async def research_page():
-    return FileResponse(static_dir / "research.html")
+async def research_page() -> Response:
+    return render_page(static_dir=static_dir, name="research.html")
 
 
 @app.get("/roleplay", include_in_schema=False)
-async def roleplay_page():
-    return FileResponse(static_dir / "roleplay.html")
+async def roleplay_page() -> Response:
+    return render_page(static_dir=static_dir, name="roleplay.html")
 
 
 @app.get("/agents", include_in_schema=False)
-async def agents_page():
-    return FileResponse(static_dir / "agents.html")
+async def agents_page() -> Response:
+    return render_page(static_dir=static_dir, name="agents.html")
 
 
 @app.get("/skills", include_in_schema=False)
-async def skills_page():
-    return FileResponse(static_dir / "skills.html")
+async def skills_page() -> Response:
+    return render_page(static_dir=static_dir, name="skills.html")
 
 
 @app.get("/library", include_in_schema=False)
-async def library_page():
-    return FileResponse(static_dir / "library.html")
+async def library_page() -> Response:
+    return render_page(static_dir=static_dir, name="library.html")
 
 
 @app.get("/share/{share_id}", include_in_schema=False)
-async def share_page(share_id: str):
-    return FileResponse(static_dir / "share.html")
+async def share_page(share_id: str) -> Response:
+    return render_page(static_dir=static_dir, name="share.html")
 
 
 @app.get("/healthz")
