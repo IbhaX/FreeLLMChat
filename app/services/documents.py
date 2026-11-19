@@ -8,6 +8,7 @@ available. No external service is required for the basic path.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import math
 import re
@@ -125,6 +126,14 @@ async def ingest(session: Any, *, name: str, data: bytes,
     text = extract_text(name, data)
     if not text.strip():
         raise ValueError("no readable text found in the file")
+    chunks: list[str] = []
+    embeds: list[Any] = []
+    failure: Optional[Exception] = None
+    try:
+        chunks = chunk_text(text)
+        embeds = await asyncio.to_thread(_embed, chunks)
+    except Exception as e:  # keep the row; status surfaces the failure
+        failure = e
     doc = Document(name=name[:256], size=len(data),
                    mime=ext_of(name).lstrip("."), owner_id=owner_id,
                    collection_id=collection_id, status="processing",
@@ -132,8 +141,8 @@ async def ingest(session: Any, *, name: str, data: bytes,
     session.add(doc)
     await session.flush()
     try:
-        chunks = chunk_text(text)
-        embeds = _embed(chunks)
+        if failure is not None:
+            raise failure
         for i, (c, e) in enumerate(zip(chunks, embeds)):
             session.add(DocumentChunk(
                 document_id=doc.id, ord=i, text=c, embedding=e,

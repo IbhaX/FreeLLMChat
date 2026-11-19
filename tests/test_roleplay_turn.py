@@ -316,3 +316,89 @@ def test_persona_turn_never_searches_in_tools_room(session_factory, monkeypatch)
     _run(go())
     assert seen_tools == [False]
     assert prefetches == []
+
+
+def _responder_room(last_speaker_id: int | None) -> RoleplayRoom:
+    msgs = [{"id": "u1", "role": "user", "kind": "talk", "speaker": "You",
+             "text": "hello"}]
+    if last_speaker_id is not None:
+        msgs.insert(0, {"id": "c1", "role": "character", "kind": "dialogue",
+                        "speaker": "x", "character_id": last_speaker_id,
+                        "text": "greetings"})
+    return RoleplayRoom(name="r", messages=msgs)
+
+
+@pytest.mark.parametrize("text,last_is_kaito,expected", [
+    ("Kaito, what do you think of this?", False, "Kaito Sensei"),
+    ("why are you not replying?", True, "Kaito Sensei"),
+    ("NOVA, why are you not replying?", True, "NOVA"),
+    ("Sensei, hello?", True, "NOVA"),
+])
+def test_pick_responder_scores_names_and_followups(
+        session_factory, text, last_is_kaito, expected):
+    nova = Character(id=1, name="NOVA", personality="x")
+    kaito = Character(id=2, name="Kaito Sensei", personality="y")
+    room = _responder_room(2 if last_is_kaito else 1)
+
+    class _NoRouter:
+        pass
+
+    async def go():
+        return await roleplay._pick_responder(
+            _NoRouter(), None, room, [nova, kaito], text)
+    assert _run(go()).name == expected
+
+
+def _archive_run(session_factory, monkeypatch, *, owner_id, text, sources):
+    from app.services import documents
+
+    calls: list[dict] = []
+
+    async def fake_ingest(session, **kw):
+        calls.append(kw)
+
+    async def fake_prefetch(*a, **k):
+        return "ctx", sources
+
+    monkeypatch.setattr(documents, "ingest", fake_ingest)
+    monkeypatch.setattr(roleplay, "_research_prefetch", fake_prefetch)
+
+    async def go():
+        async with session_factory() as s:
+            sher, _ = _mk_cast(s)
+            await s.flush()
+            room = RoleplayRoom(name="r", character_ids=[sher.id],
+                                tools_enabled=True, owner_id=owner_id,
+                                messages=[])
+            s.add(room)
+            await s.commit()
+            rid = room.id
+        gw = _FakeGW(["Findings stand [1]."])
+        await _collect(roleplay.turn_stream(
+            gw, session_factory, rid, kind="talk", text=text))
+        return rid
+    rid = _run(go())
+    return rid, calls
+
+
+def test_research_reply_is_archived_for_owned_room(session_factory, monkeypatch):
+    src = [{"title": "Primary", "url": "https://example.org/primary"}]
+    rid, calls = _archive_run(session_factory, monkeypatch, owner_id=7,
+                              text="research the baseline please", sources=src)
+    assert len(calls) == 1
+    kw = calls[0]
+    assert kw["owner_id"] == 7 and kw["collection_id"] is None
+    assert kw["name"].startswith(f"Roleplay research {rid}-")
+    body = kw["data"].decode("utf-8")
+    assert "Findings stand" in body and "https://example.org/primary" in body
+    assert "research the baseline please" not in body
+
+
+def test_research_reply_not_archived_for_anonymous_or_plain(session_factory, monkeypatch):
+    src = [{"title": "Primary", "url": "https://example.org/primary"}]
+    _, anon = _archive_run(session_factory, monkeypatch, owner_id=None,
+                           text="research the baseline please", sources=src)
+    assert anon == []
+    _, plain = _archive_run(session_factory, monkeypatch, owner_id=7,
+                            text="hello there", sources=src)
+    assert plain == []

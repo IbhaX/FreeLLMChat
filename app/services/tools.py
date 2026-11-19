@@ -575,14 +575,24 @@ async def _execute_tool_call(tc: dict[str, Any]) -> tuple[str, str, dict[str, An
         logger.info("tool execution completed", extra={
             "tool_name": name,
             "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-            "success": not output.lower().startswith(("error:", "tool error:", "fetch error:")),
+            "success": not output.lower().startswith((
+                "error:", "tool error:", "fetch error:",
+                "exa_search error", "exa_search unavailable")),
         })
     except TimeoutError:
         output = "tool error: execution timed out after 30 seconds"
-        logger.warning("tool execution timed out", extra={"tool_name": name})
+        logger.warning("tool execution timed out", extra={
+            "tool_name": name,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            "success": False,
+        })
     except Exception as exc:
         output = f"tool error: {type(exc).__name__}: {exc}"
-        logger.exception("tool execution failed", extra={"tool_name": name})
+        logger.exception("tool execution failed", extra={
+            "tool_name": name,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            "success": False,
+        })
     return call_id, name, args, output
 
 

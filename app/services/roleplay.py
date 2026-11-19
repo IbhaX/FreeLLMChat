@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import re
 import secrets
 from collections.abc import AsyncIterator
@@ -453,6 +454,30 @@ def _research_query(user_text: str, prior: list[dict[str, Any]],
     return query[:400]
 
 
+def _research_archive_markdown(text: str, sources: list[dict[str, Any]]) -> str:
+    lines = [text.strip(), "", "## Sources", ""]
+    lines += [f"- {s.get('title') or s['url']} — {s['url']}" for s in sources]
+    return "\n".join(lines) + "\n"
+
+
+async def _archive_research(session_factory: Any, room: RoleplayRoom,
+                            mid: str, text: str,
+                            sources: list[dict[str, Any]]) -> None:
+    """Best-effort Library copy of a researched reply (owned rooms only)."""
+    from app.services import documents
+    try:
+        async with session_factory() as doc_session:
+            await documents.ingest(
+                doc_session, name=f"Roleplay research {room.id}-{mid}.md",
+                data=_research_archive_markdown(text, sources).encode("utf-8"),
+                owner_id=room.owner_id, collection_id=None)
+            await doc_session.commit()
+    except Exception:
+        logging.getLogger("freellm.roleplay").warning(
+            "research archive failed", extra={"request_id": f"rp:{room.id}"},
+            exc_info=True)
+
+
 async def _research_prefetch(
     gateway: Any, session: Any, user_text: str, room: RoleplayRoom,
     char: Any, *, emit: Any,
@@ -548,40 +573,76 @@ def _is_pass(text: str) -> bool:
     return text.strip().upper().startswith("PASS")
 
 
+_HONORIFICS = frozenset({
+    "sensei", "sir", "doctor", "dr", "mr", "mrs", "ms", "miss", "lady",
+    "lord", "master", "madam"})
+_SECOND_PERSON_RE = re.compile(r"\b(?:you|your|yours|yourself)\b", re.I)
+
+
+def _responder_scores(room: RoleplayRoom, live: list[Character],
+                      text: str) -> dict[int, int]:
+    """Deterministic addressing signals: full name 100, distinctive name
+    token 60, second-person follow-up to the last character who spoke 25."""
+    scores = {c.id: 0 for c in live}
+    for c in live:
+        name = (c.name or "").strip()
+        if name and re.search(rf"\b{re.escape(name)}\b", text, re.I):
+            scores[c.id] += 100
+            continue
+        tokens = [t for t in re.findall(r"[A-Za-z0-9']+", name)
+                  if len(t) >= 3 and t.lower() not in _HONORIFICS]
+        if any(re.search(rf"\b{re.escape(t)}\b", text, re.I) for t in tokens):
+            scores[c.id] += 60
+    if _SECOND_PERSON_RE.search(text):
+        last = next((int(m.get("character_id") or 0)
+                     for m in reversed(room.messages or [])
+                     if m.get("role") == "character"), None)
+        if last in scores:
+            scores[last] += 25
+    return scores
+
+
 async def _pick_responder(
     gateway: Any, session: Any, room: RoleplayRoom,
     live: list[Character], text: str, emit: Any = None,
 ) -> Character:
     """Choose the single character the player's beat is addressed to.
 
-    Order: explicit name mention → only live character → a tiny router
-    call (best effort) → least-recently-spoke rotation, so every cast
-    member gets the stage over time.
+    Order: only live character → scored name/follow-up signals → a tiny
+    router call (best effort) → least-recently-spoke rotation, so every
+    cast member gets the stage over time.
     """
-    for c in live:
-        first = (c.name or "").split()[0] if c.name else ""
-        if first and re.search(rf"\b{re.escape(first)}\b", text, re.I):
-            return c
     if len(live) == 1:
         return live[0]
+    scores = _responder_scores(room, live, text)
+    best = max(scores.values(), default=0)
+    if best > 0:
+        return next(c for c in live if scores[c.id] == best)
     try:
         cast = "\n".join(
             f"{c.id}: {c.name} — {c.tagline or c.category or ''}"
+            + (f" ({c.knowledge_domain})" if c.knowledge_domain else "")
             for c in live)
+        recent = "\n".join(
+            f"{m.get('speaker') or m.get('role')}: "
+            f"{str(m.get('text') or '')[:250]}"
+            for m in (room.messages or [])[-6:])
         payload = {"messages": [
             {"role": "system", "content":
-             "You direct a roleplay scene. Given the cast and the player's "
-             "latest line, reply with ONLY the id of the single character "
-             "who should respond first.\nCast:\n" + cast},
-            {"role": "user", "content": text}],
+             "You direct a roleplay scene. Given the cast, the recent "
+             "transcript and the player's latest line, reply with ONLY the "
+             "id of the single character who should respond first.\nCast:\n"
+             + cast},
+            {"role": "user", "content":
+             f"Recent transcript:\n{recent}\n\nLatest line: {text}"}],
             "temperature": 0}
         from app.services.model_policy import internal_chat
         res = await internal_chat(gateway, session, payload,
                                   requested=room.model or "auto",
                                   role="general", retries=0)
         if res.ok and res.text:
-            m = re.search(r"\d+", res.text)
-            pick = next((c for c in live if m and c.id == int(m.group())),
+            m = re.fullmatch(r"\s*(\d+)\s*\.?\s*", res.text)
+            pick = next((c for c in live if m and c.id == int(m.group(1))),
                         None)
             if pick:
                 return pick
@@ -624,7 +685,7 @@ _PRONOUN_RE = re.compile(
 
 _DOSSIER_RE = re.compile(
     r"\b(?:who\s+(?:is|was)|biograph\w*|dossier|life\s+(?:history|story)|"
-    r"full\s+profile|complete\s+profile|everything\s+about|in[- ]depth|"
+    r"full\s+profile|complete\s+profile|everything\s+about|in[- ]depth|find\s+(?:all|everything)\s+about|"
     r"work\s*life|career\s+history)\b", re.I)
 
 
@@ -1096,6 +1157,10 @@ async def turn_stream(
             room.messages = (list(room.messages or []) + [msg])[-MAX_STORED:]
             session.add(room)
             await session.commit()
+            if (research and not reacting and fin.sources
+                    and room.owner_id is not None):
+                await _archive_research(session_factory, room, mid, text,
+                                        fin.sources)
             yield _sse({"event": "char_end", "id": mid, "text": text,
                         "env_text": env_text or None,
                         "sources": fin.sources or None,

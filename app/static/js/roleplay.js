@@ -14,6 +14,18 @@
     `background-image:url(${esc(c.avatar_url)});background-size:cover`:''}">${c&&c.avatar_url?'':esc(c&&c.emoji||'🎭')}</div>`;
   const charById=id=>chars.find(c=>c.id===id);
   const scroll=()=>{const s=$('#scroll');s.scrollTop=s.scrollHeight;};
+  let alignedTop=null;
+  function alignTurn(el,target=el){
+    const s=$('#scroll');
+    s.style.setProperty('--st-tail-space',`${s.clientHeight}px`);
+    s.scrollTop+=target.getBoundingClientRect().top-s.getBoundingClientRect().top-12;
+    alignedTop=s.scrollTop;
+  }
+  function readerStayed(){
+    const s=$('#scroll');
+    return alignedTop==null||Math.abs(s.scrollTop-alignedTop)<=4||
+      s.scrollTop>=s.scrollHeight-s.clientHeight-4;
+  }
 
   // ------------------------------------------------ bootstrap
   async function init(){
@@ -25,10 +37,11 @@
       rooms=d.rooms||[];
       const last=parseInt(localStorage.getItem('rp_last')||'0');
       const r=rooms.find(x=>x.id===last)||rooms[0];
-      if(r)openRoom(r.id);else{renderEmpty();renderCast();}
+      if(r)await openRoom(r.id);else{renderEmpty();renderCast();}
       // resume an in-flight turn
       if(r){const live=await v1Api(`/v1/roleplay/rooms/${r.id}/live`).catch(()=>({}));
-        if(live&&live.running)consume(`/v1/roleplay/rooms/${r.id}/live/stream`);}
+        if(live&&live.running&&room&&room.id===r.id&&!streaming)
+          consume(`/v1/roleplay/rooms/${r.id}/live/stream`);}
     }catch(e){toast2(e.message);renderEmpty();}
   }
 
@@ -185,8 +198,20 @@
 
   // Stop lives in its own stable control beside Run — queueLine text is
   // rewritten by turn_queue/tool/note events and must not own the button.
+  let neuralTl=null;
+  function paintNeural(on){
+    const nodes=$$('#backdrop .st-neural i');
+    if(neuralTl){neuralTl.kill();neuralTl=null;}
+    if(!window.gsap){return;}
+    if(!on||matchMedia('(prefers-reduced-motion: reduce)').matches){
+      gsap.set(nodes,{clearProps:'transform,opacity'});return;}
+    neuralTl=gsap.timeline({repeat:-1,yoyo:true}).to(nodes,
+      {x:36,y:-24,scale:1.8,opacity:.35,duration:2.8,stagger:.35,ease:'sine.inOut'});
+  }
+
   function setRunning(on){
     $('#backdrop').classList.toggle('is-live',on);
+    paintNeural(on);
     $('#btnRun').disabled=on;
     $('#btnRun').hidden=on;
     const ql=$('#queueLine');
@@ -297,26 +322,28 @@
           b.querySelector('.b').insertBefore(host,txt);
           b._lrHost=host;
           b._log=Nova.ActivityLog.create(host,{compact:true});
-          b._lr=NovaRender.LiveRun.create(host,{scroller:$('#scroll')});
+          b._lr=NovaRender.LiveRun.create(host,{scroller:null});
         }
-        scroll();
+        b._aligned=false;
+        alignTurn(b);
         break;}
       case 'char_delta':{
         const el=document.getElementById('m-'+ev.id);
         if(el){el._text=(el._text||'')+ev.text;
           const txt=el.querySelector('.txt');
           if(!el._sr&&window.NovaRender&&NovaRender.StreamingRenderer&&txt){
-            el._sr=NovaRender.StreamingRenderer.create(txt,$('#scroll'));}
+            el._sr=NovaRender.StreamingRenderer.create(txt,null);}
           if(el._sr)el._sr.setText(el._text);
           else txt.textContent=el._text;
-          scroll();}break;}
+          if(!el._aligned&&el._text.trim()){
+            el._aligned=true;
+            if(readerStayed())requestAnimationFrame(()=>alignTurn(el,txt));}}break;}
       case 'char_skip':{
         const el=document.getElementById('m-'+ev.id);
         if(el)el.remove();
         presence(ev.character_id,false);break;}
       case 'char_end':{
-        const scroller=$('#scroll');
-        const follow=scroller.scrollHeight-scroller.scrollTop-scroller.clientHeight<=48;
+        const stayed=readerStayed();
         const el=document.getElementById('m-'+ev.id);
         if(el){el.classList.remove('writing');el._streaming=false;
           if(el._cid!=null)presence(el._cid,false);
@@ -350,7 +377,8 @@
             if(ev.variants)m.variants=ev.variants;
             if(ev.sources)m.sources=ev.sources;
             if(ev.via)m.via=ev.via;}}
-        if(follow)scroll();
+        if(stayed){const t=document.getElementById('m-'+ev.id);
+          const tx=t&&t.querySelector('.txt');if(tx)alignTurn(t,tx);}
         break;}
       case 'turn_done':{
         if(room)room.messages=ev.messages;
@@ -519,6 +547,7 @@
     $('#emptyText').textContent=msgs.length?'':
       'The stage is set. Raise the curtain — the cast opens with their greetings.';
     msgs.forEach(appendMsg);
+    $('#scroll').style.removeProperty('--st-tail-space');
     scroll();
   }
 

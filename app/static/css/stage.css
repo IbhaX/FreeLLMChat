@@ -117,7 +117,22 @@ body {
   from { transform: translateX(-5%); opacity: .45; }
   to { transform: translateX(5%); opacity: 1; }
 }
+.st-neural { position: absolute; inset: 0; pointer-events: none; display: none;
+  background-image:
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent) 14%, transparent) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, transparent) 0 1px, transparent 1px 32px);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(ellipse at 50% 40%, #000 0%, transparent 72%); }
+.st-backdrop.is-live .st-neural { display: block; }
+.st-neural i { position: absolute; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 0 18px color-mix(in srgb, var(--accent) 55%, transparent); }
+.st-neural i:nth-child(1) { left: 20%; top: 25%; }
+.st-neural i:nth-child(2) { left: 68%; top: 38%; }
+.st-neural i:nth-child(3) { left: 47%; top: 60%; }
 .st-scroll { flex: 1; overflow-y: auto; padding: 26px 8% 18px; position: relative; }
+.st-scroll::after { content: ''; display: block; height: var(--st-tail-space, 0px); pointer-events: none; }
 .st-scenario {
   text-align: center; font-family: var(--stage-font); font-style: italic;
   color: var(--stage-faint); font-size: 14px; max-width: 560px;
