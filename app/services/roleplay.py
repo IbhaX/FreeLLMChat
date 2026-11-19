@@ -617,7 +617,14 @@ def _research_requested(text: str) -> bool:
     t = (text or "").strip()
     if not t:
         return False
-    if _RESEARCH_RE.search(t) or _LOOKUP_RE.search(t) or _dossier_requested(t):
+    if _RESEARCH_RE.search(t):
+        return True
+    if re.match(
+            r"(?:who\s+are\s+you|what\s+(?:is\s+your|are\s+your|do\s+you\s+do)"
+            r"|tell\s+me\s+about\s+yourself|what['’]s\s+your"
+            r"|where\s+are\s+you\s+from)\b", t, re.I):
+        return False
+    if _LOOKUP_RE.search(t) or _dossier_requested(t):
         return True
     try:
         from app.services.intent import classify
@@ -917,7 +924,6 @@ async def turn_stream(
                     director_notes=room.director_notes or "",
                     summary=room.summary or "",
                     tools=bool(room.tools_enabled) and not reacting)
-                reply_tools = bool(room.tools_enabled) and not reacting
                 dossier_query = (
                     _research_query(user_text, (room.messages or [])[:-1], c.id)
                     if (not reacting and research and room.tools_enabled
@@ -934,7 +940,6 @@ async def turn_stream(
                         finally:
                             if not pf.done():
                                 pf.cancel()
-                        reply_tools = False  # prefetched; reply streams
                     else:
                         ctx = ""
                         emit({"event": "note", "status": "skipped",
@@ -979,7 +984,7 @@ async def turn_stream(
                     pieces = _char_reply_stream(
                         gateway, session, room.model or "auto",
                         system, history, emit=char_emit,
-                        tools=reply_tools and not research, via=via)
+                        tools=False, via=via)
                 try:
                     async for piece in pieces:
                         acc += piece
@@ -1247,14 +1252,12 @@ async def retry_stream(
         research = bool(beat_text) and _research_requested(beat_text)
         ctx = ""
         reply_sources: list[dict[str, Any]] = []
-        reply_tools = bool(room.tools_enabled)
         if research:
             if room.tools_enabled:
                 ctx, reply_sources = await _research_prefetch(
                     gateway, session, beat_text, room, c, emit=emit,
                     prior=room.messages[:b_idx])
             system += _research_suffix(ctx, bool(room.tools_enabled))
-            reply_tools = False
         via: dict[str, Any] = {}
         yield _sse({"event": "char_start", "id": message_id,
                     "character_id": c.id, "name": c.name,
@@ -1263,7 +1266,7 @@ async def retry_stream(
         try:
             async for piece in _char_reply_stream(
                     gateway, session, room.model or "auto", system, history,
-                    emit=emit, tools=reply_tools, via=via):
+                    emit=emit, tools=False, via=via):
                 acc += piece
                 while not evq2.empty():
                     yield _sse(evq2.get_nowait())

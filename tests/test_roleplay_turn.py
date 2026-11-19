@@ -240,3 +240,51 @@ def test_clean_turn_text_strips_persona_breaks():
     assert roleplay.clean_turn_text(
         "As an AI I cannot.\nThe door creaks.", "Sherlock") \
         == "The door creaks."
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("who are you?", False),
+    ("What is your name?", False),
+    ("Tell me about yourself.", False),
+    ("What's your favourite case?", False),
+    ("Where are you from?", False),
+    ("who is the CEO of Nagarro?", True),
+    ("when was the eiffel tower built?", True),
+    ("look up your family history online", True),
+    ("search for who you are in the archives", True),
+])
+def test_research_requested_persona_vs_lookup(text, expected):
+    assert roleplay._research_requested(text) is expected
+
+
+def test_persona_turn_never_searches_in_tools_room(session_factory, monkeypatch):
+    seen_tools: list[bool] = []
+    prefetches: list[str] = []
+    real_stream = roleplay._char_reply_stream
+
+    def spy_stream(*args, **kwargs):
+        seen_tools.append(kwargs.get("tools"))
+        return real_stream(*args, **kwargs)
+
+    async def spy_prefetch(*args, **kwargs):
+        prefetches.append("called")
+        return "", []
+
+    monkeypatch.setattr(roleplay, "_char_reply_stream", spy_stream)
+    monkeypatch.setattr(roleplay, "_research_prefetch", spy_prefetch)
+
+    async def go():
+        async with session_factory() as s:
+            sher, _ = _mk_cast(s)
+            await s.flush()
+            room = RoleplayRoom(name="r", character_ids=[sher.id],
+                                tools_enabled=True, messages=[])
+            s.add(room)
+            await s.commit()
+            rid = room.id
+        gw = _FakeGW(["I am Sherlock."])
+        await _collect(roleplay.turn_stream(
+            gw, session_factory, rid, kind="talk", text="who are you?"))
+    _run(go())
+    assert seen_tools == [False]
+    assert prefetches == []
