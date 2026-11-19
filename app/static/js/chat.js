@@ -629,7 +629,8 @@ async function streamAPIReply(c,live){
   const url=isAgent?API_BASE+'/v1/agents/'+state.agent.id+'/chat':API_BASE+'/v1/chat/completions';
   const lastContent=messages[messages.length-1].content;
   const payload=isAgent
-    ?{message:lastContent,history:messages.slice(0,-1),stream:true}
+    ?{message:lastContent,history:messages.slice(0,-1),stream:true,
+      ...(state.model.id==='auto'?{}:{model:state.model.id})}
     :{model:state.model.id,messages,stream:true,builtin_tools:['*'],conversation_id:c.id,depth:state.depth};
   const doFetch=live
     ?()=>fetch(API_BASE+'/v1/conversations/'+c.id+'/live/stream',{headers:apiHeaders(),signal:ctrl.signal})
@@ -1464,7 +1465,7 @@ $('#modelSel').onclick=e=>{
   if(opening&&Date.now()-lastModelFetch>60000){lastModelFetch=Date.now();loadModels(true);}
 };
 document.addEventListener('click',e=>{
-  if(!e.target.closest('#modelSel'))$('#modelMenu').classList.remove('open');
+  if(!e.target.closest('.model-picker'))$('#modelMenu').classList.remove('open');
 });
 $('#attachBtn').onclick=()=>$('#fileInput').click();
 $('#fileInput').addEventListener('change',e=>{

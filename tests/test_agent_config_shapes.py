@@ -11,6 +11,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from app.services.agents import _caps, _compile_system_prompt, _tool_names
 
 
@@ -117,7 +119,8 @@ async def test_run_agent_retries_tool_blob(monkeypatch) -> None:
     calls: list[list[dict[str, Any]]] = []
 
     async def fake_tool_chat(gw: Any, cfg: Any, messages: list[dict[str, Any]],
-                             conv_id: Any, emit: Any = None) -> dict[str, Any]:
+                             conv_id: Any, emit: Any = None,
+                             model_override: str | None = None) -> dict[str, Any]:
         calls.append(messages)
         content = '{"query": "x", "max_results": 5}' if len(calls) == 1 else \
             "The real answer."
@@ -135,10 +138,93 @@ async def test_run_agent_blob_fallback_when_retry_also_blobs(monkeypatch) -> Non
     from app.services import agents as agents_mod
 
     async def fake_tool_chat(gw: Any, cfg: Any, messages: list[dict[str, Any]],
-                             conv_id: Any, emit: Any = None) -> dict[str, Any]:
+                             conv_id: Any, emit: Any = None,
+                             model_override: str | None = None) -> dict[str, Any]:
         return {"choices": [{"message": {"content": '{"query": "x"}'}}]}
 
     monkeypatch.setattr(agents_mod, "_chat_with_tools", fake_tool_chat)
     cfg = _agent({"tools": ["web_search"]}, enable_tools=True)
     out = await agents_mod.run_agent(SimpleNamespace(), cfg, "hi", [])
     assert out == agents_mod._TOOL_BLOB_FALLBACK
+
+
+class _FakeSession:
+    async def __aenter__(self) -> "_FakeSession":
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        return None
+
+    async def commit(self) -> None:
+        return None
+
+
+def _model_cfg() -> SimpleNamespace:
+    cfg = _agent({}, output_format="text")
+    cfg.model = "configured/model"
+    cfg.temperature = None
+    cfg.max_tokens = None
+    return cfg
+
+
+@pytest.mark.parametrize("override,expected", [
+    ("picked/model", "picked/model"),
+    (None, "configured/model"),
+])
+async def test_stream_agent_model_override(
+        monkeypatch: pytest.MonkeyPatch, override: str | None, expected: str) -> None:
+    from app.services import agents as agents_mod
+
+    seen: list[str] = []
+
+    async def chunks() -> Any:
+        yield b"data: [DONE]\n\n"
+
+    class Gateway:
+        async def chat_stream(self, session: Any, payload: dict[str, Any],
+                              on_event: Any = None) -> Any:
+            seen.append(payload["model"])
+            return chunks(), None, None, None
+
+    async def no_memory(*a: Any, **k: Any) -> str:
+        return ""
+
+    monkeypatch.setattr(agents_mod, "get_memory_text", no_memory)
+    monkeypatch.setattr(agents_mod, "get_session_factory", lambda: _FakeSession)
+    cfg = _model_cfg()
+    out = [c async for c in agents_mod.stream_agent(
+        Gateway(), cfg, "hi", [], model_override=override)]
+    assert out == [b"data: [DONE]\n\n"]
+    assert seen == [expected]
+    assert cfg.model == "configured/model"
+
+
+@pytest.mark.parametrize("override,expected", [
+    ("picked/model", "picked/model"),
+    (None, "configured/model"),
+])
+async def test_chat_with_tools_model_override(
+        monkeypatch: pytest.MonkeyPatch, override: str | None, expected: str) -> None:
+    import app.db as db_mod
+    import app.services.tools as tools_mod
+    from app.services import agents as agents_mod
+
+    seen: list[str] = []
+
+    async def fake_loop(gateway: Any, session: Any, payload: dict[str, Any],
+                        *a: Any, **k: Any) -> dict[str, Any]:
+        seen.append(payload["model"])
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    async def no_memory(*a: Any, **k: Any) -> str:
+        return ""
+
+    monkeypatch.setattr(tools_mod, "run_tool_loop", fake_loop)
+    monkeypatch.setattr(db_mod, "get_session_factory", lambda: _FakeSession)
+    monkeypatch.setattr(agents_mod, "get_memory_text", no_memory)
+    cfg = _model_cfg()
+    await agents_mod._chat_with_tools(
+        SimpleNamespace(), cfg, [{"role": "user", "content": "hi"}],
+        model_override=override)
+    assert seen == [expected]
+    assert cfg.model == "configured/model"

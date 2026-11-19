@@ -706,7 +706,7 @@ async def _research_one(
         emit(ev)
     # Researcher gets search/fetch plus anything the (possibly overridden)
     # web_research skill requires.
-    research_tools = sorted({"web_search", "http_get"}
+    research_tools = sorted({"web_search", "http_get", "exa_search"}
                             | set(skills_mod.required_tools(["web_research"])))
     payload = {
         "model": model,

@@ -268,9 +268,10 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
 def _build_agent(
     agent_cfg: AgentConfig, gateway: Gateway, custom: str = "",
     emit: Callable[[dict[str, Any]], None] | None = None,
+    model_override: str | None = None,
 ) -> Agent:
     from pydantic_ai.output import PromptedOutput
-    model = GatewayModel(agent_cfg.model, gateway, emit)
+    model = GatewayModel(model_override or agent_cfg.model, gateway, emit)
     system_prompt = _compile_system_prompt(agent_cfg)
     if agent_cfg.output_format == "structured":
         system_prompt = structured_system_prompt() + "\n\n" + system_prompt
@@ -381,6 +382,7 @@ async def _chat_with_tools(
     gateway: Gateway, agent_cfg: AgentConfig, messages: list[dict[str, Any]],
     conversation_id: str | None = None,
     emit: Callable[[dict[str, Any]], None] | None = None,
+    model_override: str | None = None,
 ) -> dict[str, Any]:
     from app.db import get_session_factory
     from app.services.tools import run_tool_loop
@@ -391,7 +393,8 @@ async def _chat_with_tools(
     if mem:
         messages.insert(1 if messages and messages[0].get("role") == "system" else 0,
                         {"role": "system", "content": mem})
-    payload: dict[str, Any] = {"model": agent_cfg.model, "messages": messages, "stream": False}
+    payload: dict[str, Any] = {"model": model_override or agent_cfg.model,
+                               "messages": messages, "stream": False}
     if agent_cfg.temperature is not None:
         payload["temperature"] = agent_cfg.temperature
     if agent_cfg.max_tokens is not None:
@@ -458,6 +461,7 @@ async def run_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
     *, custom_instructions: str = "", conversation_id: str | None = None,
     emit: Callable[[dict[str, Any]], None] | None = None,
+    model_override: str | None = None,
 ) -> str:
     """Run an agent with bounded context, relevant memory and execution limits."""
     history = _bounded_history(history)
@@ -466,7 +470,8 @@ async def run_agent(
     if _tool_names(agent_cfg):
         messages = _messages(agent_cfg, message, history, custom_instructions)
         result = await asyncio.wait_for(
-            _chat_with_tools(gateway, agent_cfg, messages, conversation_id, emit=emit),
+            _chat_with_tools(gateway, agent_cfg, messages, conversation_id, emit=emit,
+                             model_override=model_override),
             timeout=timeout_s,
         )
         content = ((result.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
@@ -480,7 +485,7 @@ async def run_agent(
                             {"role": "assistant", "content": content},
                             {"role": "user", "content": _TOOL_BLOB_RETRY},
                         ],
-                        conversation_id, emit=emit,
+                        conversation_id, emit=emit, model_override=model_override,
                     ),
                     timeout=timeout_s,
                 )
@@ -494,7 +499,7 @@ async def run_agent(
     memory = await get_memory_text(str(message), conversation_id)
     agent = _build_agent(agent_cfg, gateway,
                          custom_instructions + ("\n\n" + memory if memory else ""),
-                         emit=emit)
+                         emit=emit, model_override=model_override)
     try:
         result = await asyncio.wait_for(
             agent.run(message, message_history=_to_model_history(history)), timeout=timeout_s
@@ -514,7 +519,7 @@ async def run_agent(
         fallback = _build_agent(
             cfg2, gateway,
             custom_instructions + ("\n\n" + memory if memory else ""),
-            emit=emit)
+            emit=emit, model_override=model_override)
         result = await asyncio.wait_for(
             fallback.run(
                 message, message_history=_to_model_history(history)),
@@ -533,7 +538,7 @@ async def run_agent(
         fallback = _build_agent(
             cfg2, gateway,
             custom_instructions + ("\n\n" + memory if memory else ""),
-            emit=emit)
+            emit=emit, model_override=model_override)
         try:
             result2 = await asyncio.wait_for(
                 fallback.run(message, message_history=_to_model_history(history)),
@@ -570,6 +575,7 @@ async def stream_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
     *, custom_instructions: str = "", conversation_id: str | None = None,
     emit: Callable[[dict[str, Any]], None] | None = None,
+    model_override: str | None = None,
 ) -> AsyncIterator[bytes]:
     """Run an agent with streaming via the gateway's internal streaming API."""
     history = _bounded_history(history)
@@ -582,7 +588,8 @@ async def stream_agent(
         try:
             text = await run_agent(gateway, agent_cfg, message, history,
                                    custom_instructions=custom_instructions,
-                                   conversation_id=conversation_id, emit=emit)
+                                   conversation_id=conversation_id, emit=emit,
+                                   model_override=model_override)
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
             yield f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
         except Exception as e:
@@ -592,7 +599,8 @@ async def stream_agent(
     if _tool_names(agent_cfg):
         try:
             result = await _chat_with_tools(gateway, agent_cfg, openai_messages,
-                                            conversation_id, emit=emit)
+                                            conversation_id, emit=emit,
+                                            model_override=model_override)
             choice = (result.get("choices") or [{}])[0]
             text = (choice.get("message") or {}).get("content") or ""
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
@@ -601,7 +609,8 @@ async def stream_agent(
             err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
             yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
         return
-    payload = {"model": agent_cfg.model, "messages": openai_messages, "stream": True}
+    payload = {"model": model_override or agent_cfg.model,
+               "messages": openai_messages, "stream": True}
     if agent_cfg.temperature is not None:
         payload["temperature"] = agent_cfg.temperature
     if agent_cfg.max_tokens is not None:

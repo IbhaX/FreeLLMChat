@@ -138,6 +138,7 @@
   }
   .pill-btn:hover{border-color:var(--border-3);background:var(--surface-2)}
   .pill-btn.on{border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent)}
+  .model-picker{position:relative}
   .model-menu{top:calc(100% + 6px);right:0;display:none;
     max-height:min(62vh,460px);overflow-y:auto;overscroll-behavior:contain}
   .model-menu.open{display:block}
@@ -404,12 +405,14 @@
       <div class="chat-status"><span class="on">●</span> <span id="chatStatus">connected · replies stream in real time</span></div>
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <div class="model-picker">
       <button class="pill-btn" id="modelSel">
         <span id="modelIcon" style="width:16px;height:16px;border-radius:5px;background:var(--accent);display:inline-block"></span>
         <span id="modelName">auto</span>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-        <div class="model-menu ui-menu" id="modelMenu"></div>
       </button>
+      <div class="model-menu ui-menu" id="modelMenu"></div>
+      </div>
       <button class="pill-btn" id="shareBtn" title="Share conversation (link)">🔗</button>
     </div>
   </div>

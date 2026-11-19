@@ -139,6 +139,7 @@ async def agent_chat(
             async for chunk in stream_agent(gw, a, body.message, body.history,
                                             custom_instructions=custom,
                                             conversation_id=body.conversation_id,
+                                            model_override=body.model,
                                             emit=evq.put_nowait):
                 while not evq.empty():
                     yield _drain()
@@ -166,7 +167,8 @@ async def agent_chat(
         )
     try:
         result = await run_agent(gw, a, body.message, body.history,
-                                 custom_instructions=custom, conversation_id=body.conversation_id)
+                                 custom_instructions=custom, conversation_id=body.conversation_id,
+                                 model_override=body.model)
     except Exception as e:
         async with factory() as ls:
             await agent_log.finish_run(ls, arun, "failed",
