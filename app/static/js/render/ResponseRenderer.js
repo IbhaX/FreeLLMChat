@@ -69,17 +69,29 @@
     host.append(slot);
   }
 
+  // Only http(s) URLs may become links or image sources.
+  function safeHttpUrl(u) {
+    try {
+      const p = new URL(String(u || ""));
+      return p.protocol === "http:" || p.protocol === "https:" ? p.href : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
   function renderSources(sources, host) {
     if (!sources || !sources.length) return;
     const wrap = el("div", { class: "nova-sources" });
     wrap.append(el("div", { class: "nova-sources-label" }, "Sources"));
     const list = el("div", { class: "nova-sources-list" });
     sources.forEach((s) => {
-      const item = s.url
-        ? el("a", { class: "nova-source", href: s.url, target: "_blank", rel: "noopener" })
+      const url = safeHttpUrl(s && s.url);
+      const item = url
+        ? el("a", { class: "nova-source", href: url, target: "_blank", rel: "noopener" })
         : el("div", { class: "nova-source" });
-      if (s.favicon)
-        item.append(el("img", { class: "nova-fav", src: s.favicon, alt: "" }));
+      const fav = safeHttpUrl(s && s.favicon);
+      if (fav)
+        item.append(el("img", { class: "nova-fav", src: fav, alt: "" }));
       item.append(el("span", { class: "nova-source-title" }, s.title || s.url || ""));
       if (s.source) item.append(el("span", { class: "nova-source-name" }, s.source));
       list.append(item);
@@ -120,9 +132,24 @@
 
   function renderEnvelope(plan, host, opts) {
     const env = plan.envelope;
-    // Prose content (envelope.content or surrounding prose) as markdown.
+    // Prose content (envelope.content or surrounding prose). When the
+    // envelope carries no components, segment the content so markdown
+    // tables/code/lists still become native components in order — prose
+    // stays prose, nothing is duplicated or inferred.
     const prose = plan.prose != null ? plan.prose : env.content || "";
-    if (prose && prose.trim()) {
+    const comps = env.components || [];
+    if (prose && prose.trim() && !comps.length &&
+        Nova.ResponseClassifier && Nova.ResponseClassifier.segmentMarkdown) {
+      const segs = Nova.ResponseClassifier.segmentMarkdown(prose);
+      if (segs && segs.length && segs.some(s => s.type !== "markdown")) {
+        renderSegments(segs, host);
+      } else if (prose && prose.trim()) {
+        const mdHost = el("div", { class: "nova-prose" });
+        mdHost.innerHTML = Nova.MarkdownRenderer.render(prose);
+        Nova.MarkdownRenderer.upgrade(mdHost);
+        host.append(mdHost);
+      }
+    } else if (prose && prose.trim()) {
       const mdHost = el("div", { class: "nova-prose" });
       mdHost.innerHTML = Nova.MarkdownRenderer.render(prose);
       Nova.MarkdownRenderer.upgrade(mdHost);
@@ -132,7 +159,6 @@
     // Components in order, laid out as widget tiles: small component
     // types (see Nova.TILE_TYPES) pack side by side, wide ones span the
     // full row.
-    const comps = env.components || [];
     if (comps.length) {
       const grid = el("div", { class: "nova-comp-grid" });
       comps.forEach((c) => {
@@ -153,11 +179,24 @@
     renderAttachments(env.attachments, host);
 
     // Sources.
-    renderSources(env.sources, host);
+    if (opts.richSources && Array.isArray(env.sources) && env.sources.length &&
+        !comps.some(c => c.type === "search_result")) {
+      const results = env.sources.map(s => ({
+        title: s.title || s.url || "Source",
+        url: safeHttpUrl(s.url),
+        description: s.description || s.snippet || "",
+      }));
+      renderComponent({
+        type: "search_result",
+        data: { title: "Sources consulted", results },
+      }, host);
+    } else {
+      renderSources(env.sources, host);
+    }
 
-    // Suggested prompts.
+    // Suggested prompts (honor showSuggestions:false).
     const prompts = env.suggested_prompts;
-    if (prompts && prompts.length) {
+    if (prompts && prompts.length && opts.showSuggestions !== false) {
       const sp = Nova.SuggestedPrompts.render(prompts);
       if (sp) host.append(sp);
     }
@@ -190,12 +229,13 @@
     // actions bar, which is exactly what the research page did.
     const text = message.text ?? message.content ?? "";
     const plan = Nova.ResponseClassifier.classify(text);
-    render(plan, host, { message });
+    render(plan, host, { ...opts, message });
 
     // Infer suggestions only when none supplied and content warrants them.
     // Envelopes render their own suggested_prompts in renderEnvelope; only
     // infer for plain markdown responses so chips never appear twice.
-    if (message.role !== "user" && !message.failed && plan.kind !== "envelope") {
+    if (message.role !== "user" && !message.failed && plan.kind !== "envelope" &&
+        opts.showSuggestions !== false) {
       const prompts = Nova.SuggestedPrompts.infer(text);
       if (prompts && prompts.length) {
         const sp = Nova.SuggestedPrompts.render(prompts);

@@ -7,6 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -65,6 +66,9 @@ class Settings(BaseSettings):
     # Optional search provider keys; DuckDuckGo lite is the free fallback.
     brave_search_api_key: Optional[str] = None
     tavily_api_key: Optional[str] = None
+    # Exa neural search key (env EXA_API_KEY or .env); DB setting still wins
+    # as a fallback inside services.tools._exa_api_key.
+    exa_api_key: Optional[SecretStr] = None
     # Fetched-page caps and on-disk snapshot location (under the data dir).
     research_fetch_max_bytes: int = 1_000_000
     research_snapshot_dir: str = "research"          # under <data_dir>/

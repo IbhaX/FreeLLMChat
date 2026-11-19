@@ -58,7 +58,12 @@
   }
 
   // ---------- SearchResultCard ----------
-  function searchResult(r) {
+  function searchResult(raw) {
+    const r = Object.assign({}, raw, {
+      url: Nova.safeHttpUrl(raw && raw.url),
+      favicon: Nova.safeHttpUrl(raw && raw.favicon),
+      thumbnail: Nova.safeHttpUrl(raw && raw.thumbnail),
+    });
     const card = el("div", { class: "nova-search-card" });
     const head = el("div", { class: "nova-search-head" });
     if (r.favicon || r.thumbnail) {

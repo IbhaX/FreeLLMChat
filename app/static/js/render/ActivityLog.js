@@ -29,6 +29,8 @@
     usage:  { icon: '◈', label: 'Model usage' },
     note:   { icon: '·', label: 'Note' },
   };
+  // Interactive-channel events (finding/answer) render in LiveRun, not here.
+  const CHANNEL_SKIP = new Set(['finding', 'answer']);
   const STAGE_KIND = {
     route: 'decide', clarifying: 'wait', clarify: 'wait', plan: 'plan',
     planning: 'plan', awaiting_approval: 'wait', research: 'search',
@@ -40,6 +42,7 @@
   const TOOL_KIND = {
     web_search: ['search', 'Searching the web'],
     search: ['search', 'Searching the web'],
+    exa_search: ['search', 'Searching with Exa'],
     academic_search: ['search', 'Searching academic papers'],
     http_get: ['read', 'Fetching a page'],
     fetch_page: ['read', 'Fetching a page'],
@@ -54,11 +57,12 @@
   };
   const STATUS_GLYPH = {
     running: '', done: '✓', failed: '✕',
-    skipped: '—', waiting: '⏸', queued: '○',
+    skipped: '—', waiting: '⏸', queued: '○', cancelled: '⏹',
   };
   const STATUS_WORD = {
     running: 'in progress', done: 'done', failed: 'failed',
     skipped: 'skipped', waiting: 'waiting', queued: 'queued',
+    cancelled: 'cancelled',
   };
 
   const DETAIL_LABEL = {
@@ -133,6 +137,27 @@
     } else if (event === 'step_fail') {
       kind = 'error'; status = 'failed';
       title = clip(text || (actor + ' failed'));
+    } else if (event === 'step_queued') {
+      kind = 'run'; status = 'queued'; group = true;
+      title = clip(text || (actor ? actor + ' queued' : 'Step queued'));
+    } else if (event === 'tool_start') {
+      let tname = String(ev.tool || ''), targs = String(ev.args || '');
+      const tk = TOOL_KIND[tname] || ['run', 'Running ' + (tname || 'tool')];
+      kind = tk[0];
+      title = targs ? tk[1] + ': ' + clip(prettyArgs(targs), 90) : tk[1];
+      status = 'running';
+      meta.tool = tname; meta.args = targs;
+      if (ev.actor) actor = ev.actor;
+    } else if (event === 'handoff') {
+      kind = 'decide'; status = 'done';
+      title = clip(text || ev.title || 'Handoff');
+      ['from_task', 'to_task', 'target'].forEach(f => {
+        if (ev[f]) meta[f] = ev[f]; });
+    } else if (event === 'finding' || event === 'source_discovered' ||
+               event === 'answer_delta' || event === 'answer_section') {
+      // Interactive channels — LiveRun owns these; keep a quiet note here.
+      kind = 'note'; status = 'done'; level = 'verbose';
+      title = clip(text || event);
     } else if (event === 'synth') {
       kind = 'write'; status = 'running'; group = true;
     } else if (event === 'agent_start') {
@@ -187,6 +212,8 @@
       if (kind === 'note' || kind === 'decide') kind = 'error';
     } else if (sin === 'skip' && status !== 'skipped') {
       status = 'skipped';
+    } else if (sin === 'cancel' && status !== 'cancelled' && status !== 'failed') {
+      status = 'cancelled';
     }
     const rawDetail = ev.detail && typeof ev.detail === 'object'
       ? JSON.stringify(ev.detail, null, 2) : ev.detail;
@@ -281,6 +308,9 @@
     const steps = new Map();          // id -> step record
     const order = [];                 // top-level step records, in order
     const groups = new Map();         // parent key -> step record
+    const taskIndex = new Map();      // task_id -> step record (lifecycle)
+    const seenEvents = new Set();     // event_id dedupe (replay-safe)
+    const MAX_SEEN = 2000;
     let openGroup = null;             // most recent running group
     let counter = 0;
     let doneCount = 0, total = 0;
@@ -390,11 +420,14 @@
       rec.sr.textContent = STATUS_WORD[status] || status;
       if (status === 'running') {
         rec.startedAt = rec.startedAt || Date.now();
-        const tick = () => {
-          rec.time.textContent = fmtElapsed(Date.now() - rec.startedAt);
-        };
-        tickFns.add(tick);
-        rec.unTick = () => tickFns.delete(tick);
+        // One ticker per record: repeated running updates must not stack.
+        if (!rec.unTick) {
+          const tick = () => {
+            rec.time.textContent = fmtElapsed(Date.now() - rec.startedAt);
+          };
+          tickFns.add(tick);
+          rec.unTick = () => tickFns.delete(tick);
+        }
       } else {
         if (rec.unTick) { rec.unTick(); rec.unTick = null; }
         const dur = st.duration_ms != null ? st.duration_ms
@@ -536,9 +569,14 @@
       steps.set(id, rec);
       if (data.group) {
         groups.set(id, rec);
-        if (openGroup && openGroup !== rec && openGroup.data.status === 'running')
-          applyStatus(openGroup, 'done');
-        openGroup = data.status === 'running' ? rec : openGroup;
+        // Only legacy unidentified groups auto-close each other; identified
+        // running tasks are independent until their own end event.
+        if (!data.task_id) {
+          if (openGroup && openGroup !== rec && !openGroup.data.task_id &&
+              openGroup.data.status === 'running')
+            applyStatus(openGroup, 'done');
+          openGroup = data.status === 'running' ? rec : openGroup;
+        }
       }
       if (data.kind !== 'usage') total++;
       paintHeader();
@@ -629,56 +667,79 @@
       ingest(ev) {
         if (!ev) return;
         try {
+          // Interactive channels belong to LiveRun — never double-render.
+          // Dispatch on the wire event, not the enriched presentation kind.
+          if (CHANNEL_SKIP.has(ev.channel || '') || CHANNEL_SKIP.has(ev.event || '')) return;
+          // Stable event_id dedupe: replayed/resumed streams never double.
+          if (typeof ev.event_id === 'string' && ev.event_id) {
+            if (seenEvents.has(ev.event_id)) return;
+            seenEvents.add(ev.event_id);
+            if (seenEvents.size > MAX_SEEN) seenEvents.delete(seenEvents.values().next().value);
+          }
           const data = ev.kind ? mergeData(ev) : normalize(ev);
           // In-flight call visibility: a 'try' lands the moment a provider
-          // attempt starts; usage/fail clear it. Without this the card
-          // reads 0 calls for the entire duration of a slow call.
+          // attempt starts; usage/fail clear it.
           if (ev.event === 'try')
             stats.inflight = (ev.model || '') + (ev.provider ? ' · ' + ev.provider : '');
           else if (ev.event === 'usage' || ev.event === 'fail' || ev.event === 'done')
             stats.inflight = '';
-          // Usage for the final call lands after the run settles (the
-          // gateway reports tokens when the stream closes): count it.
           if (finished) {
             if (data.kind === 'usage') { trackUsage(data); paintDash(); }
             return;
           }
-          const id = ev.id || ('s' + (++counter));
-          const existing = steps.get(id);
           if (data.kind === 'usage') {   // folded into the pinned metrics card
             trackUsage(data);
             data.level = 'verbose';
           }
-          if (existing) {            // same step updated in place (lifecycle)
-            const prev = existing.data.status;
-            Object.assign(existing.data, data);
-            trackStep(existing.data, prev);
-            existing.el.querySelector('.alog-title').textContent = existing.data.title;
-            applyStatus(existing, data.status);
-            renderDetail(existing);
+          // Identified tasks: start/end/tool updates for the SAME
+          // (run, task) update one row; they never auto-nest or close peers.
+          const tid = ev.task_id || null;
+          const tkey = tid ? (ev.run_id || '') + '|' + tid : null;
+          if (tkey && taskIndex.has(tkey)) {
+            const rec = taskIndex.get(tkey);
+            const prev = rec.data.status;
+            Object.assign(rec.data, data);
+            if (ev.kind) rec.data.kind = data.kind;
+            trackStep(rec.data, prev);
+            applyKind(rec);
+            rec.el.querySelector('.alog-title').textContent = rec.data.title;
+            applyStatus(rec, data.status);
+            renderDetail(rec);
+            paintDash();
             return;
           }
           let parentRec = null;
-          if (data.parent && groups.has(data.parent))
+          const ptid = ev.parent_task_id || null;
+          if (ptid && taskIndex.has((ev.run_id || '') + '|' + ptid)) {
+            parentRec = taskIndex.get((ev.run_id || '') + '|' + ptid);
+          } else if (data.parent && groups.has(data.parent)) {
             parentRec = groups.get(data.parent);
-          else if (!data.group && openGroup && !ev.group)
+          } else if (!data.group && openGroup && !tid && !ev.group) {
+            // Legacy unidentified events only.
             parentRec = openGroup;
+          }
+          const id = tkey ? 't:' + tkey : ('s' + (++counter));
           const rec = addStep(parentRec, data, id);
           rec.el._rec = rec;
+          if (tkey) taskIndex.set(tkey, rec);
           if (data.kind !== 'usage') trackStep(data, undefined);
           paintDash();
         } catch (_) { /* activity must never break the stream */ }
       },
+      // ok: true (default) → success; false → failed; 'cancelled' → cancelled.
+      // Unfinished work takes that terminal state — never a silent success.
       finish(label, ok) {
         if (finished) return;
         finished = true;
         stats.inflight = '';
+        const term = ok === 'cancelled' ? 'cancelled' : ok === false ? 'failed' : 'done';
         steps.forEach(rec => {
-          if (rec.data.status === 'running' || rec.data.status === 'waiting')
-            applyStatus(rec, ok === false ? 'failed' : 'done');
+          if (rec.data.status === 'running' || rec.data.status === 'waiting' ||
+              rec.data.status === 'queued')
+            applyStatus(rec, term);
         });
         root.dataset.final = label || 'Done in ' + fmtElapsed(Date.now() - t0);
-        root.dataset.finalStatus = ok === false ? 'failed' : 'done';
+        root.dataset.finalStatus = term;
         finishedAt = Date.now();
         paintDash();
         paintHeader();

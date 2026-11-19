@@ -107,6 +107,196 @@ async def chat_resp(gateway: Any, session: Any,
     return resp
 
 
+class SSEDeltaParser:
+    """Incremental OpenAI-style SSE → content-delta decoder.
+
+    Chunks may split a multibyte UTF-8 character, an SSE line, or one JSON
+    event across many chunks; bytes are decoded incrementally and a line is
+    only parsed once complete. Only ``choices[0].delta.content`` is yielded —
+    reasoning fields are never forwarded.
+    """
+
+    _MAX_PENDING = 65536
+
+    def __init__(self) -> None:
+        import codecs
+        self._dec = codecs.getincrementaldecoder("utf-8")("replace")
+        self._line = ""
+        self._pending_json = ""
+
+    def feed(self, chunk: bytes) -> list[str]:
+        """Consume raw bytes; return content pieces completed by this chunk."""
+        return self._lines(self._dec.decode(chunk))
+
+    def flush(self) -> list[str]:
+        """Drain the decoder and any trailing (unterminated) line at EOF."""
+        out = self._lines(self._dec.decode(b"", final=True))
+        if self._line:
+            out.extend(self._consume(self._line))
+            self._line = ""
+        return out
+
+    def _lines(self, text: str) -> list[str]:
+        out: list[str] = []
+        self._line += text
+        while "\n" in self._line:
+            raw, self._line = self._line.split("\n", 1)
+            out.extend(self._consume(raw))
+        return out
+
+    def _consume(self, raw: str) -> list[str]:
+        import json as _json
+        line = raw.strip()
+        if not line.startswith("data:"):
+            return []
+        body = line[5:].strip()
+        if body == "[DONE]":
+            self._pending_json = ""
+            return []
+        candidate = self._pending_json + body
+        try:
+            j = _json.loads(candidate)
+        except ValueError:
+            # One event split over several data lines: keep accumulating,
+            # bounded so garbage cannot grow without limit.
+            self._pending_json = (candidate
+                                  if len(candidate) <= self._MAX_PENDING else "")
+            return []
+        self._pending_json = ""
+        if not isinstance(j, dict):
+            return []
+        choices = j.get("choices") or [{}]
+        first = choices[0] if isinstance(choices, list) and choices else {}
+        delta = first.get("delta") if isinstance(first, dict) else None
+        piece = delta.get("content") if isinstance(delta, dict) else None
+        return [piece] if isinstance(piece, str) and piece else []
+
+
+async def _close_stream(stream: Any) -> None:
+    """Close an async byte iterator if it supports it (bounded, never raises)."""
+    import asyncio
+    aclose = getattr(stream, "aclose", None)
+    if aclose is None:
+        return
+    try:
+        await asyncio.wait_for(aclose(), timeout=2.0)
+    except BaseException:
+        pass
+
+
+async def stream_completion(
+    gateway: Any, session: Any, payload: dict[str, Any],
+    *, candidates: list[str] | None = None,
+    requested: str | None = None, role: str = "general",
+    retries: int = 1, emit: Any | None = None,
+    on_delta: Any | None = None, label: str = "",
+    timeout_s: float = 120.0,
+) -> Any:
+    """Streaming completion across ordered explicit model candidates.
+
+    ``timeout_s`` is ONE total budget per candidate attempt (open + drain).
+    Content deltas go to ``on_delta`` and accumulate into the returned
+    ``CallResult.text``; reasoning is never forwarded. Failover happens only
+    BEFORE any output; a mid-stream failure returns the partial result
+    degraded instead of replaying another provider into the same answer.
+    The stream iterator is closed on every exit path. Gateways without
+    ``chat_stream`` use buffered ``gateway.chat`` over the same explicit
+    candidates. Never raises — returns the last ``CallResult``.
+    """
+    import asyncio
+
+    from app.services.reliable import CallResult, completion_text
+
+    cands = list(candidates) if candidates else stage_models(
+        requested if requested is not None else payload.get("model"),
+        role=role)
+    emit = emit or (lambda ev: None)
+    chat_stream = getattr(gateway, "chat_stream", None)
+    last: Any = None
+
+    if chat_stream is None:
+        for cand in cands:
+            try:
+                resp, _p, _k, _m = await asyncio.wait_for(
+                    gateway.chat(session, {**payload, "model": cand,
+                                           "stream": False}),
+                    timeout=timeout_s)
+                text = (completion_text(resp) or "").strip()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                last = CallResult(text="", degraded=True,
+                                  error=str(e)[:200], model=cand)
+                continue
+            if text:
+                if on_delta is not None:
+                    try:
+                        on_delta(text)
+                    except Exception:
+                        pass
+                return CallResult(text=text, model=cand, attempts=1)
+            last = CallResult(text="", degraded=True,
+                              error="empty completion", model=cand)
+        return last or CallResult(text="", degraded=True, error="no candidates")
+
+    for cand in cands:
+        p = {**payload, "model": cand, "stream": True}
+        state: dict[str, Any] = {"acc": "", "got": False, "model": cand}
+        stream: Any = None
+
+        async def _attempt() -> None:
+            nonlocal stream
+            stream, _prov, _key, _model = await chat_stream(
+                session, p, on_event=emit)
+            if isinstance(_model, str):
+                state["model"] = _model
+            parser = SSEDeltaParser()
+            async for chunk in stream:
+                pieces = parser.feed(
+                    chunk if isinstance(chunk, bytes) else str(chunk).encode())
+                for piece in pieces:
+                    state["got"] = True
+                    state["acc"] += piece
+                    if on_delta is not None:
+                        try:
+                            on_delta(piece)
+                        except Exception:
+                            pass
+            for piece in parser.flush():
+                state["got"] = True
+                state["acc"] += piece
+                if on_delta is not None:
+                    try:
+                        on_delta(piece)
+                    except Exception:
+                        pass
+
+        try:
+            await asyncio.wait_for(_attempt(), timeout=timeout_s)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            acc = str(state["acc"]).strip()
+            if state["got"] and acc:
+                return CallResult(
+                    text=acc, model=str(state["model"]), attempts=1,
+                    degraded=True, error=f"stream interrupted: {e}"[:200])
+            emit({"event": "note",
+                  "text": f"{label or 'stream'} failed ({cand}): {str(e)[:120]}"})
+            last = CallResult(text="", degraded=True,
+                              error=str(e)[:200], model=cand)
+            continue
+        finally:
+            await _close_stream(stream)
+
+        text = str(state["acc"]).strip()
+        if text:
+            return CallResult(text=text, model=str(state["model"]), attempts=1)
+        last = CallResult(text="", degraded=True,
+                          error="empty stream", model=str(state["model"]))
+    return last or CallResult(text="", degraded=True, error="no candidates")
+
+
 async def internal_chat(
     gateway: Any, session: Any, payload: dict[str, Any],
     *, requested: str | None = None, role: str = "general",

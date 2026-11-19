@@ -4,7 +4,8 @@
   const $=s=>document.querySelector(s);
   const $$=s=>[...document.querySelectorAll(s)];
   let chars=[],rooms=[],room=null,mode='talk',beatOnly=false,
-      editId=null,castPicks=[],streaming=null,swipeIdx={},summarizing=false;
+      editId=null,castPicks=[],streaming=null,swipeIdx={},summarizing=false,
+      streamCtl=null;
 
   const toast2=(m,k)=>{const t=$('#toast');t.textContent=m;
     t.className='st-toast show';clearTimeout(t._t);
@@ -132,46 +133,95 @@
   async function beat(kind,text,whisperTo,advanceOverride){
     if(!room)return;
     streaming=true;setRunning(true);
+    streamCtl=new AbortController();
     try{
       const r=await fetch(API_BASE+`/v1/roleplay/rooms/${room.id}/turn`,{
-        method:'POST',headers:apiHeaders(false),
+        method:'POST',headers:apiHeaders(false),signal:streamCtl.signal,
         body:JSON.stringify({kind,text,whisper_to:whisperTo||null,
           advance:advanceOverride!=null?advanceOverride:!beatOnly})});
       if(!r.ok)throw new Error('turn failed: '+r.status);
       await consumeStream(r);
-    }catch(e){toast2(e.message);}
-    finally{streaming=false;setRunning(false);}
+    }catch(e){if(e.name!=='AbortError')toast2(e.message);}
+    finally{streaming=false;setRunning(false);streamCtl=null;}
   }
 
   async function consume(path){
     streaming=true;setRunning(true);
-    try{const r=await fetch(API_BASE+path,{headers:apiHeaders(false)});
+    streamCtl=new AbortController();
+    try{const r=await fetch(API_BASE+path,{headers:apiHeaders(false),
+        signal:streamCtl.signal});
       if(r.ok)await consumeStream(r);}
-    finally{streaming=false;setRunning(false);}
+    finally{streaming=false;setRunning(false);streamCtl=null;}
   }
 
   async function retryBeat(mid){
     if(!room||streaming)return;
     streaming=true;setRunning(true);
+    streamCtl=new AbortController();
     try{
       const r=await fetch(API_BASE+`/v1/roleplay/rooms/${room.id}/retry`,{
-        method:'POST',headers:apiHeaders(false),
+        method:'POST',headers:apiHeaders(false),signal:streamCtl.signal,
         body:JSON.stringify({message_id:mid})});
       if(!r.ok)throw new Error('retry failed: '+r.status);
       await consumeStream(r);
-    }catch(e){toast2(e.message);}
-    finally{streaming=false;setRunning(false);}
+    }catch(e){if(e.name!=='AbortError')toast2(e.message);}
+    finally{streaming=false;setRunning(false);streamCtl=null;}
   }
 
+  async function stopTurn(){
+    // Cancel the detached job server-side (partial replies persist) and
+    // abort the local stream reader.
+    if(room){
+      try{await fetch(API_BASE+`/v1/roleplay/rooms/${room.id}/live`,
+        {method:'DELETE',headers:apiHeaders(false)});}catch(_){}
+    }
+    if(streamCtl){try{streamCtl.abort();}catch(_){}}
+    streaming=false;setRunning(false);streamCtl=null;
+    $('#queueLine').textContent='⏹ interrupted — partial replies kept';
+  }
+
+  // Stop lives in its own stable control beside Run — queueLine text is
+  // rewritten by turn_queue/tool/note events and must not own the button.
   function setRunning(on){
     $('#btnRun').disabled=on;
-    if(on)$('#queueLine').innerHTML='<b>Curtain up…</b>';
-    else if(!streaming)$('#queueLine').textContent='';
+    const ql=$('#queueLine');
+    let sb=document.getElementById('btnStop');
+    if(on){
+      if(!sb){
+        sb=document.createElement('button');sb.type='button';sb.id='btnStop';
+        sb.textContent='■ stop';sb.style.marginLeft='8px';
+        sb.onclick=stopTurn;
+        $('#btnRun').insertAdjacentElement('afterend',sb);
+      }
+      sb.hidden=false;
+      ql.innerHTML='<b>Curtain up…</b>';
+    }else{
+      if(sb)sb.hidden=true;
+      if(!streaming&&!ql.textContent.startsWith('⏹'))ql.textContent='';
+    }
+  }
+
+  // Clear any stray streaming state when the SSE stream ends without a
+  // matching char_end/turn_done (truncated stream, job cancel): clears the
+  // character's presence face, marks live findings/activity as interrupted
+  // and finishes the StreamingRenderer, keeping the partial text.
+  function finalizeStrayStreams(){
+    $$('#transcript .st-msg.writing, #transcript .st-msg._streaming')
+      .forEach(el=>{
+        el.classList.remove('writing');el._streaming=false;
+        if(el._cid!=null)presence(el._cid,false);
+        if(el._lr){try{el._lr.finish('cancelled');}catch(_){}el._lr=null;}
+        if(el._log){try{el._log.finish('interrupted',false);}catch(_){}el._log=null;}
+        if(el._sr){try{el._sr.finish(el._text||'');}catch(_){}el._sr=null;}
+        else{const t=el.querySelector('.txt');
+          if(t&&el._text)t.textContent=el._text;}
+      });
   }
 
   async function consumeStream(resp){
     const rd=resp.body.getReader(),dec=new TextDecoder();
     let buf='';
+    try{
     while(true){
       const{value,done}=await rd.read();
       if(done)break;
@@ -182,15 +232,38 @@
         for(const line of part.split('\n')){
           if(!line.startsWith('data:'))continue;
           const data=line.slice(5).trim();
-          if(data==='[DONE]')return;
+          if(data==='[DONE]'){finalizeStrayStreams();return;}
           try{const j=JSON.parse(data);
             if(j.freellm)onEvent(j.freellm);}catch{}
         }
       }
     }
+    }finally{finalizeStrayStreams();}
+  }
+
+  // Public activity/finding/answer events belong to the character currently
+  // writing — not the transient queue line.
+  function routeToHolder(ev){
+    const holder=document.querySelector('#transcript .st-msg.writing');
+    if(!holder)return false;
+    const ch=ev.channel||'';
+    const interactive=ch==='finding'||ch==='answer'||
+      ev.event==='finding'||ev.event==='source_discovered'||
+      ev.event==='answer_delta'||ev.event==='answer_section';
+    if(interactive){holder._lr&&holder._lr.ingest(ev);return true;}
+    if(holder._log&&ev.event&&!['char_delta','char_start','char_end',
+        'turn_queue','turn_done','beat'].includes(ev.event)){
+      holder._log.ingest(ev);return true;}
+    return false;
   }
 
   function onEvent(ev){
+    if(['tool','note','fail','retry','step_start','step_done','step_fail',
+        'step_queued','tool_start','handoff','finding','source_discovered',
+        'answer_delta','answer_section','usage','try','routing','next','skip',
+        'rate_limited','degraded','budget'].includes(ev.event)||ev.channel){
+      if(routeToHolder(ev))return;
+    }
     switch(ev.event){
       case 'beat': upsertMsg(ev.message);scroll();break;
       case 'turn_queue':{
@@ -201,16 +274,32 @@
         const b=ensureMsgEl({id:ev.id,role:'character',kind:'dialogue',
           speaker:ev.name,emoji:ev.emoji,character_id:ev.character_id,
           text:'',variants:[],aside:ev.aside});
-        b.classList.add('writing');b._streaming=true;break;}
+        b.classList.add('writing');b._streaming=true;b._cid=ev.character_id;
+        // Reset per-element stream state on every start (regenerate too):
+        // destroy the previous renderers and recreate them in a fresh host.
+        if(b._sr){try{b._sr.abort();}catch(_){}b._sr=null;}
+        if(b._lr){try{b._lr.destroy();}catch(_){}b._lr=null;}
+        if(b._log){try{b._log.destroy();}catch(_){}b._log=null;}
+        if(b._lrHost){b._lrHost.remove();b._lrHost=null;}
+        b._text='';b._curEnv='';
+        const txt=b.querySelector('.txt');
+        if(txt){txt.innerHTML='';txt.classList.add('rich');}
+        if(window.NovaRender&&NovaRender.LiveRun&&window.Nova&&Nova.ActivityLog){
+          const host=document.createElement('div');host.className='lr-host';
+          b.querySelector('.b').insertBefore(host,txt);
+          b._lrHost=host;
+          b._log=Nova.ActivityLog.create(host,{compact:true});
+          b._lr=NovaRender.LiveRun.create(host,{scroller:$('#scroll')});
+        }
+        break;}
       case 'char_delta':{
         const el=document.getElementById('m-'+ev.id);
         if(el){el._text=(el._text||'')+ev.text;
-          // once the nova-response fence starts streaming, hide the raw
-          // JSON — char_end delivers the parsed envelope for rich render
-          if(el._text.includes('nova-response')){el._suppressed=true;
-            el.querySelector('.txt').textContent='';}
-          else if(!el._suppressed)
-            el.querySelector('.txt').textContent=el._text;
+          const txt=el.querySelector('.txt');
+          if(!el._sr&&window.NovaRender&&NovaRender.StreamingRenderer&&txt){
+            el._sr=NovaRender.StreamingRenderer.create(txt,$('#scroll'));}
+          if(el._sr)el._sr.setText(el._text);
+          else txt.textContent=el._text;
           scroll();}break;}
       case 'char_skip':{
         const el=document.getElementById('m-'+ev.id);
@@ -219,19 +308,35 @@
       case 'char_end':{
         const el=document.getElementById('m-'+ev.id);
         if(el){el.classList.remove('writing');el._streaming=false;
-          if(ev.env_text){renderRich(el,ev.env_text);el._text=ev.text;}
-          else if(ev.text&&el._text!==ev.text){el._text=ev.text;
-            el.querySelector('.txt').textContent=ev.text;}
+          if(el._cid!=null)presence(el._cid,false);
+          const txt=el.querySelector('.txt');
+          // authoritative envelope replaces any draft — never appended twice
+          const finalTxt=ev.env_text||ev.text||'';
+          if(el._sr){try{el._sr.abort();}catch(_){}}
+          if(ev.env_text)renderRich(el,ev.env_text,{fallback:ev.text||''});
+          else if(txt)txt.textContent=ev.text||'';
+          el._sr=null;
+          el._text=ev.text;
+          el._curEnv=ev.env_text||'';
+          el._variantMsgs=ev.variant_messages||[];
+          if(el._lr){try{el._lr.finish('done');}catch(_){}el._lr=null;}
+          if(el._log){try{el._log.finish('done',true);}catch(_){}el._log=null;}
+          if(ev.sources&&ev.sources.length){
+            el._sources=ev.sources;
+            if(room){const m=(room.messages||[]).find(x=>x.id===ev.id);
+              if(m)m.sources=ev.sources;}}
           if(ev.via&&ev.via.model&&!el.querySelector('.via')){
             const via=document.createElement('span');via.className='via';
             via.title='powered by '+(ev.via.provider||'');
             via.textContent=ev.via.model;
             el.querySelector('.who').appendChild(via);}
-          if(ev.variants&&ev.variants.length)attachSwipe(el,ev.id,ev.variants);}
+          if(ev.variants&&ev.variants.length)attachSwipe(el,ev.id,ev.variants,
+            el._variantMsgs);}
         // keep room.messages in sync
         if(room){const m=(room.messages||[]).find(x=>x.id===ev.id);
           if(m){m.text=ev.text;if(ev.env_text)m.env_text=ev.env_text;
             if(ev.variants)m.variants=ev.variants;
+            if(ev.sources)m.sources=ev.sources;
             if(ev.via)m.via=ev.via;}}
         break;}
       case 'turn_done':{
@@ -290,10 +395,24 @@
       m.role==='narrator'?'<div class="av">📜</div>':
       `<div class="av">${esc(m.emoji||'🎭')}</div>`}
       <div class="b"><div class="who">${who}${
+        m.aside_label?`<span class="via" style="opacity:.7">· ${esc(m.aside_label)}</span>`:''}${
         m.via&&m.via.model?`<span class="via" title="powered by ${esc(m.via.provider||'')}">${esc(m.via.model)}</span>`:''}</div>
       <div class="txt">${m.env_text?'':esc(m.text||'')}</div></div>`;
     el._text=m.text||'';
-    if(m.env_text)renderRich(el,m.env_text);
+    el._variantMsgs=m.variant_messages||[];
+    if(m.env_text)renderRich(el,m.env_text,{showActions:false,showSuggestions:false});
+    // Persisted interaction events → compact completed trace on reload.
+    if(m.interaction&&m.interaction.length&&
+       window.Nova&&Nova.ActivityLog){
+      try{
+        const det=document.createElement('details');det.className='st-trace';
+        det.innerHTML='<summary>activity</summary><div class="st-trace-body"></div>';
+        el.querySelector('.b').insertBefore(det,el.querySelector('.txt'));
+        const lg=Nova.ActivityLog.create(det.querySelector('.st-trace-body'));
+        m.interaction.forEach(e=>lg.ingest(e));
+        lg.finish('done',true);
+      }catch(_){}
+    }
     attachActs(el,m);
     host.appendChild(el);
     return el;
@@ -326,32 +445,47 @@
     if(acts.children.length)b.appendChild(acts);
   }
 
-  function renderRich(el,envText){
+  function renderRich(el,envText,opts){
     const t=el.querySelector('.txt');
     if(!t||typeof NovaRender==='undefined'||
        !NovaRender.ResponseRenderer)return;
     t.innerHTML='';t.classList.add('rich');
     try{NovaRender.ResponseRenderer.renderMessage(
-      {role:'assistant',content:envText},t);}
-    catch(e){t.classList.remove('rich');}
+      {role:'assistant',content:envText},t,
+      Object.assign({showActions:false,showSuggestions:false,richSources:true},opts||{}));}
+    catch(e){t.classList.remove('rich');t.textContent=(opts&&opts.fallback)||'';}
   }
 
-  function attachSwipe(el,mid,variants){
+  function attachSwipe(el,mid,variants,variantMsgs){
     const b=el.querySelector('.b');
     let sw=b.querySelector('.swipe');
     if(!sw){sw=document.createElement('div');sw.className='swipe';
       b.appendChild(sw);}
+    // variant_messages carries text+env_text+sources per variant (additive);
+    // legacy string variants remain supported.
+    const vms=Array.isArray(variantMsgs)?variantMsgs:[];
     const total=variants.length+1;
     swipeIdx[mid]=total-1;
+    // Viewing a swipe never mutates the canonical room message: each variant
+    // paints its own text + envelope (current = el._curEnv / el._text).
     const paint=()=>{
       const i=swipeIdx[mid];
-      const txt=i===total-1?(el._saved||el._text):variants[i];
-      el.querySelector('.txt').textContent=txt;
+      const current=i===total-1;
+      const vm=current?null:vms[i];
+      if(current){
+        if(el._curEnv)renderRich(el,el._curEnv);
+        else el.querySelector('.txt').textContent=el._text||'';
+      }else if(vm&&typeof vm==='object'){
+        if(vm.env_text)renderRich(el,vm.env_text);
+        else el.querySelector('.txt').textContent=vm.text||'';
+      }else{
+        el.querySelector('.txt').textContent=variants[i]||'';
+      }
       sw.innerHTML=`<button data-p>‹</button><span>${i+1}/${total}</span><button data-n>›</button>`;
       sw.querySelector('[data-p]').onclick=()=>{if(swipeIdx[mid]>0){swipeIdx[mid]--;paint();}};
       sw.querySelector('[data-n]').onclick=()=>{if(swipeIdx[mid]<total-1){swipeIdx[mid]++;paint();}};
     };
-    el._saved=el._saved||el._text;
+    el._variantMsgs=vms;
     paint();
   }
 

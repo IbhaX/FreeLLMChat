@@ -234,14 +234,24 @@ _EXA_KEY_CACHE: str | None = None
 
 
 async def _exa_api_key() -> str:
-    """Resolve the Exa key: EXA_API_KEY env first, then the settings table
-    key ``exa_api_key`` (admin-set via /admin/settings if present)."""
+    """Resolve the Exa key: EXA_API_KEY env first, then Settings
+    (``.env`` is read by pydantic Settings, not os.environ), then the
+    settings table key ``exa_api_key``. Only non-empty keys are cached —
+    an unset key is re-resolved on the next call."""
     global _EXA_KEY_CACHE
     import os
     env = os.environ.get("EXA_API_KEY", "").strip()
     if env:
         return env
-    if _EXA_KEY_CACHE is not None:
+    try:
+        from app.config import get_settings
+        sec = get_settings().exa_api_key
+        val = sec.get_secret_value().strip() if sec is not None else ""
+        if val:
+            return val
+    except Exception:
+        pass
+    if _EXA_KEY_CACHE:
         return _EXA_KEY_CACHE
     try:
         from app.db import get_session_factory
@@ -251,10 +261,12 @@ async def _exa_api_key() -> str:
             row = (await s.execute(
                 select(Setting).where(Setting.key == "exa_api_key"))
             ).scalar_one_or_none()
-            _EXA_KEY_CACHE = (row.value or "") if row else ""
+            val = (row.value or "").strip() if row else ""
+            if val:
+                _EXA_KEY_CACHE = val
+            return val
     except Exception:
-        _EXA_KEY_CACHE = ""
-    return _EXA_KEY_CACHE
+        return ""
 
 
 async def _exa_search(query: str, num_results: int = 5,
@@ -576,26 +588,222 @@ async def _execute_tool_call(tc: dict[str, Any]) -> tuple[str, str, dict[str, An
 
 async def _timed_tool_call(
     tc: dict[str, Any],
+    *, emit: Callable[[dict[str, Any]], None] | None = None,
+    allowed: set[str] | None = None,
+    parent_task_id: str | None = None,
+    actor: str = "",
 ) -> tuple[str, str, dict[str, Any], str, float]:
-    """_execute_tool_call + wall-clock duration for the activity log."""
+    """_execute_tool_call + wall-clock duration for the activity log.
+
+    When ``emit`` is given the call is observed: ``tool_start`` fires before
+    awaiting and ``tool`` completion fires the moment THIS call finishes
+    (not after slower gather siblings), sharing one task_id.
+    """
+    import json as _json
     import time
+    import uuid as _uuid
+
+    fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+    raw_name = str(fn.get("name", "") if isinstance(fn, dict) else "")
+    try:
+        raw_args = _json.loads(fn.get("arguments") or "{}")
+    except Exception:
+        raw_args = {}
+    if not isinstance(raw_args, dict):
+        raw_args = {}
+    call_id_str = str(tc.get("id", "") if isinstance(tc, dict) else "")
+    if allowed is not None and raw_name not in allowed:
+        blocked = f"tool error: '{raw_name}' is not in the allowed tool set"
+        if emit is not None:
+            emit({"event": "tool", "tool": raw_name, "ok": False,
+                  "status": "failed", "result": blocked[:400],
+                  "args": _brief_args(raw_args), "duration_ms": 0.0,
+                  "task_id": _uuid.uuid4().hex[:10],
+                  "parent_task_id": parent_task_id,
+                  "actor": actor or f"tool:{raw_name}",
+                  "text": f"⛔ {raw_name} blocked (not advertised)"})
+        return call_id_str, raw_name, raw_args, blocked, 0.0
+    if emit is None:
+        t0 = time.perf_counter()
+        call_id, name, args, out = await _execute_tool_call(tc)
+        return call_id, name, args, out, (time.perf_counter() - t0) * 1000
+    task_id = _uuid.uuid4().hex[:10]
+    emit({
+        "event": "tool_start", "tool": raw_name,
+        "args": _brief_args(raw_args), "task_id": task_id,
+        "parent_task_id": parent_task_id,
+        "actor": actor or f"tool:{raw_name}",
+        "text": f"🔧 {raw_name}({_brief_args(raw_args)})",
+    })
     t0 = time.perf_counter()
-    call_id, name, args, out = await _execute_tool_call(tc)
-    return call_id, name, args, out, (time.perf_counter() - t0) * 1000
+    try:
+        call_id, name, args, out = await _execute_tool_call(tc)
+    except asyncio.CancelledError:
+        # Cancelled mid-await: close the lifecycle as cancelled, never success.
+        emit({"event": "tool", "tool": raw_name, "ok": False,
+              "status": "cancelled", "result": "",
+              "args": _brief_args(raw_args),
+              "duration_ms": round((time.perf_counter() - t0) * 1000, 1),
+              "task_id": task_id, "parent_task_id": parent_task_id,
+              "actor": actor or f"tool:{raw_name}",
+              "text": f"⏹ {raw_name} cancelled"})
+        raise
+    dur = (time.perf_counter() - t0) * 1000
+    _emit_tool_result(emit, name, args, out, dur, task_id=task_id,
+                      parent_task_id=parent_task_id, actor=actor)
+    return call_id, name, args, out, dur
+
+
+_SEARCH_RESULT_RE = re.compile(r"^\s*(\d{1,2})[.)]\s+(.*)$")
+_URL_LINE_RE = re.compile(r"^\s{2,}(https?://\S+)\s*$")
+
+
+def search_sources(output: str) -> list[dict[str, str]]:
+    """Parse the numbered ``N. title / url / snippet`` text format the
+    search tools emit into structured source dicts.
+
+    Bounded to 10 entries, http(s) URLs only, deduped by URL, stable id
+    from a SHA-256 prefix of the URL. Snippets are copied verbatim —
+    never invented.
+    """
+    import hashlib
+
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    lines = (output or "").splitlines()
+    i = 0
+    while i < len(lines) and len(out) < 10:
+        m = _SEARCH_RESULT_RE.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        title = m.group(2).strip()
+        url = ""
+        snip_lines: list[str] = []
+        j = i + 1
+        # URL line first (indented), then optional snippet lines.
+        while j < len(lines):
+            um = _URL_LINE_RE.match(lines[j])
+            if um and not url:
+                url = um.group(1).rstrip(".,;:)")
+                j += 1
+                continue
+            if url and lines[j].startswith(("   ", "\t")) and lines[j].strip() \
+                    and not _SEARCH_RESULT_RE.match(lines[j]):
+                snip_lines.append(lines[j].strip())
+                j += 1
+                continue
+            break
+        i = j
+        if not url.lower().startswith(("http://", "https://")) or url in seen:
+            continue
+        seen.add(url)
+        src: dict[str, str] = {
+            "id": "src:" + hashlib.sha256(url.encode()).hexdigest()[:12],
+            "title": title[:200], "url": url,
+        }
+        if snip_lines:
+            src["snippet"] = " ".join(snip_lines)[:400]
+        out.append(src)
+    return out
+
+
+def _tool_outcome(name: str, out: str) -> tuple[bool, bool]:
+    """(ok, empty) classification for a finished tool call.
+
+    Exa 'unavailable'/errors, HTTP >=400 and 'No results found' are
+    unavailable/failed/empty — never reported as successful facts.
+    """
+    # Classify by the leading status/prefix only — a fetched article that
+    # happens to contain the word "unavailable" is still a success.
+    low = (out or "").lstrip().lower()
+    failed = low.startswith((
+        "error:", "tool error:", "fetch error:", "search error:",
+        "exa_search unavailable", "exa_search error", "no api key")) \
+        or bool(re.match(r"^http\s+[45]\d\d\b", low))
+    empty = low.startswith("no results found")
+    return (not failed), empty
+
+
+def _emit_source_discoveries(
+    emit: Callable[[dict[str, Any]], None], name: str, out: str,
+    *, task_id: str | None = None, actor: str = "",
+) -> None:
+    """Emit one source_discovered (channel=finding) per real result."""
+    if name not in ("web_search", "exa_search", "search", "academic_search"):
+        return
+    ok, empty = _tool_outcome(name, out)
+    if not ok or empty:
+        return
+    for src in search_sources(out):
+        emit({"event": "source_discovered", "source": src,
+              **{k: v for k, v in {
+                  "task_id": task_id, "actor": actor or f"tool:{name}"}.items()
+                 if v}})
 
 
 def _emit_tool_result(
     emit: Callable[[dict[str, Any]], None],
     name: str, args: dict[str, Any], out: str, dur_ms: float,
+    *, task_id: str | None = None, parent_task_id: str | None = None,
+    actor: str = "",
 ) -> None:
     """One structured tool-result event — name, inputs, outcome, duration."""
-    ok = not out.lower().startswith((
-        "error:", "tool error:", "fetch error:", "search error:", "empty"))
+    ok, empty = _tool_outcome(name, out)
     emit({
         "event": "tool", "tool": name, "args": _brief_args(args),
-        "result": out[:400], "ok": ok, "duration_ms": round(dur_ms, 1),
+        "result": out[:400], "ok": ok, "empty": empty,
+        "duration_ms": round(dur_ms, 1),
         "text": f"🔧 {name}({_brief_args(args)})",
+        **{k: v for k, v in {
+            "task_id": task_id, "parent_task_id": parent_task_id,
+            "actor": actor}.items() if v},
     })
+    _emit_source_discoveries(emit, name, out, task_id=task_id, actor=actor)
+
+
+async def execute_observed_tool(
+    name: str, args: dict[str, Any], *,
+    emit: Emit,
+    parent_task_id: Optional[str] = None,
+    actor: str = "",
+) -> str:
+    """Validate, execute and observe one named tool call.
+
+    Emits ``tool_start`` BEFORE awaiting the tool and a ``tool`` completion
+    with the SAME ``task_id``/``parent_task_id``/``actor`` plus duration as
+    soon as this call finishes. Returns the tool output string.
+    """
+    import json as _json
+    import time
+    import uuid as _uuid
+
+    task_id = _uuid.uuid4().hex[:10]
+    tname = str(name or "")
+    emit({
+        "event": "tool_start", "tool": tname, "args": _brief_args(args or {}),
+        "task_id": task_id, "parent_task_id": parent_task_id,
+        "actor": actor or f"tool:{tname}",
+        "text": f"🔧 {tname}({_brief_args(args or {})})",
+    })
+    t0 = time.perf_counter()
+    tc = {"id": "obs", "type": "function",
+          "function": {"name": tname, "arguments": _json.dumps(args or {})}}
+    try:
+        _cid, _n, targs, out = await _execute_tool_call(tc)
+    except asyncio.CancelledError:
+        emit({"event": "tool", "tool": tname, "ok": False,
+              "status": "cancelled", "result": "",
+              "args": _brief_args(args or {}),
+              "duration_ms": round((time.perf_counter() - t0) * 1000, 1),
+              "task_id": task_id, "parent_task_id": parent_task_id,
+              "actor": actor, "text": f"⏹ {tname} cancelled"})
+        raise
+    dur = (time.perf_counter() - t0) * 1000
+    _emit_tool_result(emit, _n or tname, targs or (args or {}), out, dur,
+                      task_id=task_id, parent_task_id=parent_task_id,
+                      actor=actor)
+    return out
 
 
 async def run_tool_loop(
@@ -609,6 +817,8 @@ async def run_tool_loop(
     tool_output_hook: Callable[[str, str], None] | None = None,
     tool_policy: bool = False,
     closing_message: str | None = None,
+    parent_task_id: str | None = None,
+    actor: str = "",
 ) -> dict[str, Any]:
     """Server-side tool-call loop over the built-in tools.
 
@@ -631,6 +841,7 @@ async def run_tool_loop(
     if not specs:
         result, _p, _k, _m = await gateway.chat(session, payload, on_event=emit)
         return result
+    allowed_names: set[str] = {s["function"]["name"] for s in specs}
 
     body = dict(payload)
     body["stream"] = False
@@ -684,9 +895,12 @@ async def run_tool_loop(
         })
         # Tool calls in the same model turn are independent; execute concurrently
         # while preserving their original order when appending results to history.
-        executed = await asyncio.gather(*(_timed_tool_call(tc) for tc in calls))
+        # Only names in the advertised spec set may execute (allowlist boundary).
+        executed = await asyncio.gather(*(
+            _timed_tool_call(tc, emit=emit, allowed=allowed_names,
+                             parent_task_id=parent_task_id, actor=actor)
+            for tc in calls))
         for call_id, name, args, out, dur_ms in executed:
-            _emit_tool_result(emit, name, args, out, dur_ms)
             if tool_output_hook is not None:
                 with contextlib.suppress(Exception):
                     tool_output_hook(name, out)
@@ -737,9 +951,11 @@ async def run_tool_loop(
             "content": _strip_text_tool_calls(text),
             "tool_calls": calls,
         })
-        executed = await asyncio.gather(*(_timed_tool_call(tc) for tc in calls))
+        executed = await asyncio.gather(*(
+            _timed_tool_call(tc, emit=emit, allowed=allowed_names,
+                             parent_task_id=parent_task_id, actor=actor)
+            for tc in calls))
         for call_id, name, args, out, dur_ms in executed:
-            _emit_tool_result(emit, name, args, out, dur_ms)
             if tool_output_hook is not None:
                 with contextlib.suppress(Exception):
                     tool_output_hook(name, out)

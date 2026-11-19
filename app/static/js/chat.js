@@ -555,7 +555,23 @@ async function streamAPIReply(c,live){
   const actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
   const acts=[];
   const stepCount=()=>actLog?actLog.count():acts.length;
+  // Progressive findings/draft area (channel=finding|answer events).
+  let liveRun=null,liveHost=null;
+  const ensureLive=()=>{
+    if(liveRun||!(window.NovaRender&&NovaRender.LiveRun))return liveRun;
+    liveHost=document.createElement('div');liveHost.className='lr-host';
+    const col=trow.querySelector('.msg-col');
+    const bub=col&&col.querySelector('.bubble');
+    if(bub)col.insertBefore(liveHost,bub);else col.appendChild(liveHost);
+    liveRun=NovaRender.LiveRun.create(liveHost,{scroller});
+    return liveRun;};
+  const feedLive=ev=>{
+    const ch=ev&&(ev.channel||(ev.event==='finding'||ev.event==='source_discovered'?'finding':
+      (ev.event==='answer_delta'||ev.event==='answer_section'?'answer':'')));
+    if(ch==='finding'||ch==='answer'){ensureLive();if(liveRun)liveRun.ingest(ev);return true;}
+    return false;};
   const addAct=ev=>{
+    if(feedLive(typeof ev==='string'?null:ev))return;
     if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);}
     else{const text=typeof ev==='string'?ev:(ev.text||ev.event);
       acts.push(text);
@@ -568,6 +584,7 @@ async function streamAPIReply(c,live){
   const closeAct=(ok)=>{
     if(actDone)return;actDone=true;
     if(actLog){actLog.ingest({id:'__write',kind:'write',status:ok===false?'failed':'done',title:'Writing the response'});actLog.finish(null,ok);}
+    if(liveRun){try{liveRun.finish(ok===false?'failed':'done');}catch(_){}liveRun=null;}
     const secs=Math.round((Date.now()-t0)/1000);
     const dur=secs>=60?`${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`:`${secs}s`;
     actLbl.textContent=`${stepCount()} step${stepCount()!==1?'s':''} · ${dur}`;
@@ -1087,7 +1104,22 @@ async function streamResearchReply(c){
   const ctrl=new AbortController();
   state.abort={get stop(){return ctrl.signal.aborted},set stop(v){if(v)ctrl.abort()}};
   let trow=null,acts=null,actLbl=null,actList=null,actLog=null,answer=null,meta=null;
+  let liveRun=null,liveHost=null;
   const stepCount=()=>actLog?actLog.count():(acts?acts.length:0);
+  const ensureLive=()=>{
+    if(liveRun||!(window.NovaRender&&NovaRender.LiveRun))return liveRun;
+    liveHost=document.createElement('div');liveHost.className='lr-host';
+    const col=trow&&trow.querySelector('.msg-col');
+    const bub=col&&col.querySelector('.bubble');
+    if(bub)col.insertBefore(liveHost,bub);else if(col)col.appendChild(liveHost);
+    liveRun=NovaRender.LiveRun.create(liveHost,{scroller});
+    return liveRun;};
+  const feedLive=ev=>{
+    if(!ev)return false;
+    const ch=ev.channel||(ev.event==='finding'||ev.event==='source_discovered'?'finding':
+      (ev.event==='answer_delta'||ev.event==='answer_section'?'answer':''));
+    if(ch==='finding'||ch==='answer'){ensureLive();if(liveRun)liveRun.ingest(ev);return true;}
+    return false;};
   const endTurn=()=>{if(trow){const steps=trow.querySelector('.act-steps');
     if(steps){if(actLog)actLog.finish();
       steps.removeAttribute('open');steps.querySelectorAll('.act-item').forEach(i=>i.classList.add('done'));
@@ -1105,6 +1137,7 @@ async function streamResearchReply(c){
     addAct({kind:'plan',status:'running',title:'Planning research…'});
   };
   const addAct=ev=>{if(!actList)return;
+    if(feedLive(typeof ev==='string'?null:ev))return;
     if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);}
     else{const text=typeof ev==='string'?ev:(ev.text||ev.event);
       acts.push(text);
@@ -1149,14 +1182,17 @@ async function streamResearchReply(c){
         try{
           const j=JSON.parse(data);
           const ev=j.freellm;
-          if(ev&&ev.event==='research_answer'){answer=ev.answer;meta=ev;continue;}
+          if(ev&&ev.event==='research_answer'){answer=ev.answer||answer;meta=ev;continue;}
           if(ev&&ev.event==='error'){addAct({event:'error',text:ev.text});continue;}
           if(ev)addAct(ev);
-          else if(j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content){answer=j.choices[0].delta.content;}
+          // OpenAI delta chunks ACCUMULATE — the terminal answer is the
+          // full concatenation, never just the last chunk.
+          else if(j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content){answer=(answer||'')+j.choices[0].delta.content;}
         }catch(_){}
       }
     }
     if(!answer)throw new Error('research returned no answer');
+    if(liveRun){try{liveRun.finish('done');}catch(_){}liveRun=null;}
     const steps=trow?trow.querySelector('.act-steps'):null;
     if(actLog)actLog.finish();
     if(steps){steps.removeAttribute('open');

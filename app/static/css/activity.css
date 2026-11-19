@@ -197,3 +197,50 @@
   .alog-state.s-running,.alog-step[data-status=running]>.alog-rail>.alog-node::before{
     animation:none}
 }
+
+/* ---- LiveRun: progressive findings / sources / answer draft ---- */
+.liverun{margin:6px 0 10px;min-width:0}
+.liverun .lr-label{font-size:11px;font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--text-3,#8a8f98);margin-bottom:6px}
+.lr-findings,.lr-draft{border:1px solid var(--border-1,#2a2f3a);
+  border-radius:10px;background:var(--bg-1,#14171d);padding:8px 10px;
+  margin-bottom:8px;min-width:0}
+.lr-flist{display:flex;flex-direction:column;gap:6px;min-width:0}
+.lr-finding{border-left:2px solid var(--accent,#6c8cff);padding:2px 0 2px 8px;
+  min-width:0}
+.lr-fhead{display:flex;gap:8px;align-items:center;margin-bottom:2px}
+.lr-badge{font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;
+  background:var(--surface-2,#1d212b);color:var(--text-2,#c7ccd6);
+  text-transform:uppercase;letter-spacing:.03em}
+.lr-badge.lr-unverified{color:#d9a441}
+.lr-badge.lr-corroborated,.lr-badge.lr-verified{color:#4ec98a}
+.lr-actor{font-size:10px;color:var(--text-3,#8a8f98)}
+.lr-ftext{font-size:13px;color:var(--text-1,#e6e9ef);
+  white-space:pre-wrap;word-break:break-word;min-width:0}
+.lr-fsrc{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.lr-link{color:var(--accent,#6c8cff);font-size:12px;text-decoration:none;
+  word-break:break-all;min-width:0}
+.lr-link:hover{text-decoration:underline}
+.lr-snip{font-size:11px;color:var(--text-3,#8a8f98);margin-top:2px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:6;
+  overflow:hidden}
+.lr-srcwrap{margin-top:6px}
+.lr-srcwrap summary{cursor:pointer;font-size:11px;color:var(--text-3,#8a8f98)}
+.lr-slist{display:flex;flex-direction:column;gap:4px;margin-top:6px;
+  max-height:180px;overflow:auto}
+.lr-source{font-size:12px;min-width:0}
+.lr-draft .lr-dbody{font-size:13px;color:var(--text-1,#e6e9ef);
+  min-width:0}
+.lr-section{margin-bottom:8px}
+.lr-sectitle{font-size:12px;font-weight:600;color:var(--text-2,#c7ccd6);
+  margin-bottom:2px}
+.lr-secbody{font-size:13px;white-space:pre-wrap;word-break:break-word}
+.lr-final{margin-top:4px}
+.lr-final>summary{cursor:pointer}
+@media (max-width:560px){
+  .lr-findings,.lr-draft{padding:6px 8px}
+  .lr-ftext,.lr-secbody{font-size:12px}
+}
+@media (prefers-reduced-motion:reduce){
+  .liverun *{animation:none!important;transition:none!important}
+}

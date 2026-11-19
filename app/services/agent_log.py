@@ -171,8 +171,14 @@ async def list_events(session: Any, run_id: int,
         ev = dict(r.payload or {})
         ev.setdefault("event", r.event)
         ev.setdefault("text", r.detail)
+        # Producer identity (event_id/run_id/seq/task links) survives replay;
+        # the storage cursor is exposed separately as ledger_seq.
+        ev.setdefault("seq", r.seq)
+        ev.setdefault("run_id", ev.get("run_id") or str(run_id))
+        ev.setdefault("event_id", ev.get("event_id") or f"{run_id}:{r.seq}")
         ev.update({
-            "id": f"{run_id}:{r.seq}", "seq": r.seq,
+            "id": ev.get("event_id") or f"{run_id}:{r.seq}",
+            "ledger_seq": r.seq,
             "kind": r.kind, "status": r.status, "title": r.title or r.detail[:160],
             "parent": r.parent or None, "level": r.level,
             "duration_ms": r.duration_ms or None,

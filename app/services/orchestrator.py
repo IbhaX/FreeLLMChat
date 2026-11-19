@@ -18,6 +18,7 @@ requests reach ``orchestrate``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -134,14 +135,31 @@ async def run_orchestrated(
                 meta={"intent": intent.intent.value if intent else ""})
             await s.commit()
     tapped = agent_log.tap_emit(run_id, emit) if run_id else emit
-    result = await orchestrate(
-        gateway, session, question,
-        intent=intent, history=history,
-        model=str((payload or {}).get("model") or "auto"),
-        emit=tapped)
+    try:
+        result = await orchestrate(
+            gateway, session, question,
+            intent=intent, history=history,
+            model=str((payload or {}).get("model") or "auto"),
+            emit=tapped)
+    except asyncio.CancelledError:
+        if run_id and factory:
+            async with factory() as s:
+                await agent_log.finish_run(s, run_id, "cancelled",
+                    duration_ms=int((time.monotonic() - t0) * 1000))
+                await s.commit()
+        raise
+    except Exception as e:
+        if run_id and factory:
+            async with factory() as s:
+                await agent_log.finish_run(s, run_id, "failed",
+                    meta={"error": str(e)[:200]},
+                    duration_ms=int((time.monotonic() - t0) * 1000))
+                await s.commit()
+        raise
     if run_id and factory:
         async with factory() as s:
-            await agent_log.persist_events(run_id, result.trace)
+            # tap_emit already persisted every traced event live; replaying
+            # result.trace here would double-record the ledger.
             await agent_log.finish_run(
                 s, run_id, "degraded" if result.degraded else "done",
                 meta={"intent": result.intent, "strategy": result.strategy,

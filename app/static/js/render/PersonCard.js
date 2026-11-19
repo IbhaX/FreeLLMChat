@@ -23,7 +23,7 @@
     const avatar = el("div", { class: "nova-person-avatar" });
     if (data.thumbnail) {
       const img = el("img", {
-        src: data.thumbnail,
+        src: Nova.safeHttpUrl(data.thumbnail),
         alt: name,
         loading: "lazy",
         referrerpolicy: "no-referrer",
@@ -50,7 +50,7 @@
     if (data.url) {
       const link = el("a", {
         class: "nova-person-link",
-        href: data.url,
+        href: Nova.safeHttpUrl(data.url),
         target: "_blank",
         rel: "noopener",
       });

@@ -17,6 +17,16 @@
 
   const Nova = (window.NovaRender = window.NovaRender || {});
 
+  // Only absolute http(s) URLs may become href/src in any rendered card.
+  Nova.safeHttpUrl = function safeHttpUrl(u) {
+    try {
+      const p = new URL(String(u || ""));
+      return p.protocol === "http:" || p.protocol === "https:" ? p.href : "";
+    } catch (_) {
+      return "";
+    }
+  };
+
   /* ---------- small DOM helpers ---------- */
   function el(tag, attrs, ...children) {
     const node = document.createElement(tag);

@@ -42,6 +42,7 @@ class TraceEvent:
     duration_ms: float = 0.0
     status: str = "ok"   # ok | fail | skip
     ts: float = field(default_factory=time.monotonic)
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 class ExecutionTrace:
@@ -53,19 +54,23 @@ class ExecutionTrace:
         self._seq = 0
 
     def record(self, event: str, actor: str, detail: str,
-               duration_ms: float = 0.0, status: str = "ok") -> None:
+               duration_ms: float = 0.0, status: str = "ok",
+               **kw: Any) -> None:
         self._seq += 1
-        ev = TraceEvent(self._seq, event, actor, detail, duration_ms, status)
+        meta = {k: v for k, v in kw.items() if v is not None}
+        ev = TraceEvent(self._seq, event, actor, detail, duration_ms,
+                        status, meta=meta)
         self.events.append(ev)
         # Forward as activity events so the chat UI shows live progress.
-        self._emit({"event": event, "text": detail,
-                    "actor": actor, "status": status})
+        self._emit({"event": event, "text": detail, "actor": actor,
+                    "status": status, "trace_seq": self._seq,
+                    "duration_ms": round(duration_ms, 1), **meta})
 
     def as_dicts(self) -> list[dict[str, Any]]:
         return [
             {"seq": e.seq, "event": e.event, "actor": e.actor,
              "detail": e.detail, "duration_ms": round(e.duration_ms, 1),
-             "status": e.status}
+             "status": e.status, **e.meta}
             for e in self.events
         ]
 
@@ -324,19 +329,22 @@ async def _run_step(
     gateway: Any, session: Any, step: TaskStep,
     upstream: dict[str, StepResult],
     question: str, emit: Any, trace: ExecutionTrace,
+    history: list[dict[str, Any]] | None = None,
 ) -> StepResult:
     """Run one delegated step with timeout, retry and validation."""
     expert = experts.get_expert(step.expert)
     if expert is None:
         trace.record("step_fail", step.expert, "unknown expert — skipped",
-                     status="skip")
+                     status="skip", task_id=step.id)
         return StepResult(step.id, step.expert, False,
                           error="unknown expert")
     t0 = time.monotonic()
     trace.record("step_start", expert.name,
-                 f"{expert.title} — {step.task[:80]}")
+                 f"{expert.title} — {step.task[:80]}",
+                 task_id=step.id, status="running")
 
-    # Working context: the question + upstream results this step depends on.
+    # Working context: the question + bounded conversation history +
+    # upstream results this step depends on.
     ctx_parts: list[str] = []
     for dep in step.depends_on:
         r = upstream.get(dep)
@@ -344,13 +352,30 @@ async def _run_step(
             ctx_parts.append(
                 f"### Output of step {dep} ({r.expert})\n"
                 f"{r.text[:_MAX_UPSTREAM_CHARS]}")
+            dep_expert = experts.get_expert(r.expert)
+            # Its own task: the dependent step's lifecycle row is untouched.
+            emit({"event": "handoff", "from_task": dep, "to_task": step.id,
+                  "target": step.expert, "actor": expert.name,
+                  "task_id": f"handoff:{dep}:{step.id}",
+                  "parent_task_id": step.id,
+                  "title": f"{(dep_expert.title if dep_expert else r.expert)}"
+                           f" -> {expert.title}: findings handed off",
+                  "text": (r.text or "")[:300],
+                  "status": "done"})
         elif r:
             ctx_parts.append(
                 f"### Output of step {dep} ({r.expert}) — FAILED: {r.error}")
     ctx = "\n\n".join(ctx_parts)
+    hist_txt = ""
+    if history:
+        hist_txt = "\n\n## Conversation so far\n" + "\n".join(
+            f"{m.get('role', 'user')}: {str(m.get('content') or m.get('text') or '')[:2000]}"
+            for m in history[-6:]
+        )[:12000]
 
     system = skills_mod.attach_instructions(expert.system_prompt, expert.skills)
-    user = step.task + (f"\n\n## Upstream results\n{ctx}" if ctx else "")
+    user = (f"Original request:\n{question[:4000]}{hist_txt}\n\n"
+            + step.task + (f"\n\n## Upstream results\n{ctx}" if ctx else ""))
     tool_names = sorted(set(expert.tools)
                         | set(skills_mod.required_tools(expert.skills))
                         ) or None
@@ -370,7 +395,8 @@ async def _run_step(
                                       {"role": "user", "content": user}],
                          "nova_structured": False},
                         tool_names, emit=emit,
-                        max_rounds=expert.max_tool_rounds)
+                        max_rounds=expert.max_tool_rounds,
+                        parent_task_id=step.id, actor=expert.name)
                 result, _p, _k, _m = await gateway.chat(
                     session,
                     {"model": cand,
@@ -396,20 +422,27 @@ async def _run_step(
     if not res.ok:
         trace.record("step_fail", expert.name,
                      f"{expert.title} failed: {res.error or 'empty'}",
-                     duration_ms=dur, status="fail")
+                     duration_ms=dur, status="fail", task_id=step.id)
         return StepResult(step.id, step.expert, False, duration_ms=dur,
                           attempts=res.attempts, error=res.error)
     verr = _validate(step, res.text)
     if verr:
         trace.record("step_fail", expert.name,
                      f"{expert.title} output rejected: {verr}",
-                     duration_ms=dur, status="fail")
+                     duration_ms=dur, status="fail", task_id=step.id)
         return StepResult(step.id, step.expert, False, duration_ms=dur,
                           attempts=res.attempts, error=verr)
     trace.record("step_done", expert.name,
                  f"{expert.title} done ({res.model or '?'}, "
                  f"{len(res.text)} chars)",
-                 duration_ms=dur)
+                 duration_ms=dur, task_id=step.id)
+    # Progressive finding: the step's public output, explicitly unverified
+    # (the pipeline has no per-step verification stage).
+    emit({"event": "finding", "result_id": f"step:{step.id}",
+          "claim": step.task[:200], "text": res.text[:6000],
+          "evidence": "", "evidence_class": "unverified",
+          "actor": expert.name, "task_id": step.id, "status": "done",
+          "title": f"{expert.title} result"})
     return StepResult(step.id, step.expert, True, text=res.text,
                       model=res.model, duration_ms=dur,
                       attempts=res.attempts)
@@ -418,6 +451,7 @@ async def _run_step(
 async def _synthesize(
     gateway: Any, session: Any, question: str,
     results: list[StepResult], emit: Any, trace: ExecutionTrace,
+    on_delta: Any | None = None,
 ) -> CallResult:
     """Final synthesis pass over the successful step outputs."""
     ok_steps = [r for r in results if r.ok]
@@ -433,16 +467,24 @@ async def _synthesize(
         for r in results
     )
     trace.record("stage", "synthesizer",
-                 f"Synthesizing {len(ok_steps)} result(s)")
+                 f"Synthesizing {len(ok_steps)} result(s)",
+                 task_id="synthesis", status="running")
+    payload = {
+        "messages": [
+            {"role": "system", "content": _SYNTH_PROMPT},
+            {"role": "user", "content":
+                f"Original request:\n{question}\n\nExpert outputs:\n{bundle}"},
+        ],
+        "nova_structured": True,
+    }
+    if on_delta is not None:
+        from app.services.model_policy import stream_completion
+        return await stream_completion(
+            gateway, session, payload, role="reasoning", retries=1,
+            emit=emit, on_delta=on_delta, label="synthesis",
+            timeout_s=SYNTH_TIMEOUT_S)
     return await internal_chat(
-        gateway, session, {
-            "messages": [
-                {"role": "system", "content": _SYNTH_PROMPT},
-                {"role": "user", "content":
-                    f"Original request:\n{question}\n\nExpert outputs:\n{bundle}"},
-            ],
-            "nova_structured": True,
-        },
+        gateway, session, payload,
         requested=None, role="reasoning", retries=1,
         emit=emit, label="synthesis")
 
@@ -461,11 +503,14 @@ async def orchestrate(
     from app.services.intent import classify
 
     emit = emit or (lambda ev: None)
+    from app.services.activity import InteractionEmitter
+    if not getattr(emit, "_interaction_emitter", False):
+        emit = InteractionEmitter(emit)
     trace = ExecutionTrace(emit)
-    run_id = uuid.uuid4().hex[:10]
+    run_id = getattr(emit, "run_id", None) or uuid.uuid4().hex[:10]
     ir = intent or classify(question, history)
     trace.record("stage", "orchestrator",
-                 f"run {run_id} — {ir.rationale}")
+                 f"run {run_id} — {ir.rationale}", task_id="orchestrator")
 
     try:
         plan = await build_plan(gateway, session, question, ir,
@@ -476,6 +521,10 @@ async def orchestrate(
         plan = _template_plan(question, ir)
     for step in plan.steps:
         step.model = step.model if step.model != "auto" else model
+        emit({"event": "step_queued", "task_id": step.id,
+              "actor": step.expert, "status": "queued",
+              "title": f"{step.expert} queued",
+              "text": step.task[:160]})
 
     if not plan.steps:
         # Nothing delegable — single generic pass.
@@ -484,12 +533,27 @@ async def orchestrate(
             ir.intent.value, "single", "no delegable steps")
 
     # Execute level by level; steps within a level run concurrently.
+    # Each parallel expert gets its OWN session when a factory is available
+    # (a shared AsyncSession cannot run concurrent operations).
+    factory = None
+    try:
+        from app.db import get_session_factory
+        factory = get_session_factory()
+    except Exception:
+        factory = None
+
+    async def _step_with_session(s: TaskStep,
+                                 up: dict[str, StepResult]) -> StepResult:
+        if factory is not None:
+            async with factory() as own:
+                return await _run_step(gateway, own, s, up, question,
+                                       emit, trace, history)
+        return await _run_step(gateway, session, s, up, question,
+                               emit, trace, history)
+
     results: dict[str, StepResult] = {}
     for level in plan.levels():
-        coros = [
-            _run_step(gateway, session, s, results, question, emit, trace)
-            for s in level
-        ]
+        coros = [_step_with_session(s, results) for s in level]
         done = await asyncio.gather(*coros, return_exceptions=True)
         for s, r in zip(level, done):
             if isinstance(r, BaseException):
@@ -498,7 +562,7 @@ async def orchestrate(
                     error=f"unhandled: {str(r)[:120]}")
                 trace.record("step_fail", s.expert,
                              f"unhandled error: {str(r)[:100]}",
-                             status="fail")
+                             status="fail", task_id=s.id)
             else:
                 results[s.id] = r
 
@@ -506,9 +570,19 @@ async def orchestrate(
     ok = [r for r in ordered if r.ok]
 
     # Synthesize; on synthesis failure return the best partial output.
+    # Progressive draft: answer_delta events carry task_id='synthesis'.
+    def _draft_delta(piece: str) -> None:
+        if piece:
+            emit({"event": "answer_delta", "text": piece,
+                  "task_id": "synthesis", "status": "running"})
     try:
         final = await _synthesize(gateway, session, question,
-                                  ordered, emit, trace)
+                                  ordered, emit, trace,
+                                  on_delta=_draft_delta)
+    except asyncio.CancelledError:
+        trace.record("done", "orchestrator", "run cancelled",
+                     status="cancelled", task_id="orchestrator")
+        raise
     except Exception as e:
         final = CallResult(text="", degraded=True,
                            error=f"synthesis crashed: {str(e)[:120]}")

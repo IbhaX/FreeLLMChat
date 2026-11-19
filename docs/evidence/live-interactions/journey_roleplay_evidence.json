@@ -1,0 +1,42 @@
+{
+  "server": "http://127.0.0.1:5011",
+  "fixture": true,
+  "seeded_room": 4,
+  "assertions": {
+    "source_visible_before_final_table": true,
+    "comp_slot_count": 3,
+    "native_table_count": 1,
+    "native_table_body_rows": 2,
+    "search_card_count": 3,
+    "final_source_links_example_org": 9,
+    "no_raw_protocol_turn1": true,
+    "no_cursor_after_terminal": true,
+    "code_block_count": 1,
+    "code_contains_print": true,
+    "dossier_finding_visible_live": true,
+    "dossier_final_not_yet": true,
+    "dossier_full_report_sentinel": true,
+    "dossier_gaps_section": true,
+    "dossier_person_card": true,
+    "dossier_timeline": true,
+    "dossier_source_card": true,
+    "dossier_no_raw_protocol": true,
+    "dossier_calls_text": "1",
+    "dossier_tokens_text": "6,000",
+    "dossier_usage_counted": true,
+    "dossier_no_cursor": true,
+    "dossier_no_writing": true,
+    "reload_table_body_rows": 2,
+    "reload_table_identical": true,
+    "reload_search_card_count": 10,
+    "mobile_390_overflow_px": 0
+  },
+  "app_console_errors": [],
+  "external_console_messages_ignored": 1,
+  "screenshots": {
+    "desktop": "docs\\evidence\\live-interactions\\roleplay_desktop_1280.png",
+    "dossier": "docs\\evidence\\live-interactions\\roleplay_dossier.png",
+    "mobile": "docs\\evidence\\live-interactions\\roleplay_mobile_390.png"
+  },
+  "generated_at": "2026-11-19T21:58:02"
+}

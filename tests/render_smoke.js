@@ -1,13 +1,76 @@
 // Smoke test for the Nova render engine — runs in Node with a minimal DOM shim.
 global.window = {};
+// Minimal element model: tags, attributes, text and children serialize to
+// outerHTML so renderer output is inspectable without a browser.
+const escapeText = (s) => String(s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+class FakeNode {
+  constructor(tag) {
+    this.tagName = tag ? tag.toUpperCase() : "";
+    this.nodeType = tag ? 1 : 3;
+    this.children = [];
+    this.attributes = {};
+    this.dataset = {};
+    this.style = {};
+    this.hidden = false;
+    this._text = "";
+    this.parentNode = null;
+    const self = this;
+    this.classList = {
+      add(...c) { const cur = (self.attributes.class || "").split(/\s+/).filter(Boolean);
+        c.forEach(x => { if (!cur.includes(x)) cur.push(x); });
+        self.attributes.class = cur.join(" "); },
+      remove(...c) { self.attributes.class = (self.attributes.class || "").split(/\s+/)
+        .filter(x => x && !c.includes(x)).join(" "); },
+      toggle(c, on) { const has = this.contains(c);
+        if (on === undefined ? !has : on) this.add(c); else this.remove(c); return !has; },
+      contains(c) { return (self.attributes.class || "").split(/\s+/).includes(c); },
+    };
+  }
+  get className() { return this.attributes.class || ""; }
+  set className(v) { this.attributes.class = String(v); }
+  setAttribute(k, v) { this.attributes[k] = String(v); }
+  getAttribute(k) { return k in this.attributes ? this.attributes[k] : null; }
+  addEventListener() {}
+  append(...nodes) {
+    nodes.forEach(n => this.appendChild(n instanceof FakeNode ? n : document.createTextNode(n)));
+  }
+  appendChild(n) { n.parentNode = this; this.children.push(n); return n; }
+  insertBefore(n, ref) {
+    const i = this.children.indexOf(ref);
+    if (i < 0) return this.appendChild(n);
+    n.parentNode = this; this.children.splice(i, 0, n); return n;
+  }
+  remove() { if (this.parentNode) {
+    this.parentNode.children = this.parentNode.children.filter(c => c !== this); } }
+  replaceWith(n) { const p = this.parentNode; if (!p) return;
+    const i = p.children.indexOf(this); p.children[i] = n; n.parentNode = p; this.parentNode = null; }
+  querySelectorAll() { return []; }
+  querySelector() { return null; }
+  get textContent() {
+    if (this.nodeType === 3) return this._text;
+    return this.children.map(c => c.textContent).join("");
+  }
+  set textContent(v) {
+    if (this.nodeType === 3) { this._text = String(v); return; }
+    this.children = []; this._text = String(v);
+    if (String(v)) this.children.push(document.createTextNode(String(v)));
+  }
+  get innerHTML() {
+    return this.nodeType === 3 ? escapeText(this._text)
+      : this.children.map(c => c.nodeType === 3 ? escapeText(c._text) : c.outerHTML).join("");
+  }
+  set innerHTML(v) { this.children = []; this._raw = String(v); }
+  get outerHTML() {
+    if (this.nodeType === 3) return escapeText(this._text);
+    const attrs = Object.entries(this.attributes).map(([k, v]) => ` ${k}="${escapeText(v).replace(/"/g, "&quot;")}"`).join("");
+    const inner = this.children.map(c => c.nodeType === 3 ? escapeText(c._text) : c.outerHTML).join("");
+    return `<${this.tagName.toLowerCase()}${attrs}>${inner}</${this.tagName.toLowerCase()}>`;
+  }
+}
 global.document = {
-  createElement: () => ({
-    setAttribute() {}, append() {}, addEventListener() {},
-    style: {}, classList: { add() {}, remove() {}, toggle() {} },
-    dataset: {}, innerHTML: "", textContent: "",
-    appendChild() {}, querySelectorAll: () => [], querySelector: () => null,
-  }),
-  createTextNode: (t) => ({ textContent: t, nodeType: 3 }),
+  createElement: (tag) => new FakeNode(tag),
+  createTextNode: (t) => { const n = new FakeNode(""); n._text = String(t); return n; },
   documentElement: { dataset: {} },
   head: { appendChild() {} },
 };
@@ -77,7 +140,8 @@ const env = {
 const fenced = "Intro prose.\n\n```nova-response\n" + JSON.stringify(env) + "\n```";
 const plan = Nova.ResponseClassifier.classify(fenced);
 ok("envelope classified as 'envelope'", plan.kind === "envelope");
-ok("envelope prose extracted", plan.prose === "Intro prose.");
+ok("envelope keeps surrounding prose and envelope content",
+  plan.prose === "Intro prose.\n\nRevenue breakdown.");
 ok("envelope has 3 components", plan.envelope.components.length === 3);
 ok("envelope suggested_prompts preserved", plan.envelope.suggested_prompts.length === 1);
 

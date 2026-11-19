@@ -5,17 +5,38 @@
   let currentMeta=null;
   let running=false;
   let actLog=null;
+  let liveRun=null,liveHost=null,accAnswer='';
 
   AdminShell.mount('research');
   window.addEventListener('admin-ready',init);
   if(ADMIN_TOKEN)init();
 
   function addStage(ev){
+    // Progressive findings/draft channel → LiveRun (before the activity log).
+    if(ev&&typeof ev==='object'){
+      const ch=ev.channel||(ev.event==='finding'||ev.event==='source_discovered'?'finding':
+        (ev.event==='answer_delta'||ev.event==='answer_section'?'answer':''));
+      if(ch==='finding'||ch==='answer'){
+        ensureLive();
+        if(liveRun)liveRun.ingest(ev);
+        return;
+      }
+    }
     if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);return;}
     const d=document.createElement('div');
     d.className='rs-stage';
     d.innerHTML=`<span class="dot"></span><span>${esc(typeof ev==='string'?ev:(ev.text||ev.event))}</span>`;
     $('#stages').appendChild(d);
+  }
+
+  function ensureLive(){
+    if(liveRun||!(window.NovaRender&&NovaRender.LiveRun))return liveRun;
+    liveHost=document.createElement('div');liveHost.className='lr-host';
+    const stages=$('#stages');
+    if(stages)stages.parentNode.insertBefore(liveHost,stages);
+    else document.body.appendChild(liveHost);
+    liveRun=NovaRender.LiveRun.create(liveHost,{scroller:window});
+    return liveRun;
   }
 
   async function init(){
@@ -144,12 +165,15 @@
     $('#runBtn').textContent=progressText||'Researching…';
     $('#stopBtn').style.display='';$('#stopBtn').disabled=false;
     $('#stages').innerHTML='';$('#rxpad').innerHTML='';
+    if(liveHost&&liveHost.parentNode)liveHost.parentNode.removeChild(liveHost);
+    liveHost=null;liveRun=null;accAnswer='';
     $('#report').innerHTML='<p class="tx-3" style="text-align:center;padding:48px 0">Research in progress — the report appears here when complete.</p>';
     actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create($('#stages')):null;
     currentAnswer='';currentMeta=null;$('#exportBtn').disabled=true;$('#printBtn').disabled=true;
   }
 
   function endRunUI(){
+    if(liveRun){try{liveRun.finish('done');}catch(_){}liveRun=null;}
     if(actLog)actLog.finish();
     running=false;$('#runBtn').disabled=false;$('#runBtn').textContent='Run research';
     $('#stopBtn').style.display='none';
@@ -182,7 +206,9 @@
               if(e.event==='research_answer')continue;
               addStage(e);
             }else if(ev.choices&&ev.choices[0]&&ev.choices[0].delta&&ev.choices[0].delta.content){
-              renderAnswer(ev.choices[0].delta.content);
+              // OpenAI chunks ACCUMULATE — final answer is the full text.
+              accAnswer=(accAnswer||'')+ev.choices[0].delta.content;
+              renderAnswer(accAnswer);
               loadRuns();
             }
           }catch(_){}

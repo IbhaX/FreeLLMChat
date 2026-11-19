@@ -510,6 +510,8 @@ class Finding:
     researcher: str = ""
     verdict: str = ""  # set by verifier
     verdict_note: str = ""
+    # Stable per-run id for progressive finding events (assigned at merge).
+    result_id: str = ""
     # Evidence classification set after verification:
     # verified | corroborated | partially_supported | contradicted |
     # inaccessible | unverified | not_found
@@ -644,10 +646,14 @@ async def _plan(
 async def _research_one(
     gateway: Any, session: Any, model: str | list[str], sq: dict[str, Any],
     depth: str, state: ResearchState, emit: Emit,
+    task_ns: str = "sq",
 ) -> None:
     from app.services.tools import run_tool_loop
 
     qid = str(sq.get("id") or f"q{len(state.findings) + 1}")
+    task_id = f"{task_ns}:{qid}"
+    actor = f"researcher:{qid}"
+    src_before = set(state.sources)
     question = str(sq.get("question") or "")
     queries = _norm_queries(sq.get("search_queries")) or [question]
     calls = {"quick": 3, "standard": 6, "deep": 8}[depth]
@@ -663,6 +669,7 @@ async def _research_one(
     )
     emit({"event": "stage", "text": f"Researching {qid}: {question[:80]}",
           "stage": "research", "sub": qid, "agent": "researcher",
+          "task_id": task_id, "actor": actor, "status": "running",
           "detail": f"{question}\n\nQueries: {', '.join(queries)}"})
     seen_urls: list[str] = []
 
@@ -711,6 +718,7 @@ async def _research_one(
                         call_timeout=240,
                         tool_output_hook=harvest,
                         closing_message=RESEARCHER_CLOSING,
+                        parent_task_id=task_id, actor=actor,
                     )
             else:
                 result = await run_tool_loop(
@@ -720,6 +728,7 @@ async def _research_one(
                     call_timeout=240,
                     tool_output_hook=harvest,
                     closing_message=RESEARCHER_CLOSING,
+                    parent_task_id=task_id, actor=actor,
                 )
             break
         except Exception as e:
@@ -736,6 +745,8 @@ async def _research_one(
         emit({"event": "note",
               "text": f"{qid}: researcher failed on all model candidates — "
                       "no findings for this aspect"})
+        emit({"event": "step_fail", "task_id": task_id, "actor": actor,
+              "status": "failed", "text": f"{qid} failed — no findings"})
         return
     text = text_of(((result.get("choices") or [{}])[0]).get("message", {}).get("content"))
     data = _extract_json(text)
@@ -760,6 +771,28 @@ async def _research_one(
         emit({"event": "note",
               "text": f"{qid}: researcher returned no usable findings"})
     state.harvested[qid] = seen_urls
+    # Progressive channel events: sources this worker actually fetched or
+    # cited (its own harvested URLs), then each merged finding (explicitly
+    # unverified until the verifier runs). Siblings' sources are excluded.
+    for sid in sorted(set(state.sources) - src_before):
+        s = state.sources[sid]
+        if s.url in seen_urls and (s.url or "").lower().startswith(("http://", "https://")):
+            emit({"event": "source_discovered", "task_id": task_id,
+                  "actor": actor, "status": "done",
+                  "source": {"id": sid, "title": s.title or s.url,
+                             "url": s.url}})
+    for f in state.findings[merged_before:]:
+        src = state.sources.get(f.source_id)
+        emit({"event": "finding", "result_id": f.result_id or "",
+              "claim": f.claim[:300], "text": f.claim[:600],
+              "evidence": f.evidence[:400], "evidence_class": "unverified",
+              "actor": actor, "task_id": task_id, "status": "done",
+              "sources": ([{"id": src.id, "title": src.title or src.url,
+                            "url": src.url}] if src else []),
+              "title": f.claim[:120]})
+    emit({"event": "step_done", "task_id": task_id, "actor": actor,
+          "status": "done",
+          "text": f"{qid} finished — {len(state.findings) - merged_before} finding(s)"})
 
 
 _TRACK_PARAM_RE = re.compile(r"^(utm_|fbclid|gclid|mc_|igshid|ref_src)", re.I)
@@ -858,6 +891,7 @@ def _merge_findings(state: ResearchState, data: dict[str, Any], qid: str) -> Non
                 claim=str(claim), evidence=str(f.get("evidence") or f.get("detail") or ""),
                 source_id=id_map.get(raw_sid, raw_sid),
                 confidence=str(f.get("confidence") or ""), sub_question=qid,
+                result_id=f"find:{qid}:{len(state.findings) + 1:03d}",
             ))
     for c in data.get("conflicts") or []:
         if isinstance(c, str):
@@ -1025,7 +1059,9 @@ def _atomize_findings(state: ResearchState) -> None:
                     researcher=f.researcher,
                     corroborated_by=[s for s in f.corroborated_by
                                      if s != f.source_id],
-                    source_guessed=f.source_guessed)
+                    source_guessed=f.source_guessed,
+                    result_id=(f.result_id if len(parts) <= 1
+                               else f"{f.result_id or 'find'}:{len(order)}"))
                 order.append(key)
     state.findings = [merged[k] for k in order]
 
@@ -1141,6 +1177,20 @@ async def _verify(
              if (f.verdict or "").lower() in ("supported", "partially supported"))
     flagged = [f for f in claims_list if (f.verdict or "").lower() in bad]
     _classify_evidence(state)
+    # Progressive updates AFTER classification: same result_ids, the actual
+    # evidence_class and verdict — never a blanket "unverified" or "verified".
+    for f in claims_list:
+        emit({"event": "finding", "result_id": f.result_id or "",
+              "claim": f.claim[:300], "evidence_class":
+              getattr(f, "evidence_class", "") or "unverified",
+              "verdict": f.verdict or "", "actor": "verifier",
+              "task_id": f"verify:{f.sub_question}", "status": "done",
+              "sources": ([{"id": state.sources[f.source_id].id,
+                            "title": state.sources[f.source_id].title
+                            or state.sources[f.source_id].url,
+                            "url": state.sources[f.source_id].url}]
+                           if f.source_id in state.sources else []),
+              "title": f.claim[:120]})
     emit({"event": "note", "stage": "verify",
           "text": f"{ok} verified · {len(flagged)} flagged · "
                   f"{fetched} sources fetched",
@@ -1393,7 +1443,8 @@ async def _synthesize_sections(
         from app.services.settings_store import custom_instructions_block
         section_system += "\n\n" + custom_instructions_block(custom_instructions)
 
-    async def write_section(g: dict[str, Any], *, expand: bool = False) -> str:
+    async def write_section(g: dict[str, Any], *, expand: bool = False,
+                            index: int = 0) -> str:
         kept_f, rejected_f = _ledger_findings(g["findings"])
         payload = json.dumps({
             "question": question, "aspect": g["title"],
@@ -1419,9 +1470,18 @@ async def _synthesize_sections(
                         "item must carry real explanatory depth.")
         ctx = factory() if factory else contextlib.nullcontext(session)
         async with ctx as s:
-            return await _call(gateway, s, cands,
-                               [{"role": "user", "content": payload}],
-                               system=section_system, max_tokens=3600)
+            t = await _call(gateway, s, cands,
+                            [{"role": "user", "content": payload}],
+                            system=section_system, max_tokens=3600)
+        # Progressive first-pass draft. Expansion drafts are NOT published
+        # here — only the selected expansion is published after selection.
+        if not expand:
+            emit({"event": "answer_section",
+                  "section_id": f"section:{index}", "index": index + 1,
+                  "title": str(g.get("title") or "Section"),
+                  "text": str(t).strip()[:8000], "task_id": "synthesis",
+                  "status": "done"})
+        return t
 
     async def write_summary() -> str:
         kept_f, _ = _ledger_findings(state.findings)
@@ -1440,7 +1500,11 @@ async def _synthesize_sections(
                         "leading with the single most important finding. Cite "
                         "sources as [n]. No preamble, no section heading."),
                 max_tokens=800)
-        return t.strip()
+        t = t.strip()
+        emit({"event": "answer_section", "section_id": "summary",
+              "index": 0, "title": "Executive summary", "text": t[:8000],
+              "task_id": "synthesis", "status": "done"})
+        return t
 
     emit({"event": "stage", "text": f"Writing report — {len(groups)} sections",
           "stage": "synthesize", "agent": "synthesizer",
@@ -1448,7 +1512,7 @@ async def _synthesize_sections(
                              for i, g in enumerate(groups[:12]))})
     results = await asyncio.gather(
         write_summary(),
-        *(write_section(g) for g in groups[:12]),
+        *(write_section(g, index=i) for i, g in enumerate(groups[:12])),
     )
     summary, sections = results[0], [str(t).strip() for t in results[1:]]
 
@@ -1458,10 +1522,18 @@ async def _synthesize_sections(
             if 0 < len(t.split()) < 450 and len(g["findings"]) >= 3]
     if thin:
         expanded = await asyncio.gather(
-            *(write_section(groups[i], expand=True) for i in thin))
+            *(write_section(groups[i], expand=True, index=i)
+              for i in thin))
         for i, t in zip(thin, expanded):
             if len(t.split()) > len(sections[i].split()):
                 sections[i] = t.strip()
+                # Publish the selected expansion under the SAME section_id,
+                # so the shorter rejected draft is never what remains shown.
+                emit({"event": "answer_section",
+                      "section_id": f"section:{i}", "index": i + 1,
+                      "title": str(groups[i].get("title") or "Section"),
+                      "text": sections[i][:8000], "task_id": "synthesis",
+                      "status": "done"})
 
     parts: list[str] = []
     if summary:
@@ -1572,8 +1644,26 @@ async def _synthesize(
     if custom_instructions:
         from app.services.settings_store import custom_instructions_block
         system += "\n\n" + custom_instructions_block(custom_instructions)
-    answer = await _call(gateway, session, model, msgs, system=system,
-                         max_tokens=8192)
+    # Single-pass synthesis streams progressively (answer_delta) when the
+    # gateway supports it; buffered _call remains the fallback.
+    answer = ""
+    if getattr(gateway, "chat_stream", None) is not None:
+        cands = [model] if isinstance(model, str) else list(model)
+        payload = {
+            "messages": ([{"role": "system", "content": system}] + msgs),
+            "stream": True, "temperature": 0.2, "max_tokens": 8192,
+        }
+        from app.services.model_policy import stream_completion
+        res = await stream_completion(
+            gateway, session, payload, candidates=cands, emit=emit,
+            on_delta=lambda piece: piece and emit({
+                "event": "answer_delta", "text": piece,
+                "task_id": "synthesis", "status": "running"}),
+            label="synthesis", timeout_s=180.0)
+        answer = res.text if res.text else ""
+    if not answer.strip():
+        answer = await _call(gateway, session, model, msgs, system=system,
+                             max_tokens=8192)
     answer = _clean_answer(answer, state)
     return _ensure_envelope(_repair_envelope(answer, state), state)
 
@@ -1954,6 +2044,13 @@ async def run_research(
             "sources": len(state.sources),
         })
 
+    # One InteractionEmitter at the run boundary: stable run_id/seq/
+    # event_id/channel for every pipeline event. Retain identity when the
+    # caller already wrapped (e.g. tests or upstream bridges).
+    from app.services.activity import InteractionEmitter
+    if not getattr(raw_emit, "_interaction_emitter", False):
+        raw_emit = InteractionEmitter(raw_emit)
+
     state.depth = depth if depth in ("quick", "standard", "deep") else classify_depth(
         question, messages[:-1]
     )
@@ -2030,8 +2127,9 @@ async def run_research(
             Finding(claim=str(f.get("claim") or ""), evidence=str(f.get("evidence") or ""),
                     source_id=str(f.get("source_id") or ""),
                     confidence=str(f.get("confidence") or ""),
-                    sub_question="prior", verdict=str(f.get("verdict") or ""))
-            for f in prior if f.get("claim")
+                    sub_question="prior", verdict=str(f.get("verdict") or ""),
+                    result_id=f"find:prior:{n:03d}")
+            for n, f in enumerate(prior, 1) if f.get("claim")
         )
         emit({"event": "note", "text": f"reusing {len(prior)} prior findings"})
     planner_model = _stage_model("planner", model)
@@ -2045,11 +2143,12 @@ async def run_research(
                              messages[:-1], emit, prior=prior)
     _cache_put(conv, "plan", question, state.plan)
 
-    async def research_round(sqs: list[dict[str, Any]]) -> None:
+    async def research_round(sqs: list[dict[str, Any]],
+                             ns: str = "sq") -> None:
         tasks = [
             asyncio.create_task(_research_one(
                 gateway, session, researcher_model, sq, state.depth,
-                state, emit))
+                state, emit, task_ns=ns))
             for sq in sqs
         ]
         try:
@@ -2080,7 +2179,7 @@ async def run_research(
         follow = [{"id": f"g{state.rounds}_{i}", "question": g.get("sub_question") or g.get("problem", ""),
                    "search_queries": _norm_queries(g.get("follow_up_queries")) or [str(g.get("problem", ""))]}
                   for i, g in enumerate(gaps[:3])]
-        await research_round(follow)
+        await research_round(follow, ns="gap")
         state.gaps = gaps
 
     _backfill_sources(state)

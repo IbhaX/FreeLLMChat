@@ -175,6 +175,17 @@ async def turn_live(rid: int):
             "error": job.error}
 
 
+@router.delete("/rooms/{rid}/live")
+async def turn_live_cancel(rid: int):
+    """Cancel the in-flight turn job (completed messages are preserved;
+    the visible partial is finalized as interrupted server-side)."""
+    job = chat_jobs.get(_job_key(rid))
+    if job is None or job.done:
+        return {"stopped": False}
+    job.cancel()
+    return {"stopped": True}
+
+
 @router.get("/rooms/{rid}/live/stream")
 async def turn_live_stream(rid: int):
     job = chat_jobs.get(_job_key(rid))
