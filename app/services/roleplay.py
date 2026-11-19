@@ -97,6 +97,11 @@ def persona_prompt(c: Character, scenario: str = "",
     if tools:
         lines.append(_PERSONA_RESEARCH_BLOCK)
     lines.append(
+        "Answer the player's latest question directly. Resolve short "
+        "follow-ups using the most recent relevant exchange. When the topic "
+        "changes, do not steer it back to the recap or a subplot unless the "
+        "player connects them.")
+    lines.append(
         "Write only this character's next turn — 1-3 short paragraphs or a "
         "few lines of dialogue. No stage directions in brackets unless your "
         "style calls for them, and never prefix with your own name. "
@@ -641,8 +646,10 @@ def _research_requested(text: str) -> bool:
     if _RESEARCH_RE.search(t):
         return True
     if re.fullmatch(
-            r"who\s+is\s+(?:the\s+other\s+one|the\s+other\s+character"
-            r"|the\s+second\s+character)\s*[?!.]*", t, re.I):
+            r"(?:who\s+is\s+(?:the\s+other\s+one|the\s+other\s+character"
+            r"|the\s+second\s+character)"
+            r"|what\s+is\s+(?:life|the\s+meaning\s+of\s+life))"
+            r"\s*[?!.]*", t, re.I):
         return False
     if re.match(
             r"(?:who\s+are\s+you|what\s+(?:is\s+your|are\s+your|do\s+you\s+do)"
