@@ -52,6 +52,7 @@ body {
 .st-chip.paused .dot { background: var(--stage-faint); }
 .st-topbtns { margin-left: auto; display: flex; gap: 8px; }
 .st-ibtn {
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
   background: var(--stage-panel); border: 1px solid var(--stage-line);
   color: var(--stage-dim); width: 34px; height: 34px; border-radius: 10px;
   cursor: pointer; font-size: 15px; transition: all .15s;
@@ -338,11 +339,32 @@ body {
     position: fixed; inset: auto 0 0 0; width: auto; max-height: 62vh;
     border-left: none; border-top: 1px solid var(--stage-line);
     border-radius: 18px 18px 0 0; z-index: 30; transform: translateY(100%);
-    transition: transform .25s;
+    visibility: hidden; transition: transform .25s, visibility 0s .25s;
   }
-  .st-director.open { transform: none; }
+  .st-director.open { transform: none; visibility: visible; transition-delay: 0s; }
   .st-scroll { padding: 18px 5% 14px; }
   .st-msg .b { max-width: 88%; }
+}
+@media (max-width: 600px) {
+  .st-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 6px 8px; padding: 8px 10px; }
+  .st-top > [data-app-back] { grid-column: 1; grid-row: 1; }
+  .st-title { grid-column: 2; grid-row: 1; font-size: 17px; min-width: 0; }
+  .st-topbtns { grid-column: 1 / -1; grid-row: 2; margin: 0;
+    justify-content: flex-start; gap: 6px; }
+  .st-top .st-ibtn { width: 44px; height: 44px; flex: none;
+    background: transparent; border-color: transparent; }
+  .st-top .st-ibtn:hover, .st-top .st-ibtn:focus-visible {
+    background: var(--stage-panel); border-color: var(--stage-line); }
+  .st-castchips { grid-column: 3; grid-row: 1; max-width: 26vw; min-width: 0; }
+  .st-composer { padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); flex: none; }
+  .st-modes { gap: 4px; margin-bottom: 5px; }
+  .st-mode { min-height: 36px; padding-inline: 7px; }
+  .st-inputrow { gap: 6px; }
+  .st-input { min-width: 0; font-size: 16px; padding: 10px; }
+  .st-scroll { padding-inline: 10px; }
+  .st-trace > summary { cursor: pointer; min-height: 32px; display: flex;
+    align-items: center; font-size: 12px; color: var(--stage-dim); }
 }
 @media (min-width: 901px) {
   .st-cast { display: flex; }
