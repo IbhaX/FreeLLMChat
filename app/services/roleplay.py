@@ -247,6 +247,19 @@ async def _pick_responder(
 
 ROLEPLAY_TOOLS = ["web_search", "http_get"]
 
+# Optional component contract for the main responder: when the scene calls
+# for a document/letter/map/stats, the character may wrap the reply in a
+# nova-response envelope so the UI renders rich components. Plain in-character
+# text remains the default — this only fires when it genuinely helps.
+_COMPONENT_HINT = (
+    "\n\nRESPONSE FORMAT (mandatory): wrap your ENTIRE reply in one "
+    "```nova-response fence as "
+    '{"response_type":"general","content":"<your in-character reply '
+    'as normal>","components":[...]} — components are presentation only '
+    "(use them when the scene calls for an artifact, stats, map, letter "
+    "or structured data; an empty list is fine otherwise). Never break "
+    "character or mention envelopes.")
+
 
 async def _char_reply_stream(
     gateway: Any, session: Any, model: str, system: str,
@@ -414,6 +427,8 @@ async def turn_stream(
                     director_notes=room.director_notes or "",
                     summary=room.summary or "",
                     tools=bool(room.tools_enabled) and not reacting)
+                if not reacting:
+                    system += _COMPONENT_HINT
                 if reacting:
                     system += (
                         f"\n\n{responder.name} just spoke. Give only a "
@@ -439,6 +454,36 @@ async def turn_stream(
                 while not evq.empty():
                     yield _sse(evq.get_nowait())
                 text = clean_turn_text(acc, c.name)
+            env_text = ""
+            if not reacting:
+                from app.services.component_enforce import (
+                    _try_json, extract_envelope)
+                env = extract_envelope(text)
+                if env is None and text.lstrip().startswith("{"):
+                    env = _try_json(text.strip())
+                if env is not None:
+                    ctext = str(env.get("content") or "").strip()
+                    if ctext:
+                        text = ctext
+                    # always persist the envelope so the UI renders every
+                    # character turn through the component pipeline
+                    env_text = ("```nova-response\n"
+                                + json.dumps(env, ensure_ascii=False)
+                                + "\n```")
+                else:
+                    # model ignored the format contract — wrap the prose in an
+                    # envelope ourselves so every turn still renders via the
+                    # component pipeline (content only, no components)
+                    if "nova-response" in text:
+                        head = text.split("```")[0].strip()
+                        if head:
+                            text = head
+                    env_text = ("```nova-response\n"
+                                + json.dumps({"response_type": "general",
+                                              "content": text,
+                                              "components": []},
+                                             ensure_ascii=False)
+                                + "\n```")
             if reacting and (not text or _is_pass(text)):
                 # no aside from this character — remove the placeholder
                 yield _sse({"event": "char_skip", "id": mid,
@@ -450,6 +495,8 @@ async def turn_stream(
             msg = {"id": mid, "role": "character", "kind": "dialogue",
                    "speaker": c.name, "character_id": c.id,
                    "emoji": c.emoji, "text": text, "variants": []}
+            if env_text:
+                msg["env_text"] = env_text
             if reacting:
                 msg["aside"] = True
             if via.get("model"):
@@ -459,6 +506,7 @@ async def turn_stream(
             session.add(room)
             await session.commit()
             yield _sse({"event": "char_end", "id": mid, "text": text,
+                        "env_text": env_text or None,
                         "via": msg.get("via")})
         yield _sse({"event": "turn_done", "messages": room.messages})
         yield b"data: [DONE]\n\n"

@@ -70,7 +70,8 @@ def test_routing_failure_falls_back_safely():
 def test_research_agent_registry_covers_pipeline():
     from app.services.research import RESEARCH_AGENTS
 
-    expected = {"planner", "researcher", "gap_checker", "verifier", "synthesizer"}
+    expected = {"planner", "researcher", "gap_checker", "verifier",
+                "contradiction_checker", "qa_auditor", "synthesizer"}
     assert set(RESEARCH_AGENTS) == expected
     for spec in RESEARCH_AGENTS.values():
         assert spec["role"]

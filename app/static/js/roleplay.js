@@ -205,7 +205,13 @@
       case 'char_delta':{
         const el=document.getElementById('m-'+ev.id);
         if(el){el._text=(el._text||'')+ev.text;
-          el.querySelector('.txt').textContent=el._text;scroll();}break;}
+          // once the nova-response fence starts streaming, hide the raw
+          // JSON — char_end delivers the parsed envelope for rich render
+          if(el._text.includes('nova-response')){el._suppressed=true;
+            el.querySelector('.txt').textContent='';}
+          else if(!el._suppressed)
+            el.querySelector('.txt').textContent=el._text;
+          scroll();}break;}
       case 'char_skip':{
         const el=document.getElementById('m-'+ev.id);
         if(el)el.remove();
@@ -213,7 +219,8 @@
       case 'char_end':{
         const el=document.getElementById('m-'+ev.id);
         if(el){el.classList.remove('writing');el._streaming=false;
-          if(ev.text&&el._text!==ev.text){el._text=ev.text;
+          if(ev.env_text){renderRich(el,ev.env_text);el._text=ev.text;}
+          else if(ev.text&&el._text!==ev.text){el._text=ev.text;
             el.querySelector('.txt').textContent=ev.text;}
           if(ev.via&&ev.via.model&&!el.querySelector('.via')){
             const via=document.createElement('span');via.className='via';
@@ -223,7 +230,8 @@
           if(ev.variants&&ev.variants.length)attachSwipe(el,ev.id,ev.variants);}
         // keep room.messages in sync
         if(room){const m=(room.messages||[]).find(x=>x.id===ev.id);
-          if(m){m.text=ev.text;if(ev.variants)m.variants=ev.variants;
+          if(m){m.text=ev.text;if(ev.env_text)m.env_text=ev.env_text;
+            if(ev.variants)m.variants=ev.variants;
             if(ev.via)m.via=ev.via;}}
         break;}
       case 'turn_done':{
@@ -283,8 +291,9 @@
       `<div class="av">${esc(m.emoji||'🎭')}</div>`}
       <div class="b"><div class="who">${who}${
         m.via&&m.via.model?`<span class="via" title="powered by ${esc(m.via.provider||'')}">${esc(m.via.model)}</span>`:''}</div>
-      <div class="txt">${esc(m.text||'')}</div></div>`;
+      <div class="txt">${m.env_text?'':esc(m.text||'')}</div></div>`;
     el._text=m.text||'';
+    if(m.env_text)renderRich(el,m.env_text);
     attachActs(el,m);
     host.appendChild(el);
     return el;
@@ -315,6 +324,16 @@
       catch(e){toast2(e.message);}};
     acts.appendChild(del);
     if(acts.children.length)b.appendChild(acts);
+  }
+
+  function renderRich(el,envText){
+    const t=el.querySelector('.txt');
+    if(!t||typeof NovaRender==='undefined'||
+       !NovaRender.ResponseRenderer)return;
+    t.innerHTML='';t.classList.add('rich');
+    try{NovaRender.ResponseRenderer.renderMessage(
+      {role:'assistant',content:envText},t);}
+    catch(e){t.classList.remove('rich');}
   }
 
   function attachSwipe(el,mid,variants){
