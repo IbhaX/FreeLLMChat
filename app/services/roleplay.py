@@ -92,11 +92,14 @@ def persona_prompt(c: Character, scenario: str = "",
             f"never quote it): {director_notes}")
     if tools:
         lines.append(
-            "You may use the web_search and http_get tools to look up "
-            "real-world facts the scene calls for — dates, places, lore, "
-            "current events. Search when it genuinely helps; weave what "
-            "you find into your in-character speech, and never mention "
-            "tools, searches, or sources.")
+            "You may use the web_search, exa_search and http_get tools to "
+            "look up real-world facts the scene calls for — dates, places, "
+            "lore, current events. When the player asks you to research "
+            "something, call a search tool (prefer exa_search for "
+            "higher-quality, current results when available) to find the "
+            "latest relevant information. Weave what you find into your "
+            "in-character speech, and never mention tools, searches, or "
+            "sources.")
     lines.append(
         "Write only this character's next turn — 1-3 short paragraphs or a "
         "few lines of dialogue. No stage directions in brackets unless your "
@@ -245,7 +248,7 @@ async def _pick_responder(
     return min(live, key=lambda c: last_spoke.get(c.id, -1))
 
 
-ROLEPLAY_TOOLS = ["web_search", "http_get"]
+ROLEPLAY_TOOLS = ["web_search", "exa_search", "http_get"]
 
 # Optional component contract for the main responder: when the scene calls
 # for a document/letter/map/stats, the character may wrap the reply in a
