@@ -648,8 +648,8 @@
 
   async function loadSceneModels(){
     try{
-      const d=await v1Api('/v1/models?usable=1');
-      sceneModels=(d.data||[]).filter(m=>m.usable!==false);
+      const d=await v1Api('/v1/models');
+      sceneModels=(d.data||[]);
     }catch(_){}
     paintSceneModel();
   }
@@ -667,8 +667,10 @@
 
   function sceneModelEntry(id){
     const m=sceneModels.find(x=>x.id===id);
-    return {id,label:id==='auto'?'Auto':id,
-      detail:id==='auto'?'pricing varies':scenePrice(m)};
+    const usable=!m||m.usable!==false;
+    let detail=id==='auto'?'pricing varies':scenePrice(m);
+    if(!usable)detail+=' · provider cooling down';
+    return {id,label:id==='auto'?'Auto':id,detail,usable};
   }
 
   function paintSceneModel(){
@@ -699,17 +701,21 @@
     if(!ids.includes(current))ids.push(current);
     const q=sceneModelQuery.trim().toLowerCase();
     const list=ids.filter(id=>!q||id.toLowerCase().includes(q));
+    const avail=list.filter(id=>{const m=byId.get(id);return !m||m.usable!==false;});
+    const cool=list.filter(id=>{const m=byId.get(id);return m&&m.usable===false;});
+    const row=id=>{
+      const e=sceneModelEntry(id);
+      return `<div class="mi ${id===current?'sel':''}" data-id="${esc(id)}" role="option" aria-selected="${id===current}">
+        <div><b style="font-size:12.5px;display:block">${esc(e.label)}</b>
+        <span class="t-xs tx-3">${esc(e.detail)}</span></div>
+        ${id===current?'<span style="margin-left:auto;color:var(--accent)">✓</span>':''}
+      </div>`;};
     menu.innerHTML='<input class="mi-search" type="search" placeholder="Search '
       +ids.length+' models…" value="'+esc(sceneModelQuery)+'">'
       +'<div class="mi-head">'+(q?list.length+' of '+ids.length:'Model')+'</div>'
-      +(list.length?list.map(id=>{
-        const e=sceneModelEntry(id);
-        return `<div class="mi ${id===current?'sel':''}" data-id="${esc(id)}" role="option" aria-selected="${id===current}">
-          <div><b style="font-size:12.5px;display:block">${esc(e.label)}</b>
-          <span class="t-xs tx-3">${esc(e.detail)}</span></div>
-          ${id===current?'<span style="margin-left:auto;color:var(--accent)">✓</span>':''}
-        </div>`;
-      }).join(''):'<div class="mi-empty">No models match “'+esc(sceneModelQuery)+'”</div>');
+      +(avail.length?avail.map(row).join(''):'')
+      +(cool.length?'<div class="mi-head">Cooling down — provider temporarily unavailable</div>'+cool.map(row).join(''):'')
+      +(list.length?'':'<div class="mi-empty">No models match “'+esc(sceneModelQuery)+'”</div>');
     const search=menu.querySelector('.mi-search');
     search.addEventListener('input',()=>{sceneModelQuery=search.value;renderSceneModels();
       const s=menu.querySelector('.mi-search');s.focus();s.setSelectionRange(s.value.length,s.value.length);});
