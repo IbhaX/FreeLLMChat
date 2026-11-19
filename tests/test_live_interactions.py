@@ -696,3 +696,27 @@ def test_finalize_reply_drops_malformed_bare_protocol_json() -> None:
     assert fin.text == "fallback"
     assert "response_type" not in fin.text
     assert "response_type" not in fin.envelope["content"]
+
+
+def test_finalize_reply_drops_paragraph_components_repeating_body() -> None:
+    import json
+
+    body = "First point stands.\n\nSecond   point\nfollows."
+    env = {
+        "response_type": "general", "content": body,
+        "components": [
+            {"type": "paragraph", "data": {"text": "First point stands."}},
+            {"type": "paragraph", "data": {"text": "Second point follows."}},
+            {"type": "paragraph", "text": "First point stands. Second point follows."},
+            {"type": "paragraph", "data": {"text": "First point"}},
+            {"type": "table", "title": "Compare", "rows": [["a", "b"]]},
+        ],
+    }
+    raw = "```nova-response\n" + json.dumps(env) + "\n```"
+    fin = rp._finalize_reply(raw, name="X", fallback="fb")
+    types = [c.get("type") for c in fin.envelope["components"]]
+    assert types.count("table") == 1
+    paras = [c["data"]["text"] for c in fin.envelope["components"]
+             if c.get("type") == "paragraph"]
+    assert paras == ["First point"]
+    assert fin.envelope["content"] == body

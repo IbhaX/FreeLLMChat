@@ -12,7 +12,7 @@
   --stage-violet2: var(--accent-2);
   --stage-glow: var(--accent-soft);
   --stage-vline: var(--accent-line);
-  --stage-gold: #e8c56d;              /* narration color — stage identity */
+  --stage-gold: var(--narration);             /* narration color — stage identity */
   --stage-rose: var(--error);
   --stage-teal: var(--success);
   --stage-font: "Georgia", "Times New Roman", serif;
@@ -99,6 +99,7 @@ body {
 }
 .st-backdrop {
   position: absolute; inset: 0; pointer-events: none; transition: background 1s;
+  overflow: hidden;
   background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--stage-violet) 14%, transparent), transparent 60%);
 }
 .st-backdrop[data-mood="cozy"]    { background: radial-gradient(120% 90% at 50% 0%, rgba(232,197,109,.16), transparent 60%); }
@@ -106,6 +107,16 @@ body {
 .st-backdrop[data-mood="mystic"]  { background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--stage-teal) 14%, transparent), transparent 60%); }
 .st-backdrop[data-mood="dark"]    { background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--stage-dim) 10%, transparent), transparent 50%), linear-gradient(180deg, rgba(0,0,0,.4), transparent 60%); }
 .st-backdrop[data-mood="heroic"]  { background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--stage-violet) 22%, transparent), transparent 55%), linear-gradient(0deg, color-mix(in srgb, var(--stage-gold) 8%, transparent), transparent 40%); }
+.st-backdrop.is-live::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 25% 18%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 55%),
+    radial-gradient(ellipse at 75% 42%, color-mix(in srgb, var(--success) 14%, transparent), transparent 52%);
+  animation: st-ambient 6s ease-in-out infinite alternate;
+}
+@keyframes st-ambient {
+  from { transform: translateX(-5%); opacity: .45; }
+  to { transform: translateX(5%); opacity: 1; }
+}
 .st-scroll { flex: 1; overflow-y: auto; padding: 26px 8% 18px; position: relative; }
 .st-scenario {
   text-align: center; font-family: var(--stage-font); font-style: italic;
@@ -258,6 +269,12 @@ body {
   font-size: 18px; cursor: pointer; flex: none;
 }
 .st-run:disabled { opacity: .4; cursor: default; }
+.st-run-stop {
+  display: inline-grid; place-items: center; padding: 0;
+  background: var(--error-soft); color: var(--error);
+  border: 1px solid var(--stage-line);
+}
+.st-run-stop:hover { border-color: var(--error); }
 .st-queue {
   font-size: 11px; color: var(--stage-faint); margin-top: 7px; min-height: 15px;
 }
@@ -351,7 +368,7 @@ body {
   .st-top > [data-app-back] { grid-column: 1; grid-row: 1; }
   .st-title { grid-column: 2; grid-row: 1; font-size: 17px; min-width: 0; }
   .st-topbtns { grid-column: 1 / -1; grid-row: 2; margin: 0;
-    justify-content: flex-start; gap: 6px; }
+    justify-content: flex-start; gap: 6px; flex-wrap: wrap; }
   .st-top .st-ibtn { width: 44px; height: 44px; flex: none;
     background: transparent; border-color: transparent; }
   .st-top .st-ibtn:hover, .st-top .st-ibtn:focus-visible {
@@ -371,4 +388,17 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .st-face.writing .av, .st-msg { animation: none; }
+  .st-backdrop.is-live::after { animation: none; opacity: .7; transform: none; }
 }
+
+.st-top .st-room-action { width: auto; padding-inline: 8px; white-space: nowrap; gap: 4px; }
+
+/* ---------------- activity metrics ---------------- */
+.stage .alog-dash { margin-block: 4px 12px; border-radius: var(--r-lg); border-color: var(--border-2); box-shadow: var(--shadow-2); }
+.stage .alog-dm { background: var(--surface-1); transition: background .16s ease; }
+.stage .alog-dk { color: var(--text-2); text-transform: none; letter-spacing: .02em; font-size: 11px; }
+@media (hover: hover) {
+  .stage .alog-dash:hover { box-shadow: var(--shadow-3); }
+  .stage .alog-dm:hover { background: var(--surface-2); }
+}
+.stage .alog-gear:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

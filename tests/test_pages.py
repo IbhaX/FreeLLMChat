@@ -21,8 +21,7 @@ def test_workspace_routes_version_assets(route: str) -> None:
     assert '?v=' in response.text
     assert response.text.count('/static/js/ui/dialog.js?v=') == 1
     assert response.text.count('/static/css/ui.css?v=') == 1
-    fallback = 'stage' if route == '/roleplay' else 'dark'
-    assert f'const fallback="{fallback}";' in response.text
+    assert 'const fallback="dark";' in response.text
     assert '{{default_theme}}' not in response.text
     assert response.headers['cache-control'] == 'no-cache'
 

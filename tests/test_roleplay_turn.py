@@ -104,6 +104,26 @@ def test_persona_prompt_injects_mood_notes_summary(session_factory):
     assert "tense" in p and "storm coming" in p and "docks" in p
 
 
+def test_regular_talk_queues_only_one_speaker(session_factory):
+    async def go():
+        async with session_factory() as s:
+            sher, wat = _mk_cast(s)
+            await s.flush()
+            room = RoleplayRoom(name="221B", character_ids=[sher.id, wat.id],
+                                messages=[])
+            s.add(room)
+            await s.commit()
+            rid = room.id
+        gw = _FakeGW(["elementary"])
+        frames = await _collect(roleplay.turn_stream(
+            gw, session_factory, rid, kind="talk", text="what do you make of it?"))
+        queue = next(f for f in frames if f["event"] == "turn_queue")
+        assert len(queue["order"]) == 1
+        starts = [f for f in frames if f["event"] == "char_start"]
+        assert len(starts) == 1 and not starts[0].get("aside")
+    _run(go())
+
+
 def test_turn_stream_sequences_characters(session_factory):
     async def go():
         async with session_factory() as s:
@@ -118,11 +138,14 @@ def test_turn_stream_sequences_characters(session_factory):
             rid = room.id
         gw = _FakeGW(["elementary|my dear", "quite so|!"])
         frames = await _collect(roleplay.turn_stream(
-            gw, session_factory, rid, kind="talk", text="what do you make of it?"))
+            gw, session_factory, rid, kind="talk",
+            text="each of you, what do you make of it?"))
         evs = [f["event"] for f in frames]
         assert evs[0] == "beat" and "turn_queue" in evs
         starts = [f["name"] for f in frames if f["event"] == "char_start"]
         assert starts == ["Sherlock", "Watson"]
+        asides = [f.get("aside") for f in frames if f["event"] == "char_start"]
+        assert asides == [False, True]
         ends = [f["text"] for f in frames if f["event"] == "char_end"]
         assert ends == ["elementarymy dear", "quite so!"]
         async with session_factory() as s:
@@ -248,6 +271,8 @@ def test_clean_turn_text_strips_persona_breaks():
     ("Tell me about yourself.", False),
     ("What's your favourite case?", False),
     ("Where are you from?", False),
+    ("who is the other one?", False),
+    ("who is the second character?", False),
     ("who is the CEO of Nagarro?", True),
     ("when was the eiffel tower built?", True),
     ("look up your family history online", True),

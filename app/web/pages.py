@@ -53,7 +53,7 @@ def render_page(name: str, static_dir: Path) -> HTMLResponse:
     theme_partial = static_dir / 'partials' / 'theme.html'
     if theme_partial.is_file():
         bootstrap = theme_partial.read_text(encoding='utf-8').replace(
-            '{{default_theme}}', json.dumps('stage' if name == 'roleplay.html' else 'dark'),
+            '{{default_theme}}', json.dumps('dark'),
         )
         markup = _THEME_BOOTSTRAP.sub(lambda match: bootstrap, markup)
     partial = static_dir / 'partials' / 'ui.html'

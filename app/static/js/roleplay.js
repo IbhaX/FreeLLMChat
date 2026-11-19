@@ -18,6 +18,7 @@
   // ------------------------------------------------ bootstrap
   async function init(){
     bind();
+    loadSceneModels();
     try{
       chars=await v1Api('/v1/characters');
       const d=await v1Api('/v1/roleplay/rooms');
@@ -45,6 +46,8 @@
       renderCastCards();$('#castVeil').classList.add('open');};
     $('#btnDirector').onclick=()=>$('#director').classList.toggle('open');
     $('#btnNewScene').onclick=newScene;
+    $('#btnQuickNewScene').onclick=newScene;
+    $('#sceneModel').onchange=changeSceneModel;
     $('#btnNewChar').onclick=()=>openEditor(null);
     $('#btnApplyCast').onclick=applyCast;
     $('#btnBegin').onclick=()=>beat('narrate','The scene opens.');
@@ -183,13 +186,18 @@
   // Stop lives in its own stable control beside Run — queueLine text is
   // rewritten by turn_queue/tool/note events and must not own the button.
   function setRunning(on){
+    $('#backdrop').classList.toggle('is-live',on);
     $('#btnRun').disabled=on;
+    $('#btnRun').hidden=on;
     const ql=$('#queueLine');
     let sb=document.getElementById('btnStop');
     if(on){
       if(!sb){
         sb=document.createElement('button');sb.type='button';sb.id='btnStop';
-        sb.textContent='■ stop';sb.style.marginLeft='8px';
+        sb.className='st-run st-run-stop';
+        sb.title='Stop turn';
+        sb.setAttribute('aria-label','Stop turn');
+        sb.innerHTML='<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/></svg>';
         sb.onclick=stopTurn;
         $('#btnRun').insertAdjacentElement('afterend',sb);
       }
@@ -291,6 +299,7 @@
           b._log=Nova.ActivityLog.create(host,{compact:true});
           b._lr=NovaRender.LiveRun.create(host,{scroller:$('#scroll')});
         }
+        scroll();
         break;}
       case 'char_delta':{
         const el=document.getElementById('m-'+ev.id);
@@ -306,6 +315,8 @@
         if(el)el.remove();
         presence(ev.character_id,false);break;}
       case 'char_end':{
+        const scroller=$('#scroll');
+        const follow=scroller.scrollHeight-scroller.scrollTop-scroller.clientHeight<=48;
         const el=document.getElementById('m-'+ev.id);
         if(el){el.classList.remove('writing');el._streaming=false;
           if(el._cid!=null)presence(el._cid,false);
@@ -339,6 +350,7 @@
             if(ev.variants)m.variants=ev.variants;
             if(ev.sources)m.sources=ev.sources;
             if(ev.via)m.via=ev.via;}}
+        if(follow)scroll();
         break;}
       case 'turn_done':{
         if(room)room.messages=ev.messages;
@@ -560,6 +572,7 @@
     $('#dMood').value=room.mood||'';
     $('#dNotes').value=room.director_notes||'';
     $('#dTools').checked=!!room.tools_enabled;
+    paintSceneModel();
     $('#dSummary').textContent=room.summary||'No recap yet — it builds as the scene runs.';
     $('#backdrop').dataset.mood=room.mood||'';
     $('#scenarioLine').textContent=room.scenario||'';
@@ -591,6 +604,59 @@
         renderDirector();renderCast();};
       host.appendChild(el);
     });
+  }
+
+  const SCENE_MODEL_KEY='nova_roleplay_model';
+  let sceneModels=[],modelBusy=false;
+
+  function savedSceneModel(){
+    try{return localStorage.getItem(SCENE_MODEL_KEY)||'auto';}catch(_){return 'auto';}
+  }
+
+  async function loadSceneModels(){
+    try{
+      const d=await v1Api('/v1/models?usable=1');
+      sceneModels=(d.data||[]).filter(m=>m.usable!==false);
+    }catch(_){}
+    paintSceneModel();
+  }
+
+  function scenePrice(m){
+    const pr=(m&&typeof m.pricing==='object'&&m.pricing)||m||{};
+    const inp=pr.input_per_mtok,out=pr.output_per_mtok;
+    const ok=v=>v!=null&&v!==''&&Number.isFinite(Number(v));
+    if(!ok(inp)||!ok(out))return 'Pricing unavailable';
+    if(Number(inp)===0&&Number(out)===0)return 'Free';
+    return `$${Number(inp)} in / $${Number(out)} out per 1M tokens`;
+  }
+
+  function paintSceneModel(){
+    const sel=$('#sceneModel');
+    const current=(room&&room.model)||'auto';
+    const byId=new Map(sceneModels.map(m=>[m.id,m]));
+    const ids=['auto',...[...byId.keys()].filter(id=>id!=='auto')];
+    if(!ids.includes(current))ids.push(current);
+    sel.innerHTML='';
+    ids.forEach(id=>sel.add(new Option(
+      id==='auto'?'Auto — pricing varies':`${id} — ${scenePrice(byId.get(id))}`,id)));
+    sel.value=current;
+    sel.disabled=!room||modelBusy;
+  }
+
+  async function changeSceneModel(){
+    const target=room,sel=$('#sceneModel');
+    if(!target||modelBusy)return;
+    const next=sel.value;
+    modelBusy=true;sel.disabled=true;
+    try{
+      await v1Api(`/v1/roleplay/rooms/${target.id}`,{method:'PATCH',
+        body:JSON.stringify({model:next})});
+      target.model=next;
+      const listed=rooms.find(r=>r.id===target.id);
+      if(listed)listed.model=next;
+      try{localStorage.setItem(SCENE_MODEL_KEY,next);}catch(_){}
+    }catch(e){toast2(e.message);}
+    finally{modelBusy=false;paintSceneModel();}
   }
 
   async function patchRoom(){
@@ -659,7 +725,8 @@
     try{
       if(pendingRoom){
         const r=await v1Api('/v1/roleplay/rooms',{method:'POST',
-          body:JSON.stringify({name:pendingRoom,scenario:'',character_ids:castPicks})});
+          body:JSON.stringify({name:pendingRoom,scenario:'',character_ids:castPicks,
+            model:savedSceneModel()})});
         rooms.unshift(r);pendingRoom=null;openRoom(r.id);
       }else if(room){
         room.character_ids=castPicks;

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>The Stage — FreeLLM</title>
-<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'stage'</script>
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark'</script>
 <link rel="stylesheet" href="/static/css/theme.css">
 <link rel="stylesheet" href="/static/css/stage.css">
 <link rel="stylesheet" href="/static/css/render.css">
@@ -20,7 +20,8 @@
     <div class="st-title" id="sceneTitle" title="Click to rename">The Stage</div>
     <div class="st-castchips" id="castChips"></div>
     <div class="st-topbtns">
-      <button class="st-ibtn" id="btnScenes" title="Scenes" aria-label="Scenes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v13H4zM4 11h16M4 7l3-4m3 4 3-4m3 4 3-4"/></svg></button>
+      <button class="st-ibtn st-room-action" id="btnScenes" title="Scenes" aria-label="Room history"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v13H4zM4 11h16M4 7l3-4m3 4 3-4m3 4 3-4"/></svg>Rooms</button>
+      <button class="st-ibtn st-room-action" id="btnQuickNewScene" type="button">+ New room</button>
       <button class="st-ibtn" id="btnCast" title="Cast & characters" aria-label="Cast & characters"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-4M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm8-8a4 4 0 0 1 0 8"/></svg></button>
       <button class="st-ibtn" id="btnDirector" title="Director panel" aria-label="Director panel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg></button>
       <button class="st-ibtn" id="btnSurprise" title="Surprise me — narrator beat" aria-label="Surprise me — narrator beat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/></svg></button>
@@ -72,6 +73,10 @@
         <div class="mini">e.g. "the inn is about to be robbed"</div>
       </div>
       <div>
+        <h4><label for="sceneModel">Model</label></h4>
+        <select id="sceneModel" disabled><option value="auto">Auto</option></select>
+      </div>
+      <div>
         <h4>Tools</h4>
         <label class="st-check"><input type="checkbox" id="dTools">
           Web search — characters may look up real-world facts</label>
@@ -114,11 +119,11 @@
 <!-- scenes drawer -->
 <div class="st-veil" id="scenesVeil">
   <div class="st-sheet" style="width:min(520px,94vw)">
-    <h3>Scenes</h3>
+    <h3>Rooms</h3>
     <div class="sub">Your stages — pick one, or start a new act.</div>
     <div class="st-scene-list" id="sceneList"></div>
     <div style="margin-top:16px;display:flex;gap:10px">
-      <button class="st-btn" id="btnNewScene">＋ New scene</button>
+      <button class="st-btn" id="btnNewScene">＋ New room</button>
       <button class="st-btn ghost" data-close>Close</button>
     </div>
   </div>

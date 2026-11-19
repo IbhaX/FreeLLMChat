@@ -206,6 +206,27 @@ _TEXT_KEYS: frozenset[str] = frozenset({
 })
 
 
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _drop_body_paragraphs(components: list[Any], body: str) -> list[Any]:
+    """Remove paragraph components that merely repeat whole paragraphs (or a
+    contiguous run of them) from the envelope body; rich components stay."""
+    paras = [_squash(p) for p in re.split(r"\n\s*\n", body) if p.strip()][:40]
+    runs = {" ".join(paras[i:j])
+            for i in range(len(paras)) for j in range(i + 1, len(paras) + 1)}
+    kept: list[Any] = []
+    for c in components if isinstance(components, list) else []:
+        if isinstance(c, dict) and c.get("type") == "paragraph":
+            data = c.get("data")
+            raw = data.get("text") if isinstance(data, dict) else c.get("text")
+            if isinstance(raw, str) and _squash(raw) in runs:
+                continue
+        kept.append(c)
+    return kept
+
+
 def _component_text(node: Any, depth: int = 0) -> str:
     """Bounded readable text from envelope components (no type/URL/metadata).
 
@@ -312,6 +333,9 @@ def _finalize_reply(raw: str, *, name: str,
         t = readable or fallback
         # Components-only envelopes keep content empty; prose keeps the body.
         env["content"] = body
+        if body:
+            env["components"] = _drop_body_paragraphs(
+                env.get("components") or [], body)
         srcs = _merge_sources(srcs, _safe_sources(env.get("sources")))
         if srcs:
             env["sources"] = srcs
@@ -515,9 +539,6 @@ Research request:
 """
 
 
-MAX_COMMENTERS = 3   # characters that may add a brief aside after the reply
-
-
 def _is_pass(text: str) -> bool:
     return text.strip().upper().startswith("PASS")
 
@@ -619,6 +640,10 @@ def _research_requested(text: str) -> bool:
         return False
     if _RESEARCH_RE.search(t):
         return True
+    if re.fullmatch(
+            r"who\s+is\s+(?:the\s+other\s+one|the\s+other\s+character"
+            r"|the\s+second\s+character)\s*[?!.]*", t, re.I):
+        return False
     if re.match(
             r"(?:who\s+are\s+you|what\s+(?:is\s+your|are\s+your|do\s+you\s+do)"
             r"|tell\s+me\s+about\s+yourself|what['’]s\s+your"
@@ -886,14 +911,16 @@ async def turn_stream(
         # End the read transaction before any provider/network call — the
         # short writes below open their own transactions.
         await session.commit()
-        # one responder takes the stage; the rest may add short asides
+        # one responder takes the stage; others react only when the player
+        # explicitly addresses the whole group
         responder = await _pick_responder(gateway, session, room, live,
                                           user_text)
-        # Real-world research gets ONE researched voice — secondary asides
-        # would dismiss verified modern facts as impossible in the fiction.
-        order = [responder] if research else \
-            [responder] + [c for c in live
-                           if c.id != responder.id][:MAX_COMMENTERS]
+        group_address = re.search(
+            r"\b(?:introduce yourselves|each of you|both of you|all of you"
+            r"|everyone)\b", user_text, re.I)
+        order = ([responder, *(c for c in live if c.id != responder.id)]
+                 if kind == "talk" and not research and group_address
+                 else [responder])
         yield _sse({"event": "note",
                     "text": f"🎭 {responder.name} responds"})
         yield _sse({"event": "turn_queue", "order": [c.id for c in order],

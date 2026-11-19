@@ -32,7 +32,7 @@ async function loadModels(silent){
           tag:(m.owned_by||m.id).slice(0,2)});
       });
       const prevId=state.model&&state.model.id;
-      state.model=MODELS.find(m=>m.id===prevId)||MODELS.find(m=>m.id==='auto')||MODELS[0];
+      state.model=MODELS.find(m=>m.id===prevId)||state.model;
       $('#modelName').textContent=state.model.name;
       $('#modelIcon').style.background=state.model.color;
       renderModels();
@@ -138,7 +138,7 @@ function loadState(){
       multiMode:s.multiMode||(s.pipelineMode?'pipeline':'parallel'),
       groupMode:!!s.groupMode,groupIds:Array.isArray(s.groupIds)?s.groupIds:[]};
     paintDepth();paintModeChips();
-    const m=MODELS.find(x=>x.id===s.modelId);
+    const m=MODELS.find(x=>x.id===s.modelId)||(typeof s.modelId==='string'&&s.modelId ? {...MODELS[0],id:s.modelId,name:s.modelId} : null);
     if(m){state.model=m;$('#modelName').textContent=m.name;$('#modelIcon').style.background=m.color;}
     return true;
   }catch(_){return false;}

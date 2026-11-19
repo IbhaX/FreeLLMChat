@@ -1,6 +1,7 @@
 /* Research Center — run deep research, stream stage events, browse history. */
 (function(){
   const $=s=>document.querySelector(s);
+  const MODEL_KEY='nova_research_model';
   let currentAnswer='';
   let currentMeta=null;
   let running=false;
@@ -40,7 +41,10 @@
   }
 
   async function init(){
-    loadModels();loadRuns();restoreRun();
+    restoreModel();loadModels();loadRuns();restoreRun();
+    $('#model').addEventListener('change',()=>{
+      try{localStorage.setItem(MODEL_KEY,$('#model').value);}catch(_){}
+    });
     $('#runBtn').onclick=runResearch;
     $('#stopBtn').onclick=stopResearch;
     $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')runResearch();});
@@ -48,11 +52,23 @@
     $('#printBtn').onclick=()=>window.print();
   }
 
+  function restoreModel(){
+    try{
+      const sel=$('#model');
+      const saved=localStorage.getItem(MODEL_KEY);
+      if(saved&&!Array.from(sel.options).some(o=>o.value===saved))sel.add(new Option(saved,saved));
+      if(saved)sel.value=saved;
+    }catch(_){}
+  }
+
   async function loadModels(){
     try{
       const d=await v1Api('/v1/models?usable=1');
       const sel=$('#model');
+      const known=new Set(Array.from(sel.options).map(o=>o.value));
       (d.data||[]).forEach(m=>{
+        if(known.has(m.id))return;
+        known.add(m.id);
         const o=document.createElement('option');
         o.value=m.id;o.textContent=m.id;
         sel.appendChild(o);
