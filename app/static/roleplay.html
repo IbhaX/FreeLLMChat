@@ -74,7 +74,14 @@
       </div>
       <div>
         <h4><label for="sceneModel">Model</label></h4>
-        <select id="sceneModel" disabled><option value="auto">Auto</option></select>
+        <div class="model-picker">
+          <button class="ui-btn st-model-trigger" id="sceneModelBtn" type="button" aria-haspopup="listbox" aria-expanded="false" disabled>
+            <span id="sceneModelLabel">Auto — pricing varies</span>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="model-menu ui-menu" id="sceneModelMenu"></div>
+        </div>
+        <input id="sceneModel" type="hidden" value="auto">
       </div>
       <div>
         <h4>Tools</h4>

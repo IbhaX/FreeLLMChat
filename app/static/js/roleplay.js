@@ -60,7 +60,11 @@
     $('#btnDirector').onclick=()=>$('#director').classList.toggle('open');
     $('#btnNewScene').onclick=newScene;
     $('#btnQuickNewScene').onclick=newScene;
-    $('#sceneModel').onchange=changeSceneModel;
+    $('#sceneModelBtn').onclick=e=>{
+      e.stopPropagation();openSceneModelMenu();};
+    document.addEventListener('click',e=>{
+      if(!e.target.closest('#sceneModelBtn,#sceneModelMenu'))
+        $('#sceneModelMenu').classList.remove('open');});
     $('#btnNewChar').onclick=()=>openEditor(null);
     $('#btnApplyCast').onclick=applyCast;
     $('#btnBegin').onclick=()=>beat('narrate','The scene opens.');
@@ -659,24 +663,70 @@
     return `$${Number(inp)} in / $${Number(out)} out per 1M tokens`;
   }
 
+  let sceneModelQuery='';
+
+  function sceneModelEntry(id){
+    const m=sceneModels.find(x=>x.id===id);
+    return {id,label:id==='auto'?'Auto':id,
+      detail:id==='auto'?'pricing varies':scenePrice(m)};
+  }
+
   function paintSceneModel(){
-    const sel=$('#sceneModel');
+    const btn=$('#sceneModelBtn'),hidden=$('#sceneModel');
+    const current=(room&&room.model)||'auto';
+    const entry=sceneModelEntry(current);
+    hidden.value=current;
+    $('#sceneModelLabel').textContent=`${entry.label} — ${entry.detail}`;
+    btn.disabled=!room||modelBusy;
+    btn.setAttribute('aria-expanded',
+      String($('#sceneModelMenu').classList.contains('open')));
+  }
+
+  function openSceneModelMenu(){
+    const menu=$('#sceneModelMenu');
+    if(!room||modelBusy)return;
+    menu.classList.toggle('open');
+    $('#sceneModelBtn').setAttribute('aria-expanded',
+      String(menu.classList.contains('open')));
+    if(menu.classList.contains('open'))renderSceneModels();
+  }
+
+  function renderSceneModels(){
+    const menu=$('#sceneModelMenu');
     const current=(room&&room.model)||'auto';
     const byId=new Map(sceneModels.map(m=>[m.id,m]));
     const ids=['auto',...[...byId.keys()].filter(id=>id!=='auto')];
     if(!ids.includes(current))ids.push(current);
-    sel.innerHTML='';
-    ids.forEach(id=>sel.add(new Option(
-      id==='auto'?'Auto — pricing varies':`${id} — ${scenePrice(byId.get(id))}`,id)));
-    sel.value=current;
-    sel.disabled=!room||modelBusy;
+    const q=sceneModelQuery.trim().toLowerCase();
+    const list=ids.filter(id=>!q||id.toLowerCase().includes(q));
+    menu.innerHTML='<input class="mi-search" type="search" placeholder="Search '
+      +ids.length+' models…" value="'+esc(sceneModelQuery)+'">'
+      +'<div class="mi-head">'+(q?list.length+' of '+ids.length:'Model')+'</div>'
+      +(list.length?list.map(id=>{
+        const e=sceneModelEntry(id);
+        return `<div class="mi ${id===current?'sel':''}" data-id="${esc(id)}" role="option" aria-selected="${id===current}">
+          <div><b style="font-size:12.5px;display:block">${esc(e.label)}</b>
+          <span class="t-xs tx-3">${esc(e.detail)}</span></div>
+          ${id===current?'<span style="margin-left:auto;color:var(--accent)">✓</span>':''}
+        </div>`;
+      }).join(''):'<div class="mi-empty">No models match “'+esc(sceneModelQuery)+'”</div>');
+    const search=menu.querySelector('.mi-search');
+    search.addEventListener('input',()=>{sceneModelQuery=search.value;renderSceneModels();
+      const s=menu.querySelector('.mi-search');s.focus();s.setSelectionRange(s.value.length,s.value.length);});
+    menu.querySelectorAll('.mi[data-id]').forEach(el=>el.onclick=e=>{
+      e.stopPropagation();
+      $('#sceneModel').value=el.dataset.id;
+      sceneModelQuery='';
+      menu.classList.remove('open');
+      changeSceneModel(el.dataset.id);
+    });
+    requestAnimationFrame(()=>{search.focus();});
   }
 
-  async function changeSceneModel(){
-    const target=room,sel=$('#sceneModel');
+  async function changeSceneModel(next){
+    const target=room;
     if(!target||modelBusy)return;
-    const next=sel.value;
-    modelBusy=true;sel.disabled=true;
+    modelBusy=true;paintSceneModel();
     try{
       await v1Api(`/v1/roleplay/rooms/${target.id}`,{method:'PATCH',
         body:JSON.stringify({model:next})});
