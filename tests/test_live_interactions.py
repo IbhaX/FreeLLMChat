@@ -678,3 +678,21 @@ def test_tc_dos_01_deep_run_gets_resolved_subject_and_full_report(
     assert "nova-response" in ends[0]["env_text"]
     names = [f.get("event") for f in frames]
     assert names.index("finding") < names.index("char_end")
+
+
+def test_finalize_reply_renders_json_fence_with_surrounding_prose() -> None:
+    raw = ('Before the table.\n\n```json\n{"response_type":"table","content":"",'
+           '"components":[{"type":"table","title":"Compare",'
+           '"rows":[["a","b"]]}]}\n```\n\nAfter it.')
+    fin = rp._finalize_reply(raw, name="X", fallback="fallback")
+    assert any(c.get("type") == "table" for c in fin.envelope["components"])
+    assert "response_type" not in fin.text and "```" not in fin.text
+    assert "Before the table." in fin.text
+
+
+def test_finalize_reply_drops_malformed_bare_protocol_json() -> None:
+    raw = '{"response_type": "table", "content": "oops", "components": [{"type"'
+    fin = rp._finalize_reply(raw, name="X", fallback="fallback")
+    assert fin.text == "fallback"
+    assert "response_type" not in fin.text
+    assert "response_type" not in fin.envelope["content"]

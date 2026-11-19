@@ -282,11 +282,9 @@ def _finalize_reply(raw: str, *, name: str,
     # Parse the envelope from the sanitized (not prose-cleaned) text so
     # encoded JSON strings are never corrupted before parsing.
     raw_s = _sanitize_final_text(raw or "")
-    env: dict[str, Any] | None = None
-    if "nova-response" in raw_s or raw_s.lstrip().startswith("{"):
-        env = extract_envelope(raw_s)
-        if env is None and raw_s.lstrip().startswith("{"):
-            env = _try_json(raw_s.strip())
+    env = extract_envelope(raw_s)
+    if env is None and raw_s.lstrip().startswith("{"):
+        env = _try_json(raw_s.strip())
     t = clean_turn_text(raw_s, name)
     if not t or _looks_like_tool_blob(t):
         t = fallback
@@ -321,7 +319,7 @@ def _finalize_reply(raw: str, *, name: str,
         # Plain reply (or unrecoverable envelope): general envelope, prose
         # only — normal chat is not forced into cards.
         if "nova-response" in t or '"response_type"' in t:
-            head = t.split("```")[0].strip()
+            head = t.split("```")[0].strip() if "```" in t else ""
             t = head or fallback
         env = {"response_type": "general", "content": t,
                "components": []}
