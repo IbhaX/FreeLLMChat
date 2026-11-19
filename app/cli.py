@@ -62,7 +62,7 @@ def _open_when_up(url: str) -> None:
 
 
 def main() -> None:
-    url = f"http://localhost:{PORT}/chat"
+    url = f"http://localhost:{PORT}/"
     if _server_running():
         # Already running — reopening the URL would spawn a duplicate tab
         # (browsers can't navigate an arbitrary existing tab), so just point
