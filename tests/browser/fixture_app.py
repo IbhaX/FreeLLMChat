@@ -203,7 +203,10 @@ async def _fixture_run_research(
           "usage_reported": True, "cost_usd": None, "currency": "USD"})
     report = (DOSSIER_SECTIONS + "\n\n```nova-response\n"
               + json.dumps(DOSSIER_ENVELOPE, ensure_ascii=False) + "\n```")
-    return report
+    # Real run_research returns a ResearchState; mirror that shape so the
+    # caller's .answer unwrap is exercised.
+    from types import SimpleNamespace
+    return SimpleNamespace(answer=report)
 
 
 def install_boundaries(gateway_cls: type[ScriptedGateway] = ScriptedGateway) -> None:

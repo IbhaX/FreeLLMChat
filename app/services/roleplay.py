@@ -919,7 +919,9 @@ async def _dossier_pieces(task: "asyncio.Future[str]") -> AsyncIterator[str]:
         while not task.done():
             await asyncio.wait({task}, timeout=0.2)
             yield ""
-        yield await task
+        result = await task
+        # run_research returns a ResearchState; tests may stub a plain string.
+        yield getattr(result, "answer", None) or str(result or "")
     finally:
         if not task.done():
             task.cancel()
