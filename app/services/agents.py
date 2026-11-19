@@ -548,11 +548,13 @@ async def run_agent(
             out2 = ""
         return out2 if isinstance(out2, str) and out2.strip() else _TOOL_BLOB_FALLBACK
     text = out if isinstance(out, str) else ""
-    return _TOOL_BLOB_FALLBACK if _looks_like_tool_blob(text) else text
+    return (_TOOL_BLOB_FALLBACK if _looks_like_tool_blob(text)
+            else _maybe_structured(agent_cfg, text))
 
 
 def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
-    if agent_cfg.output_format != "structured" or not content:
+    structured = agent_cfg.output_format == "structured"
+    if agent_cfg.output_format == "json" or not content:
         return content
     candidates = [content.strip()]
     import re
@@ -561,13 +563,17 @@ def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
         candidates.append(fence_match.group(1).strip())
     for candidate in candidates:
         try:
-            env = validate_envelope(json.loads(candidate))
+            payload = json.loads(candidate)
+            if not structured and not (
+                    isinstance(payload, dict) and "response_type" in payload):
+                continue
+            env = validate_envelope(payload)
         except Exception:
             continue
         if env.content or env.components:
             return envelope_to_fence(env)
         # Valid shape but empty envelope — treat as a failed answer.
-        return _TOOL_BLOB_FALLBACK
+        return _TOOL_BLOB_FALLBACK if structured else content
     return content
 
 
@@ -602,7 +608,8 @@ async def stream_agent(
                                             conversation_id, emit=emit,
                                             model_override=model_override)
             choice = (result.get("choices") or [{}])[0]
-            text = (choice.get("message") or {}).get("content") or ""
+            text = _maybe_structured(
+                agent_cfg, (choice.get("message") or {}).get("content") or "")
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
             yield f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
         except Exception as e:

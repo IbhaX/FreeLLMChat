@@ -228,3 +228,22 @@ async def test_chat_with_tools_model_override(
         model_override=override)
     assert seen == [expected]
     assert cfg.model == "configured/model"
+
+
+@pytest.mark.parametrize("output_format,expect_fence", [
+    ("structured", True), ("text", True), ("json", False),
+])
+def test_maybe_structured_normalizes_bare_envelope(
+        output_format: str, expect_fence: bool) -> None:
+    from app.services.agents import _maybe_structured
+
+    bare = '{"response_type": "general", "content": "Hello there"}'
+    out = _maybe_structured(_agent({}, output_format=output_format), bare)
+    if expect_fence:
+        assert out.startswith("```nova-response\n")
+        assert '"content": "Hello there"' in out
+    else:
+        assert out == bare
+    plain = '{"answer": 42}'
+    text_cfg = _agent({}, output_format="text")
+    assert _maybe_structured(text_cfg, plain) == plain
