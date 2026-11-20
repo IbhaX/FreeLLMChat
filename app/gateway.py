@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.crypto import decrypt_key
 from app.models import ApiKey, ModelCache, Provider, RequestLog, StickyRoute, utcnow
-from app.providers.base import ProviderError
+from app.providers.base import ProviderError, is_billing_failure
 from app.providers.registry import build_adapter
 from app.routing.circuit_breaker import CircuitBreaker
 from app.routing.fallback import resolve_candidates
@@ -34,7 +34,9 @@ def _clean_exhaustion_msg(msg: str) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" :_")
     if not cleaned:
         cleaned = "provider error"
-    return f"All providers are unavailable right now (last error: {cleaned[:140]})"
+    hint = (" — the provider may be out of credit; check your balance"
+            if is_billing_failure(msg) else "")
+    return f"All providers are unavailable right now (last error: {cleaned[:140]}{hint})"
 
 
 def _scrub_body(body: dict[str, Any]) -> dict[str, Any]:

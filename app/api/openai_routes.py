@@ -19,6 +19,12 @@ from app.gateway import Gateway, GatewayExhausted
 from app.logging_config import new_request_id
 from app.models import ApiKey, Provider
 from app.response_protocol import protocol_descriptor, structured_system_prompt
+from app.services.model_policy import (
+    chat_or_auto,
+    chat_stream_or_auto,
+    failover_note,
+    pinned_request_model,
+)
 from app.schemas import ChatCompletionRequest
 
 _log = logging.getLogger("freellm.chat")
@@ -552,21 +558,62 @@ async def chat_completions(
 
         async def _open():
             try:
-                return await gateway.chat_stream(
-                    session, payload, on_event=events.put_nowait
+                return await chat_stream_or_auto(
+                    gateway, session, payload, events.put_nowait
                 )
             except Exception as e:  # surfaced as an SSE error below
                 return e
 
         async def _tool_run():
-            from app.services.tools import run_tool_loop
+            """Builtin tools via a native pydantic-ai agent run.
+
+            Pinned → auto failover + the failover note live inside
+            ``chat_or_auto`` in the model adapter; the result is wrapped
+            back into the OpenAI completion shape the route consumes.
+            """
+            from app.agents.deps import AgentDeps
+            from app.agents.factory import build_simple_agent
+            from app.services.agents import _to_model_history
+            from app.services.tools import _with_tool_policy
 
             try:
-                return await run_tool_loop(
-                    gateway, session, payload, builtin,
-                    emit=events.put_nowait, tool_policy=True,
-                )
+                msgs = _with_tool_policy(
+                    list(payload.get("messages") or []))
+                system = ""
+                rest: list[dict[str, Any]] = []
+                for m in msgs:
+                    if m.get("role") == "system":
+                        system += ("\n\n" if system else "") \
+                            + str(m.get("content") or "")
+                    else:
+                        rest.append(m)
+                prompt = ""
+                for i in range(len(rest) - 1, -1, -1):
+                    if rest[i].get("role") == "user":
+                        prompt = str(rest[i].get("content") or "")
+                        del rest[i]
+                        break
+                deps = AgentDeps(gateway, emit=events.put_nowait,
+                                 max_tool_calls=12)
+                names = builtin if isinstance(builtin, list) else ["*"]
+                agent = build_simple_agent(
+                    str(payload.get("model") or "auto"), system, deps,
+                    tools=names,
+                    temperature=payload.get("temperature"))
+                result = await agent.run(
+                    prompt, deps=deps,
+                    message_history=_to_model_history(rest))
+                text = result.output if isinstance(result.output, str) \
+                    else ""
+                return {"choices": [{"message": {
+                    "role": "assistant", "content": text}}]}
             except Exception as e:
+                if "output retries" in str(e).lower():
+                    # pydantic-ai rejected an empty reply after its native
+                    # retries — surface an empty completion so the route's
+                    # "asking again without tools" fallback still engages.
+                    return {"choices": [{"message": {
+                        "role": "assistant", "content": ""}}]}
                 return e
 
         async def _research_run():
@@ -719,9 +766,9 @@ async def chat_completions(
                     yield _meta({"event": "retry",
                                  "text": "Model returned no answer — asking again without tools"})
                     try:
-                        plain, *_ = await gateway.chat(
-                            session, {**payload, "stream": False},
-                            on_event=events.put_nowait)
+                        plain, *_ = await chat_or_auto(
+                            gateway, session, {**payload, "stream": False},
+                            events.put_nowait)
                         text = "".join(
                             (c.get("message") or {}).get("content") or ""
                             for c in plain.get("choices", []))
@@ -817,7 +864,8 @@ async def chat_completions(
         )
     try:
         await _apply_memory()
-        result, provider, key, model = await gateway.chat(session, payload)
+        result, provider, key, model = await chat_or_auto(
+            gateway, session, payload)
         if payload.get("nova_structured", True):
             from app.services.component_enforce import enforce_components
 

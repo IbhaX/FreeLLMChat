@@ -83,6 +83,12 @@ async def get_agent(
     return AgentOut.model_validate(await _get_agent(session, agent_id))
 
 
+# Fields ``seed_experts`` rewrites on boot for platform-managed agents.
+_SEEDED_FIELDS = frozenset(
+    {"description", "system_prompt", "enable_tools", "output_format", "config"}
+)
+
+
 @admin_router.patch("/{agent_id}", response_model=AgentOut)
 async def update_agent(
     agent_id: int,
@@ -90,8 +96,42 @@ async def update_agent(
     session: AsyncSession = Depends(get_session),
 ) -> AgentOut:
     a = await _get_agent(session, agent_id)
-    for k, v in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_none=True)
+    cfg = data.pop("config", None)
+    if cfg is not None:
+        a.config = {**(a.config or {}), **cfg}
+    for k, v in data.items():
         setattr(a, k, v)
+    if (a.config or {}).get("builtin") and (
+        _SEEDED_FIELDS & data.keys() or cfg is not None
+    ):
+        # Editing a seeded field detaches the row from boot-time refresh
+        # so the change isn't reverted on restart; model/enabled edits
+        # already persist without the flag.
+        a.config = {**(a.config or {}), "customized": True}
+    await session.commit()
+    return AgentOut.model_validate(a)
+
+
+@admin_router.post("/{agent_id}/reset", response_model=AgentOut)
+async def reset_agent(
+    agent_id: int, session: AsyncSession = Depends(get_session)
+) -> AgentOut:
+    """Restore a built-in agent to its registry definition."""
+    a = await _get_agent(session, agent_id)
+    if not (a.config or {}).get("builtin"):
+        raise HTTPException(400, "only built-in agents can be reset")
+    from app.services.experts import get_expert
+
+    expert = get_expert(a.name)
+    if expert is None:
+        raise HTTPException(404, "no registry definition for this agent")
+    d = expert.to_agent_dict()
+    a.description = d["description"]
+    a.system_prompt = d["system_prompt"]
+    a.enable_tools = d["enable_tools"]
+    a.output_format = d["output_format"]
+    a.config = d["config"]  # fresh dict clears the customized flag too
     await session.commit()
     return AgentOut.model_validate(a)
 

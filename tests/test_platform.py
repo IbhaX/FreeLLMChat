@@ -208,7 +208,7 @@ async def test_internal_chat_falls_through_candidates(session, monkeypatch):
         "general": ("bad/m1", "good/m2")})
 
     class GW:
-        async def chat(self, s, p):
+        async def chat(self, s, p, on_event=None):
             if p["model"] == "bad/m1":
                 raise RuntimeError("provider down")
             if p["model"] == "auto":

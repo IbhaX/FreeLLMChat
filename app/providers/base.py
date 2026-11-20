@@ -7,6 +7,7 @@ generic adapter; only URL/auth quirks need a subclass.
 
 from __future__ import annotations
 
+import re
 from typing import Any, AsyncIterator, Mapping
 
 import httpx
@@ -32,6 +33,24 @@ class ProviderError(Exception):
         self.retryable = retryable
         self.retry_after_s = retry_after_s
         self.headers = dict(headers or {})
+
+
+_BILLING_RE = re.compile(
+    r"\b402\b|insufficient[_ ](?:credit|fund|balance|quota)s?|out of credit|"
+    r"credit balance|payment required|exceed\w*.{0,20}\bquota\b",
+    re.IGNORECASE,
+)
+
+
+def is_billing_failure(error: BaseException | str | None) -> bool:
+    """True when an upstream failure looks like credit/quota exhaustion —
+    HTTP 402 or 'insufficient credits'-style bodies. A durable account
+    problem worth surfacing to the user, not a transient provider error."""
+    if error is None:
+        return False
+    if isinstance(error, ProviderError) and error.status_code == 402:
+        return True
+    return bool(_BILLING_RE.search(str(error)))
 
 
 class BaseAdapter:

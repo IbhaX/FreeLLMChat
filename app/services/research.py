@@ -669,8 +669,6 @@ async def _research_one(
     task_ns: str = "sq",
     unavailable: set[str] | None = None,
 ) -> None:
-    from app.services.tools import run_tool_loop
-
     qid = str(sq.get("id") or f"q{len(state.findings) + 1}")
     task_id = f"{task_ns}:{qid}"
     actor = f"researcher:{qid}"
@@ -708,60 +706,45 @@ async def _research_one(
     # web_research skill requires.
     research_tools = sorted({"web_search", "http_get", "exa_search"}
                             | set(skills_mod.required_tools(["web_research"])))
-    payload = {
-        "model": model,
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user", "content": user}],
-        "stream": False,
-        "temperature": 0.2,
-    }
-    # Researchers run in parallel: each gets its OWN DB session — sharing the
-    # request's AsyncSession across coroutines raises "concurrent operations
-    # are not permitted" on the rotator/quota lookups.
-    from app.db import get_session_factory
-    try:
-        factory = get_session_factory()
-    except Exception:
-        factory = None
+    # Researchers run in parallel; each pydantic-ai run opens its own DB
+    # session inside the gateway adapter, so no shared-session contention.
+    from app.agents.deps import AgentDeps
+    from app.agents.factory import build_simple_agent
+    from app.agents.tools import build_toolset
 
+    toolset = build_toolset(research_tools, output_hook=harvest,
+                            parent_task_id=task_id, actor=actor)
     candidates = [model] if isinstance(model, str) else list(model)
-    result: dict[str, Any] | None = None
+    result_text: str | None = None
     outage: Exception | None = None
     for cand in candidates:
         if unavailable is not None and cand in unavailable:
             continue
-        payload["model"] = cand
         try:
-            if factory is not None:
-                async with factory() as own:
-                    result = await run_tool_loop(
-                        gateway, own, payload, research_tools,
-                        emit=collect_emit,
-                        max_rounds=4 if depth == "deep" else 3,
-                        call_timeout=240,
-                        tool_output_hook=harvest,
-                        closing_message=RESEARCHER_CLOSING,
-                        parent_task_id=task_id, actor=actor,
-                    )
-            else:
-                result = await run_tool_loop(
-                    gateway, session, payload, research_tools,
-                    emit=collect_emit,
-                    max_rounds=4 if depth == "deep" else 3,
-                    call_timeout=240,
-                    tool_output_hook=harvest,
-                    closing_message=RESEARCHER_CLOSING,
-                    parent_task_id=task_id, actor=actor,
-                )
+            deps = AgentDeps(gateway, emit=collect_emit,
+                             max_tool_calls=calls + 4)
+            agent = build_simple_agent(
+                cand, system, deps, toolset=toolset, temperature=0.2)
+            result = await asyncio.wait_for(
+                agent.run(user, deps=deps),
+                timeout=240)
+            out = result.output
+            result_text = out if isinstance(out, str) else ""
             break
         except Exception as e:
+            if "maximum output retries" in str(e).lower():
+                # pydantic-ai retries then rejects empty/invalid replies —
+                # treat as a completed-but-empty run so the
+                # "no usable findings" note still fires.
+                result_text = ""
+                break
             if _is_outage(e):
                 outage = e
             if unavailable is not None:
                 unavailable.update(_unavailable_after(e, cand, candidates))
             emit({"event": "note",
                   "text": f"{qid} failed ({cand}): {str(e)[:120]}"})
-    if result is None:
+    if result_text is None:
         # Outage on the last working candidate = the run cannot continue;
         # but an outage on an early candidate must not block later
         # candidates (e.g. ``auto``'s local backstop) from trying.
@@ -773,7 +756,7 @@ async def _research_one(
         emit({"event": "step_fail", "task_id": task_id, "actor": actor,
               "status": "failed", "text": f"{qid} failed — no findings"})
         return
-    text = text_of(((result.get("choices") or [{}])[0]).get("message", {}).get("content"))
+    text = text_of(result_text or "")
     data = _extract_json(text)
     merged_before = len(state.findings)
     if data is not None:
@@ -2090,8 +2073,12 @@ async def run_research(
         return time.monotonic() - t0 > budget_s
 
     if state.depth == "quick":
-        # One search + short answer via the plain tool loop.
-        from app.services.tools import run_tool_loop
+        # One search + short answer via a native pydantic-ai tool run.
+        from app.agents.deps import AgentDeps
+        from app.agents.factory import build_simple_agent
+        from app.agents.tools import build_toolset
+        from app.services.agents import _to_model_history
+
         seen: list[str] = []
 
         def harvest(_name: str, output: str) -> None:
@@ -2100,20 +2087,31 @@ async def run_research(
                 if u not in seen:
                     seen.append(u)
 
-        res: dict[str, Any] | None = None
+        # Split the incoming OpenAI-style messages into prompt + history.
+        hist_msgs = [m for m in messages
+                     if isinstance(m, dict) and m.get("role") in
+                     ("user", "assistant")]
+        prompt = ""
+        for i in range(len(hist_msgs) - 1, -1, -1):
+            if hist_msgs[i].get("role") == "user":
+                prompt = str(hist_msgs[i].get("content") or "")
+                del hist_msgs[i]
+                break
+        toolset = build_toolset(["web_search", "http_get"],
+                                output_hook=harvest)
         answer = ""
         for cand in _stage_model("researcher", model):
             try:
-                payload = {"model": cand, "messages": messages,
-                           "stream": False}
-                res = await run_tool_loop(gateway, session, payload,
-                                          ["web_search", "http_get"],
-                                          emit=emit, max_rounds=3,
-                                          call_timeout=120,
-                                          tool_output_hook=harvest)
-                answer = text_of(
-                    ((res.get("choices") or [{}])[0])
-                    .get("message", {}).get("content"))
+                deps = AgentDeps(gateway, emit=emit, max_tool_calls=9)
+                agent = build_simple_agent(
+                    cand, "You are a research assistant.", deps,
+                    toolset=toolset)
+                result = await asyncio.wait_for(
+                    agent.run(prompt, deps=deps,
+                              message_history=_to_model_history(hist_msgs)),
+                    timeout=120)
+                answer = result.output if isinstance(result.output, str) \
+                    else ""
                 if answer.strip():
                     break
             except Exception as e:

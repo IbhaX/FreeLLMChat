@@ -184,7 +184,10 @@
     if(liveHost&&liveHost.parentNode)liveHost.parentNode.removeChild(liveHost);
     liveHost=null;liveRun=null;accAnswer='';
     $('#report').innerHTML='<p class="tx-3" style="text-align:center;padding:48px 0">Research in progress — the report appears here when complete.</p>';
-    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create($('#stages')):null;
+    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create($('#stages'),{
+      onModel:()=>{const s=$('#model');if(!s)return;s.focus();
+        if(s.showPicker){try{s.showPicker()}catch(_){s.click()}}else s.click();}
+    }):null;
     currentAnswer='';currentMeta=null;$('#exportBtn').disabled=true;$('#printBtn').disabled=true;
   }
 

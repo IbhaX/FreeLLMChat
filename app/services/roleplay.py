@@ -162,35 +162,62 @@ def clean_turn_text(text: str, name: str) -> str:
     return t.strip()
 
 
+def _turn_prompt(history: list[dict[str, str]]) -> tuple[str, list[Any]]:
+    """Latest user turn becomes the pydantic prompt; the rest is history."""
+    from app.services.agents import _to_model_history
+
+    hist = list(history)
+    prompt = ""
+    for i in range(len(hist) - 1, -1, -1):
+        if hist[i].get("role") == "user":
+            prompt = str(hist[i].get("content") or "")
+            del hist[i]
+            break
+    return prompt, _to_model_history(hist)
+
+
+def _turn_limits() -> Any:
+    """Per-turn tool-call cap, enforced natively by pydantic-ai."""
+    from pydantic_ai.usage import UsageLimits
+
+    return UsageLimits(tool_calls_limit=9)
+
+
+def _char_agent(gateway: Any, model: str, system: str,
+                deps: Any, *, tools: bool) -> Any:
+    """One pydantic-ai agent for a character turn."""
+    from app.agents.factory import build_simple_agent
+
+    return build_simple_agent(
+        model, system, deps,
+        tools=list(ROLEPLAY_TOOLS) if tools else None,
+        temperature=0.8)
+
+
 async def _reply(gateway: Any, session: Any, model: str, system: str,
                  history: list[dict[str, str]], *,
-                 tools: bool = False) -> str:
-    """One character turn via the model policy's general-role candidates."""
-    if tools:
-        from app.services.tools import run_tool_loop
-        payload: dict[str, Any] = {
-            "model": model or "auto",
-            "messages": [{"role": "system", "content": system}] + history,
-            "temperature": 0.8,
-            "stream": False,
-        }
-        try:
-            result = await run_tool_loop(gateway, session, payload,
-                                         ROLEPLAY_TOOLS, max_rounds=3,
-                                         call_timeout=120.0)
-            msg = ((result.get("choices") or [{}])[0]).get("message", {})
-            content = msg.get("content")
-            return content.strip() if isinstance(content, str) else ""
-        except Exception:
-            return ""
-    from app.services.model_policy import internal_chat
-    payload = {
-        "messages": [{"role": "system", "content": system}] + history,
-        "temperature": 0.8,
-    }
-    res = await internal_chat(gateway, session, payload,
-                              requested=model, role="general", retries=1)
-    return (res.text or "").strip() if res.ok else ""
+                 tools: bool = False, emit: Any = None) -> str:
+    """One character turn via a native pydantic-ai agent.
+
+    Pinned-model → auto failover happens inside ``chat_or_auto`` in the
+    gateway adapter; tool rounds are pydantic-ai's native loop.
+    """
+    import asyncio
+
+    from app.agents.deps import AgentDeps
+
+    deps = AgentDeps(gateway, emit=emit, max_tool_calls=9)
+    agent = _char_agent(gateway, model, system, deps, tools=tools)
+    prompt, mh = _turn_prompt(history)
+    try:
+        result = await asyncio.wait_for(
+            agent.run(prompt, deps=deps, message_history=mh,
+                      usage_limits=_turn_limits()),
+            timeout=120.0)
+    except Exception:
+        return ""
+    out = result.output
+    return out.strip() if isinstance(out, str) else ""
 
 
 def _find_msg(room: RoleplayRoom, mid: str) -> dict[str, Any] | None:
@@ -664,6 +691,11 @@ _RESEARCH_RE = re.compile(
 # are factual lookups even inside a roleplay scene.
 _LOOKUP_RE = re.compile(
     r"\b(?:who|what|where|when)\s+(?:is|are|was|were)\b"
+    r"|\bwho\s+(?:won|did|does|plays?|sings?|sang|wrote|invented|"
+    r"discovered|created|made|built|founded|directed|produced|"
+    r"designed|starred|leads?|runs|owns|coached|captained|scored|"
+    r"married|voices)\b"
+    r"|\bwhat\s+year\b"
     r"|\bhow\s+(?:much|many|old|to)\b", re.I)
 # Trivial small talk / explicit scene openers only. Matched with fullmatch so
 # 'hi, research …' or 'write code' never count as an opener.
@@ -780,67 +812,48 @@ async def _char_reply_stream(
     caller draining queued tool-activity events while the loop runs,
     and the finished reply arrives as one final delta.
     """
-    if tools:
-        import asyncio
+    import asyncio as _aio
 
-        from app.services.tools import run_tool_loop
-        if via is not None and emit is not None:
-            _emit0 = emit
-            def emit(ev: Any) -> Any:  # capture provider/model from usage events
-                try:
-                    if isinstance(ev, dict) and ev.get("event") == "usage":
-                        via["model"] = ev.get("model")
-                        via["provider"] = ev.get("provider")
-                except Exception:
-                    pass
-                return _emit0(ev)
-        payload: dict[str, Any] = {
-            "model": model or "auto",
-            "messages": [{"role": "system", "content": system}] + history,
-            "temperature": 0.8,
-            "stream": False,
-        }
-        task = asyncio.ensure_future(run_tool_loop(
-            gateway, session, payload, ROLEPLAY_TOOLS, emit=emit,
-            max_rounds=3, call_timeout=120.0))
+    from app.agents.deps import AgentDeps
+
+    if via is not None and emit is not None:
+        _emit0 = emit
+        def emit(ev: Any) -> Any:  # capture served provider/model from usage
+            try:
+                if isinstance(ev, dict) and ev.get("event") == "usage":
+                    via["model"] = ev.get("model")
+                    via["provider"] = ev.get("provider")
+            except Exception:
+                pass
+            return _emit0(ev)
+
+    deps = AgentDeps(gateway, emit=emit, max_tool_calls=9)
+    agent = _char_agent(gateway, model, system, deps, tools=tools)
+    prompt, mh = _turn_prompt(history)
+
+    if tools:
+        # Buffered run with heartbeat yields so the caller keeps draining
+        # queued tool-activity events while the native tool loop runs.
+        task = _aio.ensure_future(_aio.wait_for(agent.run(
+            prompt, deps=deps, message_history=mh,
+            usage_limits=_turn_limits()), timeout=120.0))
         while not task.done():
-            await asyncio.sleep(0.3)
+            await _aio.sleep(0.3)
             yield ""
         try:
-            result = task.result()
+            out = task.result().output
         except Exception:
-            result = {}
-        msg = ((result.get("choices") or [{}])[0]).get("message", {})
-        content = msg.get("content")
-        text = content if isinstance(content, str) else ""
-        if text.strip():
-            yield text.strip()
+            out = ""
+        if isinstance(out, str) and out.strip():
+            yield out.strip()
         return
-    payload: dict[str, Any] = {
-        "model": model or "auto",
-        "messages": [{"role": "system", "content": system}] + history,
-        "temperature": 0.8,
-        "stream": True,
-    }
+
     got_any = False
     try:
-        stream, _p, _k, _m = await gateway.chat_stream(
-            session, payload, on_event=emit)
-        if via is not None:
-            pname = getattr(_p, "name", None)
-            via["provider"] = pname if isinstance(pname, str) else None
-            via["model"] = _m if isinstance(_m, str) else None
-        async for chunk in stream:
-            for line in chunk.decode("utf-8", "ignore").splitlines():
-                line = line.strip()
-                if not line.startswith("data:") or line == "data: [DONE]":
-                    continue
-                try:
-                    j = json.loads(line[5:].strip())
-                except Exception:
-                    continue
-                delta = ((j.get("choices") or [{}])[0]
-                         .get("delta") or {}).get("content") or ""
+        async with agent.run_stream(
+                prompt, deps=deps, message_history=mh,
+                usage_limits=_turn_limits()) as result:
+            async for delta in result.stream_text(delta=True):
                 if delta:
                     got_any = True
                     yield delta
@@ -848,7 +861,8 @@ async def _char_reply_stream(
         if got_any:
             return
     if not got_any:
-        text = await _reply(gateway, session, model, system, history)
+        text = await _reply(gateway, session, model, system, history,
+                            emit=emit)
         if text:
             yield text
 

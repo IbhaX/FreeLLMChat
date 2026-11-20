@@ -34,6 +34,11 @@
   font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 .alog-dm.w .alog-dv{font-weight:500;font-size:12px}
+.alog-mbtn{cursor:pointer;border-radius:6px;outline-offset:2px;
+  transition:background .15s}
+.alog-mbtn:hover{background:var(--hover,rgba(255,255,255,.06))}
+.alog-mbtn:focus-visible{outline:2px solid var(--accent)}
+.alog-mbtn .alog-dv::after{content:" ⇄";opacity:.45;font-weight:400}
 .alog-dash.live [data-m=elapsed] .alog-dv::before{content:"";display:inline-block;
   width:6px;height:6px;border-radius:50%;background:var(--accent);
   margin-right:6px;vertical-align:middle;animation:alogPulse 1.4s infinite}

@@ -387,16 +387,22 @@ async def _run_step(
         for cand in stage_models(step.model or expert.model_hint or "auto"):
             try:
                 if tool_names:
-                    from app.services.tools import run_tool_loop
-                    return await run_tool_loop(
-                        gateway, session,
-                        {"model": cand,
-                         "messages": [{"role": "system", "content": system},
-                                      {"role": "user", "content": user}],
-                         "nova_structured": False},
-                        tool_names, emit=emit,
-                        max_rounds=expert.max_tool_rounds,
-                        parent_task_id=step.id, actor=expert.name)
+                    from app.agents.deps import AgentDeps
+                    from app.agents.factory import build_simple_agent
+                    from app.agents.tools import build_toolset
+
+                    deps = AgentDeps(
+                        gateway, emit=emit,
+                        max_tool_calls=max(1, expert.max_tool_rounds) * 4)
+                    agent = build_simple_agent(
+                        cand, system, deps,
+                        toolset=build_toolset(
+                            tool_names, parent_task_id=step.id,
+                            actor=expert.name))
+                    out = await agent.run(user, deps=deps)
+                    return {"choices": [{"message": {
+                        "content": out.output
+                        if isinstance(out.output, str) else ""}}]}
                 result, _p, _k, _m = await gateway.chat(
                     session,
                     {"model": cand,

@@ -10,7 +10,7 @@
   /** @param {FormOptions} options @returns {Promise<Record<string, string | boolean> | null>} */
   function form(options) {
     const fields = options.fields || [];
-    const allowedTypes = ['text', 'password', 'email', 'url', 'number', 'textarea', 'select', 'checkbox'];
+    const allowedTypes = ['text', 'password', 'email', 'url', 'number', 'textarea', 'select', 'checkbox', 'multiselect'];
     const names = new Set();
     for (const field of fields) {
       if (!field.name || names.has(field.name) || !allowedTypes.includes(field.type || 'text')) {
@@ -42,12 +42,16 @@
         const caption = document.createElement('span');
         caption.textContent = field.label;
         const type = field.type || 'text';
-        const input = document.createElement(type === 'textarea' ? 'textarea' : type === 'select' ? 'select' : 'input');
+        const input = document.createElement(
+          type === 'textarea' ? 'textarea'
+            : type === 'select' ? 'select'
+            : type === 'multiselect' ? 'div' : 'input');
         if (input.tagName === 'INPUT') input.type = type;
         caption.id = 'nova-dialog-field-' + sequence + '-' + controls.size;
         input.setAttribute('aria-labelledby', caption.id);
         input.name = field.name;
-        input.className = type === 'checkbox' ? '' : 'ui-input';
+        input.className = type === 'checkbox' ? ''
+          : type === 'multiselect' ? 'nova-dialog-ms' : 'ui-input';
         input.required = Boolean(field.required);
         if (type === 'select') {
           for (const choice of field.options || []) {
@@ -57,8 +61,44 @@
             input.append(option);
           }
         }
+        if (type === 'multiselect') {
+          const picked = new Set(Array.isArray(field.value) ? field.value : []);
+          let allCb = null;
+          const rest = [];
+          for (const choice of field.options || []) {
+            const item = document.createElement('label');
+            item.className = 'nova-dialog-msi'
+              + (choice.selectAll ? ' nova-dialog-msall' : '');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = choice.value;
+            cb.checked = picked.has(choice.value);
+            const text = document.createElement('span');
+            text.textContent = choice.label;
+            if (choice.title) item.title = choice.title;
+            item.append(cb, text);
+            input.append(item);
+            if (choice.selectAll) allCb = cb; else rest.push(cb);
+          }
+          /* An option flagged selectAll drives the rest: toggling it
+             checks/clears every item; it mirrors the set (checked /
+             indeterminate) as items are toggled individually. */
+          if (allCb && rest.length) {
+            const sync = () => {
+              const on = rest.filter(c => c.checked).length;
+              allCb.checked = on === rest.length;
+              allCb.indeterminate = on > 0 && on < rest.length;
+            };
+            allCb.addEventListener('change', () => {
+              rest.forEach(c => { c.checked = allCb.checked; });
+              allCb.indeterminate = false;
+            });
+            rest.forEach(c => c.addEventListener('change', sync));
+            sync();
+          }
+        }
         if (type === 'checkbox') input.checked = Boolean(field.value);
-        else input.value = field.value == null ? '' : String(field.value);
+        else if (type !== 'multiselect') input.value = field.value == null ? '' : String(field.value);
         label.append(caption, input);
         body.append(label);
         controls.set(field.name, input);
@@ -98,7 +138,10 @@
         event.preventDefault();
         if (!body.reportValidity()) return;
         result = Object.fromEntries(Array.from(controls, ([name, control]) => [
-          name, control.type === 'checkbox' ? control.checked : control.value
+          name,
+          control.classList && control.classList.contains('nova-dialog-ms')
+            ? Array.from(control.querySelectorAll('input:checked'), c => c.value)
+            : control.type === 'checkbox' ? control.checked : control.value
         ]));
         dialog.close();
       };

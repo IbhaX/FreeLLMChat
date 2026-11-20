@@ -139,6 +139,7 @@
   .pill-btn:hover{border-color:var(--border-3);background:var(--surface-2)}
   .pill-btn.on{border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent)}
   .model-picker{position:relative}
+  .model-via{font-size:10px;color:var(--warn,var(--accent));font-weight:600;white-space:nowrap;cursor:help}
   .model-menu{top:calc(100% + 6px);right:0;display:none;
     max-height:min(62vh,460px);overflow-y:auto;overscroll-behavior:contain}
   .model-menu.open{display:block}
@@ -409,6 +410,7 @@
       <button class="pill-btn" id="modelSel">
         <span id="modelIcon" style="width:16px;height:16px;border-radius:5px;background:var(--accent);display:inline-block"></span>
         <span id="modelName">auto</span>
+        <span id="modelVia" class="model-via" hidden></span>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </button>
       <div class="model-menu ui-menu" id="modelMenu"></div>

@@ -329,6 +329,28 @@
     const dashEl = root.querySelector('.alog-dash');
     const dv = k => dashEl.querySelector('[data-m="' + k + '"] .alog-dv');
 
+    /* Live model switching: opts.onModel turns the MODEL cell into a
+       button; the host wires it to its picker (next call/turn picks the
+       new selection up). */
+    if (typeof opts.onModel === 'function') {
+      const mcell = dashEl.querySelector('[data-m="model"]');
+      mcell.classList.add('alog-mbtn');
+      mcell.setAttribute('role', 'button');
+      mcell.setAttribute('tabindex', '0');
+      mcell.title = 'Change model';
+      const fire = e => {
+        /* Picker-open clicks must not reach the pages' document-level
+           "close menu on outside click" handlers — same pattern as each
+           picker's own trigger button (e.stopPropagation). */
+        e.stopPropagation();
+        opts.onModel();
+      };
+      mcell.addEventListener('click', fire);
+      mcell.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(e); }
+      });
+    }
+
     function fmtCost(c) {
       if (!stats.costKnown) return '—';
       const cur = stats.currency && stats.currency !== 'USD' ? stats.currency + ' ' : '$';

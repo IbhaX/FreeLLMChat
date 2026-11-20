@@ -35,6 +35,7 @@ async function loadModels(silent){
       state.model=MODELS.find(m=>m.id===prevId)||state.model;
       $('#modelName').textContent=state.model.name;
       $('#modelIcon').style.background=state.model.color;
+      updateModelVia();
       renderModels();
       if(!silent)toast(`Connected — ${data.length} models`,'ok');
     }
@@ -139,7 +140,7 @@ function loadState(){
       groupMode:!!s.groupMode,groupIds:Array.isArray(s.groupIds)?s.groupIds:[]};
     paintDepth();paintModeChips();
     const m=MODELS.find(x=>x.id===s.modelId)||(typeof s.modelId==='string'&&s.modelId ? {...MODELS[0],id:s.modelId,name:s.modelId} : null);
-    if(m){state.model=m;$('#modelName').textContent=m.name;$('#modelIcon').style.background=m.color;}
+    if(m){state.model=m;$('#modelName').textContent=m.name;$('#modelIcon').style.background=m.color;updateModelVia();}
     return true;
   }catch(_){return false;}
 }
@@ -552,7 +553,7 @@ async function streamAPIReply(c,live){
   trow.innerHTML=`<div class="msg-av ai">${state.agent?'🤖':'N'}</div><div class="msg-col"><div class="typing"><i></i><i></i><i></i></div><details class="act-steps" open><summary><span class="act-ico">⚡</span><span class="act-lbl">Agent activity</span></summary><div class="act-list"></div></details></div>`;
   inner.appendChild(trow);scrollBottom();
   const actList=trow.querySelector('.act-list'),actLbl=trow.querySelector('.act-lbl'),t0=Date.now();
-  const actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
+  const actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onModel:()=>{const mb=$('#modelSel');if(mb)mb.click();},onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
   const acts=[];
   const stepCount=()=>actLog?actLog.count():acts.length;
   // Progressive findings/draft area (channel=finding|answer events).
@@ -570,7 +571,7 @@ async function streamAPIReply(c,live){
       (ev.event==='answer_delta'||ev.event==='answer_section'?'answer':'')));
     if(ch==='finding'||ch==='answer'){ensureLive();if(liveRun)liveRun.ingest(ev);return true;}
     return false;};
-  const addAct=ev=>{
+  const addAct=ev=>{recordServed(ev);
     if(feedLive(typeof ev==='string'?null:ev))return;
     if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);}
     else{const text=typeof ev==='string'?ev:(ev.text||ev.event);
@@ -677,6 +678,7 @@ async function streamAPIReply(c,live){
             }
             addAct(ev);continue;}
           if(j.error){acc+=`\n\n_${errText(j.error)}_`;continue;}
+          if(j.model)msg.model=j.model;
           const delta=j.choices?.[0]?.delta||{};
           if(delta.reasoning||delta.reasoning_content)reasoning+=(delta.reasoning||delta.reasoning_content);
           if(delta.content)acc+=delta.content;
@@ -777,6 +779,26 @@ function renderSlash(q){
 
 // --- Model menu --------------------------------------------------------------
 let modelQuery='';
+let servedModel=''; // last provider+model that actually served a reply
+function recordServed(ev){
+  if(ev&&typeof ev==='object'&&ev.model&&ev.event==='usage'){
+    servedModel=(ev.provider?ev.provider+'/':'')+ev.model;
+    updateModelVia();
+  }
+}
+function updateModelVia(){
+  const el=$('#modelVia');if(!el||!state.model)return;
+  const sel=state.model.id;
+  const show=!!servedModel&&servedModel!==sel
+    &&servedModel.split('/').pop()!==sel.split('/').pop();
+  el.hidden=!show;
+  if(show){
+    el.textContent='→ '+servedModel.split('/').pop();
+    el.title=sel.startsWith('auto')
+      ?('auto routed to '+servedModel)
+      :('Selected model unavailable — last reply served by '+servedModel);
+  }
+}
 function renderModels(){
   const menu=$('#modelMenu');
   const q=modelQuery.trim().toLowerCase();
@@ -795,7 +817,7 @@ function renderModels(){
   menu.querySelectorAll('.mi').forEach(el=>el.onclick=e=>{
     e.stopPropagation();
     const m=MODELS.find(x=>x.id===el.dataset.id);
-    if(m){state.model=m;$('#modelName').textContent=m.name;$('#modelIcon').style.background=m.color;renderModels();saveState();}
+    if(m){state.model=m;$('#modelName').textContent=m.name;$('#modelIcon').style.background=m.color;updateModelVia();renderModels();saveState();}
     menu.classList.remove('open');
   });
 }
@@ -957,10 +979,10 @@ async function streamGroupReply(c,live){
     trow.innerHTML=`<div class="msg-av ai" style="background:${agentColor(name)}">🤖</div><div class="msg-col"><div class="msg-meta"><b>${esc(name)}</b></div><div class="typing"><i></i><i></i><i></i></div><details class="act-steps" open><summary><span class="act-ico">⚡</span><span class="act-lbl">working…</span></summary><div class="act-list"></div></details></div>`;
     inner.appendChild(trow);scrollBottom();
     acts=[];actLbl=trow.querySelector('.act-lbl');actList=trow.querySelector('.act-list');
-    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
+    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onModel:()=>{const mb=$('#modelSel');if(mb)mb.click();},onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
     setStageLive(name,false);
   };
-  const addAct=ev=>{if(!actList)return;
+  const addAct=ev=>{recordServed(ev);if(!actList)return;
     if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);}
     else{const text=typeof ev==='string'?ev:(ev.text||ev.event);
       acts.push(text);
@@ -1134,10 +1156,10 @@ async function streamResearchReply(c){
       <div class="bubble typing"><span class="dots"><i></i><i></i><i></i></span></div></div>`;
     inner.appendChild(trow);scrollBottom();
     acts=[];actLbl=trow.querySelector('.act-lbl');actList=trow.querySelector('.act-list');
-    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
+    actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onModel:()=>{const mb=$('#modelSel');if(mb)mb.click();},onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
     addAct({kind:'plan',status:'running',title:'Planning research…'});
   };
-  const addAct=ev=>{if(!actList)return;
+  const addAct=ev=>{recordServed(ev);if(!actList)return;
     if(feedLive(typeof ev==='string'?null:ev))return;
     if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);}
     else{const text=typeof ev==='string'?ev:(ev.text||ev.event);
@@ -1494,7 +1516,7 @@ function maybeSwitchVision(){
   if(imgs.length){
     const vm=pickVisionModel();
     if(vm&&vm!==state.model){
-      state.model=vm;$('#modelName').textContent=vm.name;$('#modelIcon').style.background=vm.color;
+      state.model=vm;$('#modelName').textContent=vm.name;$('#modelIcon').style.background=vm.color;updateModelVia();
       renderModels();saveState();
       toast(`Switched to ${vm.id} (vision)`);
     }else if(!vm){

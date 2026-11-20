@@ -4,7 +4,7 @@ Each :class:`ExpertDef` is a self-contained specialist definition: role,
 mission, rules, deliverable contract, tool allowlist, model hint and
 compatible skills. Adapted from the agency-agents role model (identity +
 mission + rules + deliverables) into this platform's capabilities —
-experts run through the existing ``run_tool_loop``/gateway, not a
+experts run through pydantic-ai agents over the gateway, not a
 separate runtime.
 
 The registry is the single source of truth; adding an expert is one
@@ -623,8 +623,13 @@ async def seed_experts(session: Any) -> int:
         if row is None:
             session.add(AgentConfig(**d))
             n += 1
-        elif (row.config or {}).get("builtin"):
-            # Platform-managed agent: refresh definition, keep user model pick.
+        elif (row.config or {}).get("builtin") and not (
+            row.config or {}
+        ).get("customized"):
+            # Platform-managed agent: refresh definition, keep user model
+            # pick. Rows the user edited via the API are flagged
+            # ``customized`` and left alone — their edits win over
+            # registry updates until they reset to the platform default.
             row.description = d["description"]
             row.system_prompt = d["system_prompt"]
             row.enable_tools = d["enable_tools"]

@@ -325,7 +325,7 @@
           const host=document.createElement('div');host.className='lr-host';
           b.querySelector('.b').insertBefore(host,txt);
           b._lrHost=host;
-          b._log=Nova.ActivityLog.create(host,{compact:true});
+          b._log=Nova.ActivityLog.create(host,{compact:true,onModel:openModelPicker});
           b._lr=NovaRender.LiveRun.create(host,{scroller:null});
         }
         b._aligned=false;
@@ -462,7 +462,8 @@
         const det=document.createElement('details');det.className='st-trace';
         det.innerHTML='<summary>activity</summary><div class="st-trace-body"></div>';
         el.querySelector('.b').insertBefore(det,el.querySelector('.txt'));
-        const lg=Nova.ActivityLog.create(det.querySelector('.st-trace-body'));
+        const lg=Nova.ActivityLog.create(det.querySelector('.st-trace-body'),
+          {onModel:openModelPicker});
         m.interaction.forEach(e=>lg.ingest(e));
         lg.finish('done',true);
       }catch(_){}
@@ -567,10 +568,27 @@
       const c=charById(id);if(!c)return;
       const el=document.createElement('div');
       el.className='st-face'+((room.paused_ids||[]).includes(id)?' paused':'');
-      el.dataset.cid=id;el.draggable=true;el.title='drag to reorder';
+      el.dataset.cid=id;el.draggable=true;
+      el.title='drag to reorder · drag out to remove';
       el.innerHTML=`${face(c)}<div class="nm">${esc(c.name)}</div>`;
       el.ondblclick=()=>setMode('whisper')||($('#whisperTo').value=id,$('#input').focus());
-      el.ondragstart=e=>e.dataTransfer.setData('text/plain',String(id));
+      el.ondragstart=e=>{
+        e.dataTransfer.setData('text/plain',String(id));
+        e.dataTransfer.effectAllowed='move';};
+      el.ondragend=e=>{
+        /* Drag out to remove: the drag ended somewhere no reorder target
+           accepted (dropEffect 'none') and the pointer left the rail.
+           ESC-cancel while still over the rail stays inside bounds. */
+        if(e.dataTransfer.dropEffect!=='none')return;
+        const r=$('#castRail').getBoundingClientRect();
+        if(e.clientX>=r.left&&e.clientX<=r.right
+          &&e.clientY>=r.top&&e.clientY<=r.bottom)return;
+        room.character_ids=(room.character_ids||[]).filter(x=>x!==id);
+        v1Api(`/v1/roleplay/rooms/${room.id}`,{method:'PATCH',
+          body:JSON.stringify({character_ids:room.character_ids})})
+          .catch(()=>{});
+        toast2(`${c.name} left the stage — re-add them from the cast sheet`);
+        renderCast();renderChips();renderDirector();};
       el.ondragover=e=>e.preventDefault();
       el.ondrop=e=>{e.preventDefault();
         const drag=parseInt(e.dataTransfer.getData('text/plain'));
@@ -682,6 +700,13 @@
     btn.disabled=!room||modelBusy;
     btn.setAttribute('aria-expanded',
       String($('#sceneModelMenu').classList.contains('open')));
+  }
+
+  function openModelPicker(){
+    const d=$('#director');
+    if(d&&!d.classList.contains('open'))d.classList.add('open');
+    const menu=$('#sceneModelMenu');
+    if(!menu||!menu.classList.contains('open'))openSceneModelMenu();
   }
 
   function openSceneModelMenu(){

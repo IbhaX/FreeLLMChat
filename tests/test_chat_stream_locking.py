@@ -96,8 +96,10 @@ def test_empty_tool_loop_answer_retries_without_tools(
     async def route(*_: Any, **__: Any) -> str:
         return "tools"
 
-    async def tool_loop(*_: Any, **__: Any) -> dict[str, Any]:
-        return {"choices": [{"message": {"role": "assistant", "content": ""}}]}
+    async def chat_or_auto(*_: Any, **__: Any) -> tuple:
+        return ({"choices": [{"message": {"role": "assistant",
+                                         "content": ""}}]},
+                None, None, "m")
 
     calls: list[dict[str, Any]] = []
 
@@ -107,10 +109,19 @@ def test_empty_tool_loop_answer_retries_without_tools(
         return ({"choices": [{"message": {"content": "Hi there!"}}]},
                 SimpleNamespace(name="p"), SimpleNamespace(label="k"), "m")
 
+    class _FS:
+        async def __aenter__(self) -> "_FS":
+            return self
+
+        async def __aexit__(self, *exc: Any) -> None:
+            return None
+
+    import app.agents.model as model_mod
     from app.gateway import Gateway
 
     monkeypatch.setattr("app.services.orchestrator.route_message", route)
-    monkeypatch.setattr("app.services.tools.run_tool_loop", tool_loop)
+    monkeypatch.setattr(model_mod, "chat_or_auto", chat_or_auto)
+    monkeypatch.setattr(model_mod, "get_session_factory", lambda: _FS)
     monkeypatch.setattr(Gateway, "chat", chat)
     monkeypatch.setattr("app.services.astra_memory.ensure_collections", lambda: None)
     monkeypatch.setattr("app.services.astra_memory.store_short", lambda *a, **k: None)

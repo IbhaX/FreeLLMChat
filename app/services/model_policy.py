@@ -18,7 +18,12 @@ Overrides (comma-separated model ids):
 from __future__ import annotations
 
 import os
-from typing import Any
+from collections.abc import AsyncIterator, Callable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.gateway import Gateway
+    from app.models import ApiKey, Provider
 
 _PREFERRED: dict[str, tuple[str, ...]] = {
     # Complex planning, verification, final synthesis.
@@ -100,11 +105,69 @@ def stage_models(requested: str | None, *, role: str = "general") -> list[str]:
 
 
 async def chat_resp(gateway: Any, session: Any,
-                    payload: dict[str, Any]) -> dict[str, Any]:
+                    payload: dict[str, Any],
+                    emit: Any | None = None) -> dict[str, Any]:
     """``Gateway.chat`` returns ``(resp, provider, key, model)`` — internal
-    helpers only need the completion dict."""
-    resp, _p, _k, _m = await gateway.chat(session, payload)
+    helpers only need the completion dict. ``emit`` receives gateway
+    activity events (usage, provider notes) when supplied."""
+    resp, _p, _k, _m = await gateway.chat(session, payload, on_event=emit)
     return resp
+
+
+def pinned_request_model(payload: dict[str, Any]) -> str | None:
+    """Requested model when it pins a specific provider route; ``None``
+    for ``auto``/unset requests where failover is meaningless."""
+    requested = str(payload.get("model") or "")
+    return requested if requested and not is_auto(requested) else None
+
+
+def failover_note(emit: Callable[[dict[str, Any]], None] | None,
+                  requested: str,
+                  error: BaseException | str | None = None) -> None:
+    """Activity note shown when a pinned provider is being bypassed.
+    Credit/quota exhaustion is named explicitly — the user should see it
+    is a billing problem, not a transient outage."""
+    if emit is not None:
+        from app.providers.base import is_billing_failure
+        reason = " — provider out of credit" if is_billing_failure(error) else ""
+        emit({"event": "note",
+              "text": f"{requested} unavailable{reason}; "
+                      "trying another provider"})
+
+
+async def chat_or_auto(
+    gateway: Gateway, session: Any, payload: dict[str, Any],
+    emit: Callable[[dict[str, Any]], None] | None = None,
+) -> tuple[dict[str, Any], Provider, ApiKey, str]:
+    """``gateway.chat`` with one ``auto``-routed retry when a pinned
+    model's provider is exhausted (e.g. all of its keys on cooldown)."""
+    from app.gateway import GatewayExhausted
+    try:
+        return await gateway.chat(session, payload, on_event=emit)
+    except GatewayExhausted as e:
+        pinned = pinned_request_model(payload)
+        if pinned is None:
+            raise
+        failover_note(emit, pinned, e)
+        return await gateway.chat(session, {**payload, "model": "auto"},
+                                  on_event=emit)
+
+
+async def chat_stream_or_auto(
+    gateway: Gateway, session: Any, payload: dict[str, Any],
+    emit: Callable[[dict[str, Any]], None] | None = None,
+) -> tuple[AsyncIterator[bytes], Provider, ApiKey, str]:
+    """``gateway.chat_stream`` variant of :func:`chat_or_auto`."""
+    from app.gateway import GatewayExhausted
+    try:
+        return await gateway.chat_stream(session, payload, on_event=emit)
+    except GatewayExhausted as e:
+        pinned = pinned_request_model(payload)
+        if pinned is None:
+            raise
+        failover_note(emit, pinned, e)
+        return await gateway.chat_stream(
+            session, {**payload, "model": "auto"}, on_event=emit)
 
 
 class SSEDeltaParser:
@@ -314,7 +377,7 @@ async def internal_chat(
     for cand in stage_models(requested, role=role):
         p = {**payload, "model": cand}
         last = await reliable_call(
-            lambda p=p: chat_resp(gateway, session, p),
+            lambda p=p: chat_resp(gateway, session, p, emit),
             retries=retries, emit=emit, label=label or f"chat:{cand}")
         if last.ok:
             return last

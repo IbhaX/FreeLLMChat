@@ -171,11 +171,20 @@ def test_tool_loop_answer_is_replayed_in_deltas(monkeypatch):
     async def wants_tools(*a, **kw):
         return True
 
-    async def run_tool_loop(gateway, session, payload, builtin, **kw):
-        return _res(ENV)
+    async def chat_or_auto(gateway, session, payload, emit=None, **kw):
+        return (_res(ENV), None, None, "m")
 
+    class _FS:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+    import app.agents.model as model_mod
+    monkeypatch.setattr(model_mod, "chat_or_auto", chat_or_auto)
+    monkeypatch.setattr(model_mod, "get_session_factory", lambda: _FS)
     monkeypatch.setattr(tools_mod, "wants_tools", wants_tools, raising=False)
-    monkeypatch.setattr(tools_mod, "run_tool_loop", run_tool_loop)
     with TestClient(app) as c:
         r = c.post("/v1/chat/completions", json={
             "model": "auto", "stream": True, "builtin_tools": True,

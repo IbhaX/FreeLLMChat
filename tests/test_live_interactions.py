@@ -720,3 +720,125 @@ def test_finalize_reply_drops_paragraph_components_repeating_body() -> None:
              if c.get("type") == "paragraph"]
     assert paras == ["First point"]
     assert fin.envelope["content"] == body
+
+
+# ------------------------------------------------------------------ failover
+
+class _ExhaustGW:
+    """Gateway stub: any non-auto model raises GatewayExhausted; 'auto' works."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def chat(self, session: Any, payload: dict[str, Any],
+                   on_event: Any = None) -> tuple[Any, Any, Any, str]:
+        from app.gateway import GatewayExhausted
+        model = str(payload["model"])
+        self.calls.append(model)
+        if model != "auto":
+            raise GatewayExhausted("All providers are unavailable right now",
+                                   503)
+        return ({"choices": [{"message": {"content": "ok"}}]},
+                None, None, model)
+
+    async def chat_stream(self, session: Any, payload: dict[str, Any],
+                          on_event: Any = None) -> tuple[Any, Any, Any, str]:
+        from app.gateway import GatewayExhausted
+        model = str(payload["model"])
+        self.calls.append(model)
+        if model != "auto":
+            raise GatewayExhausted("All providers are unavailable right now",
+                                   503)
+
+        async def gen() -> AsyncIterator[bytes]:
+            yield _sse_line("ok")
+        return gen(), None, None, model
+
+
+def test_tc_fo_01_pinned_exhaustion_falls_back_to_auto() -> None:
+    """TC-FO-01 — Purpose: provider-outage on a pinned model must not surface
+    an error to the user when a healthy provider exists.
+
+    Inputs: payload pinned to 'openrouter/x'; gateway exhausts all non-auto
+    requests.
+    Expected: retried once with 'auto', note emitted, answer returned."""
+    gw = _ExhaustGW()
+    notes: list[dict[str, Any]] = []
+    resp, *_ = asyncio.run(mp.chat_or_auto(
+        gw, None, {"model": "openrouter/x", "messages": []}, notes.append))
+    assert gw.calls == ["openrouter/x", "auto"]
+    assert resp["choices"][0]["message"]["content"] == "ok"
+    assert any("unavailable" in str(n.get("text") or "") for n in notes)
+
+
+def test_tc_fo_02_auto_request_never_retries() -> None:
+    """TC-FO-02 — Purpose: exhaustion on 'auto' is a real outage — re-raise.
+
+    Expected: single call, GatewayExhausted propagates, no retry loop."""
+    from app.gateway import GatewayExhausted
+    gw = _ExhaustGW()
+    gw.calls.clear()
+    # 'auto' succeeds in the stub — simulate a genuine full outage instead.
+    async def _down(session: Any, payload: dict[str, Any],
+                    on_event: Any = None) -> tuple[Any, Any, Any, str]:
+        gw.calls.append(str(payload["model"]))
+        raise GatewayExhausted("All providers are unavailable right now", 503)
+    gw.chat = _down  # type: ignore[method-assign]
+    with pytest.raises(GatewayExhausted):
+        asyncio.run(mp.chat_or_auto(
+            gw, None, {"model": "auto", "messages": []}, None))
+    assert gw.calls == ["auto"]
+
+
+def test_tc_fo_03_stream_pinned_exhaustion_falls_back() -> None:
+    """TC-FO-03 — Purpose: streaming open failure on a pinned model retries
+    with 'auto' before any bytes are emitted."""
+    gw = _ExhaustGW()
+
+    async def run() -> list[bytes]:
+        stream, *_ = await mp.chat_stream_or_auto(
+            gw, None, {"model": "openrouter/x", "messages": []}, None)
+        return [c async for c in stream]
+
+    parts = asyncio.run(run())
+    assert gw.calls == ["openrouter/x", "auto"]
+    assert parts
+
+
+def test_tc_fo_04_pinned_request_model_detects_auto_forms() -> None:
+    """TC-FO-04 — Purpose: 'auto', 'auto:*' and unset models are not pinned."""
+    assert mp.pinned_request_model({"model": "openrouter/x"}) == "openrouter/x"
+    assert mp.pinned_request_model({"model": "auto"}) is None
+    assert mp.pinned_request_model({"model": "auto:coding"}) is None
+    assert mp.pinned_request_model({"model": ""}) is None
+    assert mp.pinned_request_model({}) is None
+
+
+def test_tc_fo_05_billing_failure_named_on_screen() -> None:
+    """TC-FO-05 — Purpose: credit exhaustion is named in the failover note
+    and the final error message, not hidden behind 'unavailable'.
+
+    Inputs: failover errors shaped like real 402s and a transient 429.
+    Expected: 'out of credit' appears only for billing failures."""
+    from app.gateway import _clean_exhaustion_msg
+    from app.providers.base import is_billing_failure
+
+    assert is_billing_failure("openrouter returned 402")
+    assert is_billing_failure("insufficient credits remaining")
+    assert is_billing_failure("exceeded your current quota")
+    assert not is_billing_failure("openrouter returned 429")
+    assert not is_billing_failure(None)
+
+    notes: list[dict[str, Any]] = []
+    mp.failover_note(notes.append, "openrouter/x",
+                     "openrouter returned 402: insufficient credits")
+    assert "out of credit" in notes[0]["text"]
+    notes.clear()
+    mp.failover_note(notes.append, "openrouter/x",
+                     "openrouter returned 429")
+    assert "out of credit" not in notes[0]["text"]
+
+    msg = _clean_exhaustion_msg("openrouter returned 402: {\"error\":{}}")
+    assert "out of credit" in msg
+    msg = _clean_exhaustion_msg("openrouter returned 503")
+    assert "out of credit" not in msg

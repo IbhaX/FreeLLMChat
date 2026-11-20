@@ -75,7 +75,9 @@ def test_null_content_does_not_crash_gateway_model() -> None:
     from types import SimpleNamespace
     from unittest.mock import MagicMock
 
-    from app.services.agents import GatewayModel
+    from pydantic_ai.models import ModelRequestParameters
+
+    from app.agents.model import GatewayChatModel
 
     gw = SimpleNamespace()
     async def chat(session: Any, payload: dict[str, Any],
@@ -83,8 +85,9 @@ def test_null_content_does_not_crash_gateway_model() -> None:
         return ({"choices": [{"message": {"content": None}}]},
                 MagicMock(), MagicMock(), "m")
     gw.chat = chat
-    model = GatewayModel("auto", gw)
-    resp = asyncio.run(model.request([], None, MagicMock()))
+    model = GatewayChatModel("auto", gw)
+    resp = asyncio.run(
+        model.request([], None, ModelRequestParameters()))
     assert resp.parts[0].content == ""
 
 
@@ -111,39 +114,61 @@ def test_tool_blob_detector() -> None:
     assert not _looks_like_tool_blob("")
 
 
+class _FakeResult:
+    """Stand-in for pydantic-ai's AgentRunResult."""
+
+    def __init__(self, output: Any) -> None:
+        self.output = output
+
+    def all_messages(self) -> list[Any]:
+        return []
+
+
+class _FakeAgent:
+    """Stand-in for a pydantic-ai ``Agent`` — returns canned outputs."""
+
+    def __init__(self, outputs: list[Any]) -> None:
+        self._outputs = list(outputs)
+        self.prompts: list[str] = []
+
+    async def run(self, prompt: str, **kwargs: Any) -> _FakeResult:
+        self.prompts.append(prompt)
+        return _FakeResult(self._outputs.pop(0))
+
+
 async def test_run_agent_retries_tool_blob(monkeypatch) -> None:
-    """A tool-capable agent whose model emits a bare JSON call gets one
-    retry; if the retry still blobs, the reply is a readable fallback."""
+    """A model emitting a bare JSON call gets one retry; if the retry
+    still blobs, the reply is a readable fallback."""
     from app.services import agents as agents_mod
 
-    calls: list[list[dict[str, Any]]] = []
+    fake = _FakeAgent(['{"query": "x", "max_results": 5}', "The real answer."])
+    monkeypatch.setattr("app.agents.factory.build_agent",
+                        lambda *a, **k: fake)
 
-    async def fake_tool_chat(gw: Any, cfg: Any, messages: list[dict[str, Any]],
-                             conv_id: Any, emit: Any = None,
-                             model_override: str | None = None) -> dict[str, Any]:
-        calls.append(messages)
-        content = '{"query": "x", "max_results": 5}' if len(calls) == 1 else \
-            "The real answer."
-        return {"choices": [{"message": {"content": content}}]}
+    async def no_memory(*a: Any, **k: Any) -> str:
+        return ""
+    monkeypatch.setattr(agents_mod, "get_memory_text", no_memory)
 
-    monkeypatch.setattr(agents_mod, "_chat_with_tools", fake_tool_chat)
     cfg = _agent({"tools": ["web_search"]}, enable_tools=True)
+    cfg.model = "m"; cfg.temperature = None; cfg.max_tokens = None
     out = await agents_mod.run_agent(SimpleNamespace(), cfg, "hi", [])
     assert out == "The real answer."
-    assert len(calls) == 2
-    assert calls[1][-1]["content"] == agents_mod._TOOL_BLOB_RETRY
+    assert fake.prompts == ["hi", agents_mod._TOOL_BLOB_RETRY]
 
 
 async def test_run_agent_blob_fallback_when_retry_also_blobs(monkeypatch) -> None:
     from app.services import agents as agents_mod
 
-    async def fake_tool_chat(gw: Any, cfg: Any, messages: list[dict[str, Any]],
-                             conv_id: Any, emit: Any = None,
-                             model_override: str | None = None) -> dict[str, Any]:
-        return {"choices": [{"message": {"content": '{"query": "x"}'}}]}
+    fake = _FakeAgent(['{"query": "x"}', '{"query": "y"}'])
+    monkeypatch.setattr("app.agents.factory.build_agent",
+                        lambda *a, **k: fake)
 
-    monkeypatch.setattr(agents_mod, "_chat_with_tools", fake_tool_chat)
+    async def no_memory(*a: Any, **k: Any) -> str:
+        return ""
+    monkeypatch.setattr(agents_mod, "get_memory_text", no_memory)
+
     cfg = _agent({"tools": ["web_search"]}, enable_tools=True)
+    cfg.model = "m"; cfg.temperature = None; cfg.max_tokens = None
     out = await agents_mod.run_agent(SimpleNamespace(), cfg, "hi", [])
     assert out == agents_mod._TOOL_BLOB_FALLBACK
 
@@ -173,11 +198,13 @@ def _model_cfg() -> SimpleNamespace:
 ])
 async def test_stream_agent_model_override(
         monkeypatch: pytest.MonkeyPatch, override: str | None, expected: str) -> None:
+    import app.agents.model as model_mod
     from app.services import agents as agents_mod
 
     seen: list[str] = []
 
     async def chunks() -> Any:
+        yield b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
         yield b"data: [DONE]\n\n"
 
     class Gateway:
@@ -190,11 +217,12 @@ async def test_stream_agent_model_override(
         return ""
 
     monkeypatch.setattr(agents_mod, "get_memory_text", no_memory)
-    monkeypatch.setattr(agents_mod, "get_session_factory", lambda: _FakeSession)
+    monkeypatch.setattr(model_mod, "get_session_factory", lambda: _FakeSession)
     cfg = _model_cfg()
     out = [c async for c in agents_mod.stream_agent(
         Gateway(), cfg, "hi", [], model_override=override)]
-    assert out == [b"data: [DONE]\n\n"]
+    assert any(b'"content": "hi"' in c for c in out)
+    assert out[-1] == b"data: [DONE]\n\n"
     assert seen == [expected]
     assert cfg.model == "configured/model"
 
@@ -203,29 +231,33 @@ async def test_stream_agent_model_override(
     ("picked/model", "picked/model"),
     (None, "configured/model"),
 ])
-async def test_chat_with_tools_model_override(
+async def test_run_agent_model_override_with_tools(
         monkeypatch: pytest.MonkeyPatch, override: str | None, expected: str) -> None:
-    import app.db as db_mod
-    import app.services.tools as tools_mod
+    """The model override must propagate through build_agent →
+    GatewayChatModel → the gateway payload."""
+    import app.agents.model as model_mod
     from app.services import agents as agents_mod
 
     seen: list[str] = []
 
-    async def fake_loop(gateway: Any, session: Any, payload: dict[str, Any],
-                        *a: Any, **k: Any) -> dict[str, Any]:
-        seen.append(payload["model"])
-        return {"choices": [{"message": {"content": "ok"}}]}
+    class Gateway:
+        async def chat(self, session: Any, payload: dict[str, Any],
+                       on_event: Any = None) -> tuple:
+            seen.append(payload["model"])
+            return ({"choices": [{"message": {"content": "ok"}}]},
+                    None, None, "m")
 
     async def no_memory(*a: Any, **k: Any) -> str:
         return ""
 
-    monkeypatch.setattr(tools_mod, "run_tool_loop", fake_loop)
-    monkeypatch.setattr(db_mod, "get_session_factory", lambda: _FakeSession)
+    monkeypatch.setattr(model_mod, "get_session_factory", lambda: _FakeSession)
     monkeypatch.setattr(agents_mod, "get_memory_text", no_memory)
     cfg = _model_cfg()
-    await agents_mod._chat_with_tools(
-        SimpleNamespace(), cfg, [{"role": "user", "content": "hi"}],
-        model_override=override)
+    cfg.config = {"tools": ["web_search"]}
+    cfg.enable_tools = True
+    out = await agents_mod.run_agent(
+        Gateway(), cfg, "hi", [], model_override=override)
+    assert out == "ok"
     assert seen == [expected]
     assert cfg.model == "configured/model"
 
@@ -247,3 +279,72 @@ def test_maybe_structured_normalizes_bare_envelope(
     plain = '{"answer": 42}'
     text_cfg = _agent({}, output_format="text")
     assert _maybe_structured(text_cfg, plain) == plain
+
+
+def test_passthrough_args_validator_matches_pydanticai_contract() -> None:
+    """ToolManager calls validate_json/validate_python with
+    allow_partial and context kwargs (pydantic-ai 1.107) — the
+    passthrough validator must accept and ignore them."""
+    from app.agents.tools import _PassthroughArgsValidator
+
+    v = _PassthroughArgsValidator()
+    assert v.validate_json(
+        '{"q": "x"}', allow_partial="trailing-strings", context=None
+    ) == {"q": "x"}
+    assert v.validate_json(b"{}", allow_partial="off") == {}
+    obj = {"a": 1}
+    assert v.validate_python(obj, allow_partial=True, context=None) is obj
+
+
+async def test_builtin_agent_edit_survives_reseed_and_reset(session) -> None:
+    """Editing a built-in agent marks it customized so seed_experts
+    no longer overwrites it on boot; /reset restores the registry def."""
+    from sqlalchemy import select
+
+    from app.api.agent_routes import reset_agent, update_agent
+    from app.models import AgentConfig
+    from app.schemas import AgentUpdate
+    from app.services.experts import seed_experts
+
+    await seed_experts(session)
+    row = (
+        await session.execute(
+            select(AgentConfig).where(AgentConfig.name == "deep_researcher")
+        )
+    ).scalar_one()
+    original_prompt = row.system_prompt
+
+    await update_agent(
+        row.id, AgentUpdate(system_prompt="custom prompt"), session
+    )
+    assert row.config["customized"] is True
+
+    await seed_experts(session)
+    await session.refresh(row)
+    assert row.system_prompt == "custom prompt"
+
+    out = await reset_agent(row.id, session)
+    assert out.system_prompt == original_prompt
+    assert "customized" not in (out.config or {})
+
+
+async def test_builtin_model_edit_does_not_detach(session) -> None:
+    """Model picks persist through reseed without needing the flag."""
+    from sqlalchemy import select
+
+    from app.api.agent_routes import update_agent
+    from app.models import AgentConfig
+    from app.schemas import AgentUpdate
+    from app.services.experts import seed_experts
+
+    await seed_experts(session)
+    row = (
+        await session.execute(
+            select(AgentConfig).where(AgentConfig.name == "fact_checker")
+        )
+    ).scalar_one()
+    await update_agent(row.id, AgentUpdate(model="groq/m1"), session)
+    assert "customized" not in (row.config or {})
+    await seed_experts(session)
+    await session.refresh(row)
+    assert row.model == "groq/m1"

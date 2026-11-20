@@ -84,7 +84,7 @@ def _fetch(name: str) -> dict[str, Any] | None:
         return {
             "name": _TAG_RE.sub("", summ.get("title") or title),
             "description": summ.get("description") or "",
-            "extract": (summ.get("extract") or "")[:400],
+            "extract": (summ.get("extract") or "")[:600],
             "thumbnail": thumb,
             "url": content,
             "source": "wikipedia",

@@ -518,8 +518,19 @@ body:has(.app-topnav) .sh-top-in>#appNavBtn{display:none}
 .nova-dialog h2{font-size:var(--t-xl);margin:0 0 16px}
 .nova-dialog p{color:var(--text-2);margin:0 0 20px;overflow-wrap:anywhere}
 .nova-dialog-field{display:grid;gap:6px;margin:16px 0;font-size:var(--t-sm)}
-.nova-dialog-field:has(input[type="checkbox"]){display:flex;align-items:center;justify-content:space-between}
+.nova-dialog-field:has(> input[type="checkbox"]){display:flex;align-items:center;justify-content:space-between}
 .nova-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:24px;flex-wrap:wrap}
+.nova-dialog-ms{display:grid;gap:2px;max-height:200px;overflow-y:auto;
+  width:100%;border:1px solid var(--line);border-radius:8px;padding:6px;
+  background:var(--surface-2)}
+.nova-dialog-msi{display:flex;align-items:center;gap:8px;font-size:var(--t-sm);
+  padding:5px 8px;border-radius:6px;cursor:pointer}
+.nova-dialog-msi:hover{background:var(--hover)}
+.nova-dialog-msi input{accent-color:var(--accent);flex:none}
+.nova-dialog-msi:has(input:checked){background:var(--accent-soft);
+  color:var(--accent)}
+.nova-dialog-msall{font-weight:600;border-bottom:1px solid var(--line);
+  margin-bottom:2px;padding-bottom:7px}
 .nova-toasts{
   position:fixed;inset:auto 16px 20px auto;z-index:1000;display:grid;gap:8px;
   width:min(400px,calc(100vw - 32px));pointer-events:none;

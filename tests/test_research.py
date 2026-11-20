@@ -260,11 +260,12 @@ def test_call_returns_empty_on_transient_errors():
 def test_research_one_reraises_outage(monkeypatch):
     import asyncio
 
-    async def _tool_loop(*a, **kw):
+    async def _chat_or_auto(*a, **kw):
         raise RuntimeError(
             "All 2 provider key(s) are on cooldown after upstream errors")
-    import app.services.tools as tools
-    monkeypatch.setattr(tools, "run_tool_loop", _tool_loop)
+    import app.agents.model as model_mod
+    monkeypatch.setattr(model_mod, "chat_or_auto", _chat_or_auto)
+    monkeypatch.setattr(model_mod, "get_session_factory", _fake_session)
 
     st = R.ResearchState()
     sq = {"id": "q1", "question": "why?"}
@@ -278,21 +279,34 @@ def test_research_one_reraises_outage(monkeypatch):
     assert not st.findings
 
 
+class _FakeSession:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return None
+
+
+def _fake_session():
+    return _FakeSession
+
+
 def _failover_calls(monkeypatch, status):
     import asyncio
     from app.gateway import GatewayExhausted
-    import app.services.tools as tools
+    import app.agents.model as model_mod
 
     calls: list[str] = []
 
-    async def _tool_loop(gateway, session, payload, *a, **kw):
+    async def _chat_or_auto(gateway, session, payload, *a, **kw):
         calls.append(payload["model"])
         if payload["model"] == "groq/a":
             raise GatewayExhausted("boom", status)
-        return {"choices": [{"message": {"content":
+        return ({"choices": [{"message": {"content":
             '{"findings": [{"claim": "ok", "evidence": "e", "source_id": "",'
-            ' "confidence": "low"}], "sources": []}'}}]}
-    monkeypatch.setattr(tools, "run_tool_loop", _tool_loop)
+            ' "confidence": "low"}], "sources": []}'}}]}, None, None, "m")
+    monkeypatch.setattr(model_mod, "chat_or_auto", _chat_or_auto)
+    monkeypatch.setattr(model_mod, "get_session_factory", _fake_session)
     models = ["groq/a", "groq/b", "openrouter/free", "auto"]
     unavailable: set[str] = set()
     for qid in ("q1", "q2"):
@@ -359,35 +373,6 @@ def test_gap_check_skips_when_coverage_complete():
                for e in events)
 
 
-def test_tool_loop_uses_custom_closing_message():
-    import asyncio
-
-    from app.services.tools import run_tool_loop
-
-    seen: list[list[dict]] = []
-
-    class _ToolGateway:
-        async def chat(self, session, payload, **kw):
-            seen.append(list(payload.get("messages") or []))
-            if "tools" in payload:
-                return ({"choices": [{"message": {
-                    "content": "",
-                    "tool_calls": [{"id": "c1", "type": "function",
-                                    "function": {"name": "get_datetime",
-                                                 "arguments": "{}"}}]}}]},
-                        "fake", None, "fake/model")
-            return ({"choices": [{"message": {"content": '{"findings":[]}'}}]},
-                    "fake", None, "fake/model")
-
-    payload = {"model": "m",
-               "messages": [{"role": "user", "content": "research this"}]}
-    asyncio.run(run_tool_loop(
-        _ToolGateway(), None, payload, ["get_datetime"],
-        max_rounds=1, closing_message="RETURN JSON NOW."))
-    closing = seen[-1][-1]
-    assert closing["role"] == "user" and closing["content"] == "RETURN JSON NOW."
-
-
 def test_merge_findings_alternate_shapes():
     st = R.ResearchState()
     # findings under "results" with "text" claims and "references" sources
@@ -420,10 +405,12 @@ def test_research_one_raw_json_never_becomes_finding(
         monkeypatch, reply, expect_finding, expect_unverified):
     import asyncio
 
-    async def _tool_loop(*a, **kw):
-        return {"choices": [{"message": {"content": reply}}]}
-    import app.services.tools as tools
-    monkeypatch.setattr(tools, "run_tool_loop", _tool_loop)
+    async def _chat_or_auto(*a, **kw):
+        return ({"choices": [{"message": {"content": reply}}]},
+                None, None, "m")
+    import app.agents.model as model_mod
+    monkeypatch.setattr(model_mod, "chat_or_auto", _chat_or_auto)
+    monkeypatch.setattr(model_mod, "get_session_factory", _fake_session)
 
     st = R.ResearchState()
     events = []
@@ -690,10 +677,11 @@ def test_score_sources_retrievability():
 def test_research_one_notes_when_empty(monkeypatch):
     import asyncio
 
-    async def _tool_loop(*a, **kw):
-        return {"choices": [{"message": {"content": ""}}]}
-    import app.services.tools as tools
-    monkeypatch.setattr(tools, "run_tool_loop", _tool_loop)
+    async def _chat_or_auto(*a, **kw):
+        return ({"choices": [{"message": {"content": ""}}]}, None, None, "m")
+    import app.agents.model as model_mod
+    monkeypatch.setattr(model_mod, "chat_or_auto", _chat_or_auto)
+    monkeypatch.setattr(model_mod, "get_session_factory", _fake_session)
 
     st = R.ResearchState()
     notes = []

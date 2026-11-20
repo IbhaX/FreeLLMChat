@@ -93,7 +93,8 @@ async def reliable_call(
                           f"({last_err or 'empty'}) — retrying in {wait:.0f}s"})
             await asyncio.sleep(wait)
     emit({"event": "fail",
-          "text": f"{label} failed after {retries + 1} attempt(s)"})
+          "text": f"{label} failed after {retries + 1} attempt(s)"
+                  + (f" — {last_err}" if last_err else "")})
     return CallResult(text="", attempts=retries + 1,
                       degraded=True, error=last_err)
 

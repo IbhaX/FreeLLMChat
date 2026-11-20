@@ -13,7 +13,6 @@ import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from pydantic_ai import Agent
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -21,101 +20,14 @@ from pydantic_ai.messages import (
     TextPart,
     UserPromptPart,
 )
-from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 
-from app.db import get_session_factory
 from app.gateway import Gateway
 from app.models import AgentConfig
 from app.response_protocol import (
     ResponseEnvelope,
     envelope_to_fence,
-    structured_system_prompt,
     validate_envelope,
 )
-
-
-class GatewayModel(Model):
-    """A Pydantic AI Model that delegates to the FreeLLM Gateway's internal API."""
-
-    def __init__(self, model_name: str, gateway: Gateway,
-                 emit: Callable[[dict[str, Any]], None] | None = None) -> None:
-        self._model_name = model_name
-        self._gateway = gateway
-        self._emit = emit
-
-    @property
-    def model_name(self) -> str:
-        return self._model_name
-
-    @property
-    def system(self) -> str:
-        return "freeLLM-gateway"
-
-    async def request(
-        self, messages: list[ModelMessage], model_settings, params: ModelRequestParameters
-    ) -> ModelResponse:
-        """Non-streaming request through the gateway.
-
-        Forwards safe request parameters (temperature, response_format, etc.)
-        from pydantic-ai model_settings onto the gateway payload so structured
-        output can leverage provider-level JSON mode when available.
-        """
-        openai_messages = _convert_messages(messages)
-        payload: dict[str, Any] = {
-            "model": self._model_name,
-            "messages": openai_messages,
-            "stream": False,
-        }
-        forward = {
-            "temperature", "top_p", "max_tokens", "stop", "seed",
-            "response_format", "presence_penalty", "frequency_penalty",
-        }
-        for k, v in (model_settings or {}).items():
-            if k in forward and v is not None:
-                payload[k] = v
-        async with get_session_factory()() as session:
-            result, provider, key, model = await self._gateway.chat(
-                session, payload, on_event=self._emit
-            )
-        text = ""
-        for choice in result.get("choices", []):
-            msg = choice.get("message", {})
-            # Some providers return {"content": null} — .get default only
-            # covers a MISSING key; a present null must not crash `+=`.
-            text += msg.get("content") or ""
-        if "response_format" in payload and "```" in text:
-            import re as _re
-
-            m = _re.search(r"```[^\n`]*\n?([\s\S]*?)```", text)
-            if m:
-                text = m.group(1).strip()
-        return ModelResponse(parts=[TextPart(content=text)])
-
-    async def request_stream(
-        self, messages: list[ModelMessage], params: ModelRequestParameters
-    ) -> StreamedResponse:
-        raise NotImplementedError("Use stream_agent() for streaming")
-
-
-def _convert_messages(messages: list[ModelMessage]) -> list[dict[str, Any]]:
-    """Convert Pydantic AI messages to OpenAI format."""
-    out: list[dict[str, Any]] = []
-    for m in messages:
-        role = "user"
-        content = ""
-        if hasattr(m, "role"):
-            role = m.role
-        if hasattr(m, "parts"):
-            for part in m.parts:
-                if hasattr(part, "content"):
-                    c = part.content
-                    content += "".join(str(x) for x in c) if isinstance(c, list) else str(c)
-        elif hasattr(m, "content"):
-            c = m.content
-            content = "".join(str(x) for x in c) if isinstance(c, list) else str(c)
-        if content:
-            out.append({"role": role, "content": content})
-    return out
 
 
 def _to_model_history(history: list[dict[str, Any]]) -> list[ModelMessage]:
@@ -265,31 +177,6 @@ def _compile_system_prompt(agent_cfg: AgentConfig) -> str:
     return "\n\n".join(parts) if parts else "You are a helpful assistant."
 
 
-def _build_agent(
-    agent_cfg: AgentConfig, gateway: Gateway, custom: str = "",
-    emit: Callable[[dict[str, Any]], None] | None = None,
-    model_override: str | None = None,
-) -> Agent:
-    from pydantic_ai.output import PromptedOutput
-    model = GatewayModel(model_override or agent_cfg.model, gateway, emit)
-    system_prompt = _compile_system_prompt(agent_cfg)
-    if agent_cfg.output_format == "structured":
-        system_prompt = structured_system_prompt() + "\n\n" + system_prompt
-    if custom:
-        from app.services.settings_store import custom_instructions_block
-        system_prompt += "\n\n" + custom_instructions_block(custom)
-    settings: dict[str, Any] = {}
-    if agent_cfg.temperature is not None:
-        settings["temperature"] = agent_cfg.temperature
-    if agent_cfg.max_tokens is not None:
-        settings["max_tokens"] = agent_cfg.max_tokens
-    if agent_cfg.output_format == "structured":
-        settings["response_format"] = {"type": "json_object"}
-        return Agent(model, output_type=PromptedOutput(ResponseEnvelope),
-                     system_prompt=system_prompt, model_settings=settings)
-    return Agent(model, system_prompt=system_prompt, model_settings=settings or None)
-
-
 def _cfg(agent_cfg: AgentConfig) -> dict[str, Any]:
     """Agent ``config`` column, always a dict (JSON column can hold anything)."""
     return agent_cfg.config if isinstance(agent_cfg.config, dict) else {}
@@ -364,52 +251,6 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
     return "\n\n".join(parts)
 
 
-def _messages(
-    agent_cfg: AgentConfig, message: Any, history: list[dict[str, Any]], custom: str = ""
-) -> list[dict[str, Any]]:
-    msgs = _bounded_history(history) + [{"role": "user", "content": message}]
-    system_prompt = _compile_system_prompt(agent_cfg)
-    if agent_cfg.output_format == "structured":
-        system_prompt = structured_system_prompt() + "\n\n" + system_prompt
-    if custom:
-        from app.services.settings_store import custom_instructions_block
-        system_prompt += "\n\n" + custom_instructions_block(custom)
-    msgs.insert(0, {"role": "system", "content": system_prompt})
-    return msgs
-
-
-async def _chat_with_tools(
-    gateway: Gateway, agent_cfg: AgentConfig, messages: list[dict[str, Any]],
-    conversation_id: str | None = None,
-    emit: Callable[[dict[str, Any]], None] | None = None,
-    model_override: str | None = None,
-) -> dict[str, Any]:
-    from app.db import get_session_factory
-    from app.services.tools import run_tool_loop
-    tool_names = _tool_names(agent_cfg)
-    query = next((m.get("content", "") for m in reversed(messages)
-                  if m.get("role") == "user" and isinstance(m.get("content"), str)), "")
-    mem = await get_memory_text(query, conversation_id)
-    if mem:
-        messages.insert(1 if messages and messages[0].get("role") == "system" else 0,
-                        {"role": "system", "content": mem})
-    payload: dict[str, Any] = {"model": model_override or agent_cfg.model,
-                               "messages": messages, "stream": False}
-    if agent_cfg.temperature is not None:
-        payload["temperature"] = agent_cfg.temperature
-    if agent_cfg.max_tokens is not None:
-        payload["max_tokens"] = agent_cfg.max_tokens
-    if agent_cfg.output_format in ("json", "structured"):
-        payload["response_format"] = {"type": "json_object"}
-    execution = _cfg(agent_cfg).get("execution", {})
-    timeout_s = execution.get("timeout")
-    max_rounds = min(int(execution.get("max_retries") or 5), 10)
-    async with get_session_factory()() as session:
-        return await run_tool_loop(gateway, session, payload, tool_names,
-                                   max_rounds=max_rounds, call_timeout=timeout_s,
-                                   emit=emit)
-
-
 _TOOLISH_KEYS = {
     "query", "queries", "q", "search", "max_results", "tool", "tool_name",
     "tool_calls", "function_call", "arguments", "args", "input", "url",
@@ -457,99 +298,117 @@ _TOOL_BLOB_FALLBACK = (
 )
 
 
+def _usage_limits(max_tool_calls: int) -> Any:
+    """Cap tool-call volume per run via pydantic-ai's native limits."""
+    from pydantic_ai.usage import UsageLimits
+
+    return UsageLimits(tool_calls_limit=max(1, max_tool_calls))
+
+
+def _agent_deps(
+    gateway: Gateway, agent_cfg: AgentConfig, *,
+    conversation_id: str | None,
+    emit: Callable[[dict[str, Any]], None] | None,
+    model_override: str | None,
+) -> Any:
+    """Typed RunContext dependencies for one agent execution."""
+    from app.agents.deps import AgentDeps
+
+    execution = _cfg(agent_cfg).get("execution", {})
+    return AgentDeps(
+        gateway,
+        emit=emit,
+        conversation_id=conversation_id,
+        model_override=model_override,
+        max_tool_calls=min(int(execution.get("max_retries") or 5), 10) * 4,
+    )
+
+
+async def _plain_text_fallback(
+    agent_cfg: AgentConfig, deps: Any, message: str,
+    history: list[dict[str, Any]], custom: str,
+    timeout_s: float, limits: Any,
+) -> str:
+    """Re-run once with ``output_format='text'`` when structured output
+    fails validation or comes back empty — never show a raw envelope."""
+    import copy
+
+    from app.agents.factory import build_agent
+
+    cfg2 = copy.copy(agent_cfg)
+    cfg2.output_format = "text"
+    fallback = build_agent(cfg2, deps, custom_instructions=custom)
+    try:
+        result = await asyncio.wait_for(
+            fallback.run(message, deps=deps,
+                         message_history=_to_model_history(history),
+                         usage_limits=limits),
+            timeout=timeout_s)
+        out = result.output
+    except Exception:
+        out = ""
+    return out if isinstance(out, str) and out.strip() else _TOOL_BLOB_FALLBACK
+
+
 async def run_agent(
     gateway: Gateway, agent_cfg: AgentConfig, message: str, history: list[dict[str, Any]],
     *, custom_instructions: str = "", conversation_id: str | None = None,
     emit: Callable[[dict[str, Any]], None] | None = None,
     model_override: str | None = None,
 ) -> str:
-    """Run an agent with bounded context, relevant memory and execution limits."""
+    """Run an agent natively through pydantic-ai.
+
+    Tool rounds, output-validation retries and provider failover all
+    happen inside the pydantic-ai run — no bespoke orchestration loops.
+    """
+    from app.agents.factory import build_agent
+
     history = _bounded_history(history)
     execution = _cfg(agent_cfg).get("execution", {})
     timeout_s = max(1.0, min(float(execution.get("timeout") or 120), 600.0))
-    if _tool_names(agent_cfg):
-        messages = _messages(agent_cfg, message, history, custom_instructions)
-        result = await asyncio.wait_for(
-            _chat_with_tools(gateway, agent_cfg, messages, conversation_id, emit=emit,
-                             model_override=model_override),
-            timeout=timeout_s,
-        )
-        content = ((result.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
-        if _looks_like_tool_blob(content):
-            # One clean retry with the leaked call visible for context.
-            try:
-                retry = await asyncio.wait_for(
-                    _chat_with_tools(
-                        gateway, agent_cfg,
-                        messages + [
-                            {"role": "assistant", "content": content},
-                            {"role": "user", "content": _TOOL_BLOB_RETRY},
-                        ],
-                        conversation_id, emit=emit, model_override=model_override,
-                    ),
-                    timeout=timeout_s,
-                )
-                content = ((retry.get("choices") or [{}])[0]
-                           .get("message") or {}).get("content") or ""
-            except Exception:
-                content = ""
-            if not content.strip() or _looks_like_tool_blob(content):
-                content = _TOOL_BLOB_FALLBACK
-        return _maybe_structured(agent_cfg, content)
     memory = await get_memory_text(str(message), conversation_id)
-    agent = _build_agent(agent_cfg, gateway,
-                         custom_instructions + ("\n\n" + memory if memory else ""),
-                         emit=emit, model_override=model_override)
+    custom = custom_instructions + ("\n\n" + memory if memory else "")
+    deps = _agent_deps(gateway, agent_cfg, conversation_id=conversation_id,
+                       emit=emit, model_override=model_override)
+    limits = _usage_limits(deps.max_tool_calls)
+    agent = build_agent(agent_cfg, deps, custom_instructions=custom)
     try:
         result = await asyncio.wait_for(
-            agent.run(message, message_history=_to_model_history(history)), timeout=timeout_s
-        )
+            agent.run(message, deps=deps,
+                      message_history=_to_model_history(history),
+                      usage_limits=limits),
+            timeout=timeout_s)
     except Exception as e:
-        # Weak models often can't emit a valid structured envelope before
-        # pydantic-ai's output retries run out — retry once as plain text
-        # instead of returning the raw error to the user.
+        # Output-validation retries exhausted on a structured agent —
+        # retry once as plain text instead of returning the raw error.
         if agent_cfg.output_format != "structured" or (
                 "retries" not in str(e).lower()
                 and "output" not in type(e).__name__.lower()):
             raise
-        import copy
-
-        cfg2 = copy.copy(agent_cfg)
-        cfg2.output_format = "text"
-        fallback = _build_agent(
-            cfg2, gateway,
-            custom_instructions + ("\n\n" + memory if memory else ""),
-            emit=emit, model_override=model_override)
-        result = await asyncio.wait_for(
-            fallback.run(
-                message, message_history=_to_model_history(history)),
-            timeout=timeout_s)
+        return await _plain_text_fallback(
+            agent_cfg, deps, message, history, custom, timeout_s, limits)
     out = result.output
     if isinstance(out, ResponseEnvelope):
         if out.content or out.components:
             return envelope_to_fence(out)
-        # Degenerate envelope (empty content, no components) — the model
-        # answered with empty JSON. One plain-text retry, then a readable
-        # fallback rather than showing the raw envelope.
-        import copy
-
-        cfg2 = copy.copy(agent_cfg)
-        cfg2.output_format = "text"
-        fallback = _build_agent(
-            cfg2, gateway,
-            custom_instructions + ("\n\n" + memory if memory else ""),
-            emit=emit, model_override=model_override)
-        try:
-            result2 = await asyncio.wait_for(
-                fallback.run(message, message_history=_to_model_history(history)),
-                timeout=timeout_s)
-            out2 = result2.output
-        except Exception:
-            out2 = ""
-        return out2 if isinstance(out2, str) and out2.strip() else _TOOL_BLOB_FALLBACK
+        return await _plain_text_fallback(
+            agent_cfg, deps, message, history, custom, timeout_s, limits)
     text = out if isinstance(out, str) else ""
-    return (_TOOL_BLOB_FALLBACK if _looks_like_tool_blob(text)
-            else _maybe_structured(agent_cfg, text))
+    if _looks_like_tool_blob(text):
+        # Weak models can leak the call as text — retry once with the
+        # leaked blob visible in history, then give up honestly.
+        try:
+            retry = await asyncio.wait_for(
+                agent.run(_TOOL_BLOB_RETRY, deps=deps,
+                          message_history=result.all_messages(),
+                          usage_limits=limits),
+                timeout=timeout_s)
+            text = retry.output if isinstance(retry.output, str) else ""
+        except Exception:
+            text = ""
+        if not text.strip() or _looks_like_tool_blob(text):
+            return _TOOL_BLOB_FALLBACK
+    return _maybe_structured(agent_cfg, text)
 
 
 def _maybe_structured(agent_cfg: AgentConfig, content: str) -> str:
@@ -583,14 +442,18 @@ async def stream_agent(
     emit: Callable[[dict[str, Any]], None] | None = None,
     model_override: str | None = None,
 ) -> AsyncIterator[bytes]:
-    """Run an agent with streaming via the gateway's internal streaming API."""
+    """Stream an agent reply via pydantic-ai's native streaming.
+
+    Structured-output and tool-enabled agents run buffered (native tool
+    rounds + output validation), then emit one SSE chunk — the same
+    downstream contract as before.
+    """
+    from app.agents.factory import build_agent
+
     history = _bounded_history(history)
-    openai_messages = _messages(agent_cfg, message, history, custom_instructions)
-    if not _tool_names(agent_cfg):
-        mem = await get_memory_text(str(message), conversation_id)
-        if mem:
-            openai_messages.insert(1, {"role": "system", "content": mem})
-    if agent_cfg.output_format == "structured":
+    execution = _cfg(agent_cfg).get("execution", {})
+    timeout_s = max(1.0, min(float(execution.get("timeout") or 120), 600.0))
+    if agent_cfg.output_format == "structured" or _tool_names(agent_cfg):
         try:
             text = await run_agent(gateway, agent_cfg, message, history,
                                    custom_instructions=custom_instructions,
@@ -602,35 +465,26 @@ async def stream_agent(
             err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
             yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
         return
-    if _tool_names(agent_cfg):
-        try:
-            result = await _chat_with_tools(gateway, agent_cfg, openai_messages,
-                                            conversation_id, emit=emit,
-                                            model_override=model_override)
-            choice = (result.get("choices") or [{}])[0]
-            text = _maybe_structured(
-                agent_cfg, (choice.get("message") or {}).get("content") or "")
-            chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
-            yield f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
-        except Exception as e:
-            err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
-            yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
-        return
-    payload = {"model": model_override or agent_cfg.model,
-               "messages": openai_messages, "stream": True}
-    if agent_cfg.temperature is not None:
-        payload["temperature"] = agent_cfg.temperature
-    if agent_cfg.max_tokens is not None:
-        payload["max_tokens"] = agent_cfg.max_tokens
-    execution = _cfg(agent_cfg).get("execution", {})
-    timeout_s = max(1.0, min(float(execution.get("timeout") or 120), 600.0))
+    memory = await get_memory_text(str(message), conversation_id)
+    deps = _agent_deps(gateway, agent_cfg, conversation_id=conversation_id,
+                       emit=emit, model_override=model_override)
+    agent = build_agent(
+        agent_cfg, deps,
+        custom_instructions=custom_instructions + ("\n\n" + memory if memory else ""))
     try:
         async with asyncio.timeout(timeout_s):
-            async with get_session_factory()() as session:
-                stream, provider, key, model = await gateway.chat_stream(
-                    session, payload, on_event=emit)
-                async for chunk in stream:
-                    yield chunk
+            async with agent.run_stream(
+                    message, deps=deps,
+                    message_history=_to_model_history(history),
+                    usage_limits=_usage_limits(deps.max_tool_calls)) as result:
+                async for delta in result.stream_text(delta=True):
+                    if not delta:
+                        continue
+                    chunk = {"choices": [{"index": 0,
+                                          "delta": {"content": delta},
+                                          "finish_reason": None}]}
+                    yield f"data: {json.dumps(chunk)}\n\n".encode()
+            yield b"data: [DONE]\n\n"
     except Exception as e:
         err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
         yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
