@@ -672,18 +672,27 @@ async def chat_completions(
                 from app.services.reliable import last_resort_answer
 
                 if isinstance(res, Exception) or res is None:
-                    answer = last_resort_answer(
-                        last_user, failures=[str(res)[:200]])
+                    failures = [str(res)[:200]] if isinstance(res, Exception) \
+                        else ["No orchestration result was returned"]
+                    degraded = True
+                    answer = last_resort_answer(last_user, failures=failures)
                     trace: list[dict] = []
                 else:
+                    meta = getattr(res, "meta", {}) or {}
                     answer = getattr(res, "answer", "") or last_resort_answer(
                         last_user,
-                        failures=[str(f) for f in
-                                  getattr(res, "meta", {}).get("failures", [])])
+                        failures=[str(f) for f in meta.get("failures", [])])
                     trace = getattr(res, "trace", [])
-                yield _meta({"event": "orchestration_done",
-                             "text": f"Orchestration complete "
-                                     f"({getattr(res, 'intent', '?')})",
+                    failures = [str(f)[:200] for f in meta.get("failures", []) if f]
+                    degraded = bool(getattr(res, "degraded", False) or failures)
+                event = "degraded" if degraded else "orchestration_done"
+                text = ("Orchestration completed with partial results"
+                        if degraded else "Orchestration complete")
+                yield _meta({"event": event,
+                             "text": f"{text} ({getattr(res, 'intent', '?')})",
+                             "degraded": degraded,
+                             "detail": "; ".join(failures[:5]),
+                             "failures": failures[:5],
                              "trace": trace,
                              "steps": [{"expert": s.expert, "ok": s.ok}
                                        for s in getattr(res, "steps", [])]})

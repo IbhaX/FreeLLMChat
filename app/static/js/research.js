@@ -121,6 +121,10 @@
     const date=(meta.created_at||'').slice(0,10)||new Date().toISOString().slice(0,10);
     const cites=q.citations!=null
       ?`${q.citations} checked${q.dead_urls&&q.dead_urls.length?` · ${q.dead_urls.length} dead`:''}`:null;
+    const assurance=String(meta.depth||'').toLowerCase()==='quick'
+      ?'Quick research · links gathered; claims not independently verified'
+      :(meta.quality?'Full research · claims reviewed; citations and links checked'
+        :'Research report · verification details unavailable');
     const rows=[
       rxRow('Date',date),rxRow('Depth',meta.depth),
       rxRow('Model',meta.model),rxRow('Sources',meta.sources),
@@ -135,7 +139,7 @@
         ${meta.run_id?`<div class="rx-no">№<b>${esc(String(meta.run_id))}</b></div>`:''}
       </div>
       ${rows?`<div class="rx-body">${rows}</div>`:''}
-      <div class="rx-foot"><span>Verified research</span><span>FreeLLM Research Center</span></div>
+      <div class="rx-foot"><span>${esc(assurance)}</span><span>FreeLLM Research Center</span></div>
     </div>`;
   }
 

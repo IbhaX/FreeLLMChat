@@ -145,12 +145,18 @@ class RegistryToolset(AbstractToolset[AgentDeps]):
             ctx.deps.emit_event({
                 "event": "tool", "kind": "tool", "status": "failed",
                 "title": f"{label} timed out", "tool": name,
+                "error_type": "TimeoutError",
+                "duration_s": round(time.perf_counter() - started, 2),
+                **scope,
             })
             return "tool error: execution timed out"
         except Exception as exc:  # tool failures become model-visible text
             ctx.deps.emit_event({
                 "event": "tool", "kind": "tool", "status": "failed",
                 "title": label, "tool": name,
+                "error_type": type(exc).__name__,
+                "duration_s": round(time.perf_counter() - started, 2),
+                **scope,
             })
             return f"tool error: {type(exc).__name__}: {exc}"
 

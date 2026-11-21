@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+from app.agents import tools as native_tools
 from app.services import activity
 from app.services import model_policy as mp
 from app.services import roleplay as rp
@@ -282,6 +283,35 @@ def test_tc_tool_03_cancelled_call_emits_cancelled_not_success(
     asyncio.run(run())
     done = [e for e in events if e.get("event") == "tool"]
     assert done and done[-1]["status"] == "cancelled" and done[-1]["ok"] is False
+
+
+def test_tc_tool_04_failed_native_tool_keeps_task_and_actor_scope(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """TC-TOOL-04 — failed tools remain attributable to their expert task.
+
+    Inputs: a mocked native tool exception under a scoped researcher.
+    Expected: the terminal failure event preserves task/actor and error type.
+    """
+    events: list[dict[str, Any]] = []
+
+    async def fail(_name: str, _args: dict[str, Any]) -> str:
+        raise RuntimeError("provider failure")
+
+    monkeypatch.setattr(native_tools.registry, "run_tool", fail)
+
+    async def run() -> None:
+        toolset = native_tools.RegistryToolset(
+            ["web_search"], parent_task_id="task-42", actor="researcher")
+        ctx = SimpleNamespace(deps=SimpleNamespace(emit_event=events.append))
+        await toolset.call_tool("web_search", {"query": "test"}, ctx, None)
+
+    asyncio.run(run())
+    failed = [e for e in events if e.get("status") == "failed"]
+    assert len(failed) == 1
+    assert failed[0]["task_id"] == "task-42"
+    assert failed[0]["parent_task_id"] == "task-42"
+    assert failed[0]["actor"] == "researcher"
+    assert failed[0]["error_type"] == "RuntimeError"
 
 
 # ----------------------------------------------------- roleplay boundaries
