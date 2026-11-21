@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<title>Research — Nova</title>
+<title>Research - Nova</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,7 +15,8 @@
 <script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
 <style>
   .rs-grid{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
-  @media(max-width:900px){.rs-grid{grid-template-columns:1fr}}
+  @media(max-width:900px){.rs-grid{grid-template-columns:1fr}
+    .rs-grid>:first-child{order:2}}  /* mobile: report first, history below */
   .rs-run{padding:10px 12px;border-radius:var(--r-md);cursor:pointer;border:1px solid transparent}
   .rs-run:hover{background:var(--surface-2)}
   .rs-run.active{border-color:var(--accent-line);background:var(--accent-soft)}
@@ -99,6 +100,7 @@
         <div class="sub">Deep multi-agent investigation with verified sources</div>
       </div>
       <div class="acts">
+        <button class="ui-btn ui-btn-sm" id="bookBtn" disabled>📖 Textbook</button>
         <button class="ui-btn ui-btn-sm" id="printBtn" disabled>⎙ Print/PDF</button>
         <button class="ui-btn ui-btn-sm" id="exportBtn" disabled>↓ Export MD</button>
       </div>
@@ -149,6 +151,7 @@
 <script src="/static/js/app-nav.js"></script>
 <script src="/static/js/admin-shell.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
 <script src="/static/js/render/ns.js"></script>
 <script src="/static/js/render/ComponentRegistry.js"></script>
 <script src="/static/js/render/ResponseClassifier.js"></script>

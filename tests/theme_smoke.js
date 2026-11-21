@@ -8,15 +8,23 @@ function setup(initial = 'dark', blocked = false, pageDefault = initial) {
   const listeners = {};
   const events = [];
   const writes = [];
+  const styleProps = {};
   const context = {
     document: {
-      documentElement: {dataset: {theme: initial, defaultTheme: pageDefault}},
+      documentElement: {
+        dataset: {theme: initial, defaultTheme: pageDefault},
+        style: {
+          setProperty: (k, v) => { styleProps[k] = v; },
+          removeProperty: k => { delete styleProps[k]; }
+        }
+      },
       querySelectorAll: () => [],
       addEventListener: () => {}
     },
     localStorage: {
       getItem: () => { if (blocked) throw Error('blocked'); return null; },
-      setItem: (key, value) => { if (blocked) throw Error('blocked'); writes.push([key, value]); }
+      setItem: (key, value) => { if (blocked) throw Error('blocked'); writes.push([key, value]); },
+      removeItem: () => { if (blocked) throw Error('blocked'); }
     },
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
     addEventListener: (name, listener) => { listeners[name] = listener; },
@@ -24,7 +32,7 @@ function setup(initial = 'dark', blocked = false, pageDefault = initial) {
   };
   context.window = context;
   vm.runInNewContext(source, context);
-  return {theme: context.UITheme, listeners, events, writes};
+  return {theme: context.UITheme, listeners, events, writes, styleProps};
 }
 const app = setup();
 assert.equal(app.theme.registry.length, 8);
@@ -51,4 +59,26 @@ const invalid = setup('missing', false, 'stage');
 assert.equal(invalid.theme.get(), 'stage');
 invalid.theme.set('__proto__');
 assert.equal(invalid.theme.get(), 'stage');
-console.log('Theme registry, events, storage synchronization and blocked storage: passed');
+// accent customization
+const before = app.events.length;
+assert.ok(app.theme.setAccent('#ffdd00'));
+assert.equal(app.theme.accent(), '#ffdd00');
+assert.equal(app.styleProps['--accent'], '#ffdd00');
+assert.ok(app.styleProps['--accent-soft'].startsWith('rgba(255,221,0'));
+assert.equal(app.styleProps['--on-accent'], '#0a0a0a');
+assert.ok(app.writes.some(([k]) => k === 'ui-theme-custom'));
+assert.equal(app.events[before].type, 'nova:themecustom');
+assert.ok(app.theme.setAccent('#123456'));
+assert.equal(app.styleProps['--on-accent'], '#ffffff');
+assert.equal(app.theme.setAccent('not-a-color'), false);
+app.theme.clearAccent();
+assert.equal(app.theme.accent(), null);
+assert.equal(app.styleProps['--accent'], undefined);
+app.listeners.storage({key: 'ui-theme-custom',
+  newValue: JSON.stringify({accent: '#00ff00', vars: {'--accent': '#00ff00'}})});
+assert.equal(app.theme.accent(), '#00ff00');
+assert.equal(app.styleProps['--accent'], '#00ff00');
+app.listeners.storage({key: 'ui-theme-custom', newValue: null});
+assert.equal(app.theme.accent(), null);
+assert.equal(app.styleProps['--accent'], undefined);
+console.log('Theme registry, events, storage synchronization, blocked storage and accent customization: passed');

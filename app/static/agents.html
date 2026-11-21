@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<title>Agents — Nova</title>
+<title>Agents - Nova</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/theme.css">
@@ -23,7 +23,7 @@
       <div><h1>Agent Directory</h1><div class="sub">Specialist experts you can delegate work to</div></div>
       <div class="acts">
         <input id="filter" class="ui-input" placeholder="Filter…" style="width:180px">
-        <button class="ui-btn ui-btn-primary" id="newAgent">+ New agent</button>
+        <button class="ui-btn ui-btn-primary" id="newAgent" data-admin="1">+ New agent</button>
       </div>
     </div>
     <div class="ag-grid" id="grid"></div>
@@ -41,5 +41,7 @@
 <script src="/static/js/admin-shell.js"></script>
 <script src="/static/js/render/ActivityLog.js"></script>
 <script src="/static/js/agents.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-"""FreeLLM Gateway application entrypoint."""
+"""Nova Gateway application entrypoint."""
 
 from __future__ import annotations
 
@@ -12,7 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from app.api.admin_routes import router as admin_router
+from app.api.admin_routes import user_router as admin_user_router
 from app.api.agent_routes import admin_router as agent_admin_router
+from app.api.agent_routes import admin_read_router as agent_admin_read_router
 from app.api.agent_routes import chat_router as agent_chat_router
 from app.api.auth_routes import router as auth_router
 from app.api.character_routes import router as character_router
@@ -40,14 +42,8 @@ async def lifespan(app: FastAPI):
     if settings.admin_token == "admin-change-me":
         import logging
 
-        logging.getLogger("freellm").warning(
+        logging.getLogger("nova").warning(
             "ADMIN_TOKEN is the default 'admin-change-me' — set a real token in .env"
-        )
-    if not settings.gateway_api_key:
-        import logging
-
-        logging.getLogger("freellm").info(
-            "GATEWAY_API_KEY not set — /v1 endpoints are unauthenticated"
         )
     await init_db()
     async with get_session_factory()() as session:
@@ -75,7 +71,7 @@ async def lifespan(app: FastAPI):
         if seeded:
             import logging as _log
 
-            _log.getLogger("freellm").info(
+            _log.getLogger("nova").info(
                 "Seeded/refreshed %d built-in expert agents", seeded
             )
         from app.services.skills import load_custom_skills
@@ -106,7 +102,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="FreeLLM Gateway",
+    title="Nova Gateway",
     version="0.1.0",
     description="Unified OpenAI-compatible gateway over free-tier LLM providers.",
     lifespan=lifespan,
@@ -131,10 +127,12 @@ async def no_cache_html(request, call_next):
 
 app.include_router(openai_router)
 app.include_router(admin_router)
+app.include_router(admin_user_router)
 app.include_router(auth_router)
 app.include_router(character_router)
 app.include_router(person_router)
 app.include_router(agent_admin_router)
+app.include_router(agent_admin_read_router)
 app.include_router(agent_chat_router)
 app.include_router(group_router)
 app.include_router(research_router)
@@ -198,6 +196,11 @@ async def media_file(fname: str):
 
 
 @app.get("/", include_in_schema=False)
+async def landing() -> Response:
+    return render_page(static_dir=static_dir, name="landing.html")
+
+
+@app.get("/dashboard", include_in_schema=False)
 async def dashboard() -> Response:
     return render_page(static_dir=static_dir, name="dashboard.html")
 
@@ -215,6 +218,11 @@ async def keys_page() -> Response:
 @app.get("/settings", include_in_schema=False)
 async def settings_page() -> Response:
     return render_page(static_dir=static_dir, name="settings.html")
+
+
+@app.get("/profile", include_in_schema=False)
+async def profile_page() -> Response:
+    return render_page(static_dir=static_dir, name="profile.html")
 
 
 @app.get("/research", include_in_schema=False)
@@ -240,6 +248,16 @@ async def skills_page() -> Response:
 @app.get("/library", include_in_schema=False)
 async def library_page() -> Response:
     return render_page(static_dir=static_dir, name="library.html")
+
+
+@app.get("/memory", include_in_schema=False)
+async def memory_page() -> Response:
+    return render_page(static_dir=static_dir, name="memory.html")
+
+
+@app.get("/textbook/{run_id}", include_in_schema=False)
+async def textbook_page(run_id: int) -> Response:
+    return render_page(static_dir=static_dir, name="textbook.html")
 
 
 @app.get("/share/{share_id}", include_in_schema=False)

@@ -149,7 +149,7 @@ def _accumulate(job: ChatJob, frame: bytes) -> None:
             if not line.startswith("data:"):
                 continue
             data = json.loads(line[5:].strip())
-            fl = data.get("freellm")
+            fl = data.get("nova")
             if isinstance(fl, dict):
                 ev = fl.get("event")
                 if ev == "replace_content":
@@ -181,7 +181,7 @@ async def _pump(job: ChatJob, agen: AsyncIterator[bytes],
         raise
     except Exception as e:
         job.error = str(e)[:300]
-        payload = {"freellm": {"event": "error", "text": f"generation failed: {job.error}"}}
+        payload = {"nova": {"event": "error", "text": f"generation failed: {job.error}"}}
         frame = f"data: {json.dumps(payload)}\n\n".encode()
         async with job._cond:
             job.frames.append(frame)

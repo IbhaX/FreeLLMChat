@@ -129,6 +129,25 @@ async def init_db() -> None:
             if c_cols and col not in c_cols:
                 await conn.exec_driver_sql(
                     f"ALTER TABLE characters ADD COLUMN {col} {ddl}")
+        # Profile fields on users (bio / avatar / GitHub link).
+        u_cols = {
+            r[1]
+            for r in (await conn.exec_driver_sql(
+                "PRAGMA table_info(users)")).fetchall()
+        }
+        u_adds = {
+            "bio": "VARCHAR(512) DEFAULT ''",
+            "avatar_url": "VARCHAR(512) DEFAULT ''",
+            "github_username": "VARCHAR(64) DEFAULT ''",
+            "pronouns": "VARCHAR(64) DEFAULT ''",
+            "company": "VARCHAR(128) DEFAULT ''",
+            "location": "VARCHAR(128) DEFAULT ''",
+            "website": "VARCHAR(512) DEFAULT ''",
+        }
+        for col, ddl in u_adds.items():
+            if u_cols and col not in u_cols:
+                await conn.exec_driver_sql(
+                    f"ALTER TABLE users ADD COLUMN {col} {ddl}")
         # Activity-log v2: normalized event fields on the agent ledger.
         ae_cols = {
             r[1]

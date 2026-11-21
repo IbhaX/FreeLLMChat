@@ -1,4 +1,4 @@
-# FreeLLM Gateway
+# Nova Gateway
 
 One OpenAI-compatible endpoint (`http://localhost:8000/v1`) that unifies the free
 tiers of many LLM providers, with multi-key rotation, quota tracking, cooldowns,
@@ -51,13 +51,16 @@ Point the agent's OpenAI-compatible base URL at the gateway:
 
 | Tool | Setting |
 |---|---|
-| **Cline** | Provider: OpenAI Compatible → Base URL `http://localhost:8000/v1`, API key any value (or `GATEWAY_API_KEY` if set), model `auto` |
+| **Cline** | Provider: OpenAI Compatible → Base URL `http://localhost:8000/v1`, API key: your user session token, model `auto` |
 | **Continue** | `config.json`: `"provider": "openai", "apiBase": "http://localhost:8000/v1", "model": "auto"` |
-| **Aider** | `aider --openai-api-base http://localhost:8000/v1 --openai-api-key x --model openai/auto` |
+| **Aider** | `aider --openai-api-base http://localhost:8000/v1 --openai-api-key <user-token> --model openai/auto` |
 | **OpenCode** | Provider `openai` with `baseURL: http://localhost:8000/v1` |
-| **OpenAI SDK** | `OpenAI(base_url="http://localhost:8000/v1", api_key="x")` |
+| **OpenAI SDK** | `OpenAI(base_url="http://localhost:8000/v1", api_key="<user-token>")` |
 
-If `GATEWAY_API_KEY` is set, the agent's API key must match it.
+Authentication is via user accounts: `/v1/auth/register` or `/v1/auth/login`
+returns a session token — pass it as the bearer `api_key` (or as an
+`X-User-Token` header) on any `/v1` endpoint. When `NOVA_AUTH_REQUIRED` is
+off, `/v1` is open and any placeholder API key works.
 
 ## Adding keys
 

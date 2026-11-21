@@ -10,14 +10,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import (optional_user, require_gateway_key, require_user,
+from app.api.deps import (optional_user, require_user,
                           subject_for)
 from app.db import get_session
 from app.models import Collection, Document, DocumentChunk, User
 from app.services import documents as docs
 
 router = APIRouter(prefix="/v1/knowledge", tags=["knowledge"],
-                   dependencies=[Depends(require_gateway_key), Depends(require_user)])
+                   dependencies=[Depends(require_user)])
 
 
 class CollectionBody(BaseModel):

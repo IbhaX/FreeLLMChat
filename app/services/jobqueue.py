@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.config import get_settings
 from app.models import Job, utcnow
 
-log = logging.getLogger("freellm.jobs")
+log = logging.getLogger("nova.jobs")
 
 Handler = Callable[["JobContext"], Awaitable[dict[str, Any] | None]]
 

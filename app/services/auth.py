@@ -13,7 +13,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from app.models import AuthToken, User
 
@@ -27,6 +27,15 @@ def auth_required() -> bool:
     .env) — read lazily so tests can flip it without re-importing."""
     from app.config import get_settings
     return bool(get_settings().auth_required)
+
+
+def is_admin_email(email: str) -> bool:
+    """Whether ``email`` is in the ``ADMIN_EMAILS`` env allowlist — those
+    accounts always hold the admin role."""
+    from app.config import get_settings
+    allowed = {e.strip().lower()
+               for e in (get_settings().admin_emails or "").split(",") if e.strip()}
+    return bool(allowed) and (email or "").strip().lower() in allowed
 
 MIN_USERNAME = 3
 MIN_PASSWORD = 8
@@ -67,11 +76,12 @@ async def create_user(session: Any, username: str, password: str,
     # First account becomes admin of the install.
     first = (await session.execute(
         select(User.id).limit(1))).scalar_one_or_none() is None
+    email = (email or "").strip().lower()
     user = User(
-        username=username, email=(email or "").strip(),
+        username=username, email=email,
         password_hash=hash_password(password),
         display_name=(display_name or "").strip() or username,
-        role="admin" if first else "user",
+        role="admin" if (first or is_admin_email(email)) else "user",
     )
     session.add(user)
     await session.flush()
@@ -79,12 +89,17 @@ async def create_user(session: Any, username: str, password: str,
 
 
 async def authenticate(session: Any, username: str, password: str) -> Optional[User]:
+    ident = (username or "").strip().lower()
     user = (await session.execute(
         select(User).where(
-            User.username == (username or "").strip().lower())
+            or_(User.username == ident,
+                func.lower(User.email) == ident))
     )).scalar_one_or_none()
     if not user or user.disabled or not verify_password(password, user.password_hash):
         return None
+    if user.role != "admin" and is_admin_email(user.email):
+        user.role = "admin"
+        await session.flush()
     return user
 
 

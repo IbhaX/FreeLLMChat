@@ -12,7 +12,7 @@ from app.web.pages import VersionedStaticFiles, asset_url, render_page
 @pytest.mark.parametrize(
     'route',
     ['/', '/chat', '/keys', '/settings', '/research', '/roleplay',
-     '/agents', '/skills', '/library', '/share/example'],
+     '/agents', '/skills', '/library', '/memory', '/share/example'],
 )
 def test_workspace_routes_version_assets(route: str) -> None:
     client = TestClient(app)

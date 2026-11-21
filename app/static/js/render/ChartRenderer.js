@@ -78,10 +78,48 @@
     return P[i % P.length];
   }
 
+  // Models emit chart data in a few shapes; normalize all of them into the
+  // flat row-object list buildSeries expects:
+  //   {data: [{month, count}]}                    -> as-is
+  //   {series: [{name, data: [{x, y}]}]}          -> [{x, <name>: y}]
+  //   {labels: [...], series: [{name, data: [n]}]} -> [{x: label, <name>: n}]
+  function normalizeRows(data) {
+    if (Array.isArray(data.data) && data.data.length
+        && typeof data.data[0] === "object" && !Array.isArray(data.data[0])) {
+      return data.data;
+    }
+    const series = data.series;
+    if (!Array.isArray(series) || !series.length) {
+      return Array.isArray(data.data) ? data.data : [];
+    }
+    const pts = series[0] && series[0].data;
+    if (Array.isArray(pts) && pts.length && typeof pts[0] === "object" && "x" in pts[0]) {
+      const rows = [], byX = {};
+      series.forEach((s) => {
+        (s.data || []).forEach((p) => {
+          const key = String(p.x ?? "");
+          let row = byX[key];
+          if (!row) { row = { x: key }; byX[key] = row; rows.push(row); }
+          row[s.name || "value"] = Number(p.y) || 0;
+        });
+      });
+      return rows;
+    }
+    if (Array.isArray(pts) && pts.length && typeof pts[0] === "number"
+        && Array.isArray(data.labels) && data.labels.length) {
+      return data.labels.map((l, i) => {
+        const row = { x: String(l) };
+        series.forEach((s) => { row[s.name || "value"] = Number((s.data || [])[i]) || 0; });
+        return row;
+      });
+    }
+    return Array.isArray(data.data) ? data.data : [];
+  }
+
   function render(data) {
     const chartType = (data.chart_type || "bar").replace("area", "line");
     const isDonut = data.chart_type === "donut";
-    const rows = data.data || [];
+    const rows = normalizeRows(data);
     const title = data.title || "";
     const labels = data.labels || {};
     const options = data.options || {};

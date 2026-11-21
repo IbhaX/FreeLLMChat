@@ -28,6 +28,7 @@
     d.className='rs-stage';
     d.innerHTML=`<span class="dot"></span><span>${esc(typeof ev==='string'?ev:(ev.text||ev.event))}</span>`;
     $('#stages').appendChild(d);
+    if(window.NovaMotion)NovaMotion.enter(d,{y:6,dur:.22});
   }
 
   function ensureLive(){
@@ -51,6 +52,7 @@
     $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')runResearch();});
     $('#exportBtn').onclick=exportMd;
     $('#printBtn').onclick=()=>window.print();
+    $('#bookBtn').onclick=()=>{if(currentMeta&&currentMeta.run_id)location.href='/textbook/'+currentMeta.run_id;};
   }
 
   function restoreModel(){
@@ -79,7 +81,7 @@
 
   async function loadRuns(){
     try{
-      const rows=await v1Api('/v1/research/runs?limit=30');
+      const rows=await v1Api('/v1/research/runs?limit=10');
       const host=$('#runs');host.innerHTML='';
       if(!rows.length){host.innerHTML='<div class="tx-3 t-sm" style="padding:14px">No research yet.</div>';return;}
       rows.forEach(r=>{
@@ -91,6 +93,7 @@
         el.onclick=()=>openRun(r.id,el);
         host.appendChild(el);
       });
+      if(window.NovaMotion)NovaMotion.stagger(host.children,{x:-8,y:0,dur:.25,stagger:.04});
     }catch(e){$('#runs').innerHTML='<div class="tx-3 t-sm" style="padding:14px">'+esc(e.message)+'</div>';}
   }
 
@@ -140,7 +143,7 @@
         ${meta.run_id?`<div class="rx-no">№<b>${esc(String(meta.run_id))}</b></div>`:''}
       </div>
       ${rows?`<div class="rx-body">${rows}</div>`:''}
-      <div class="rx-foot"><span>${esc(assurance)}</span><span>FreeLLM Research Center</span></div>
+      <div class="rx-foot"><span>${esc(assurance)}</span><span>Nova Research Center</span></div>
     </div>`;
   }
 
@@ -156,13 +159,18 @@
         // Guard: if the renderer produced nothing visible, fall through
         // to the <pre> fallback rather than showing a blank report.
         if(host.textContent.trim()||host.querySelector('canvas,img,svg,video,audio')){
-          $('#exportBtn').disabled=false;$('#printBtn').disabled=false;return;
+          $('#exportBtn').disabled=false;$('#printBtn').disabled=false;
+          $('#bookBtn').disabled=!(currentMeta&&currentMeta.run_id);
+          if(window.NovaMotion)NovaMotion.stagger(host.children,
+            {y:14,dur:.4,stagger:.05});
+          return;
         }
       }catch(_){}
     }
     host.innerHTML='<pre style="white-space:pre-wrap">'+esc(text)+'</pre>';
     $('#exportBtn').disabled=!text;
     $('#printBtn').disabled=!text;
+    $('#bookBtn').disabled=!(text&&currentMeta&&currentMeta.run_id);
   }
 
   function exportMd(){
@@ -212,7 +220,7 @@
       onModel:()=>{const s=$('#model');if(!s)return;s.focus();
         if(s.showPicker){try{s.showPicker()}catch(_){s.click()}}else s.click();}
     }):null;
-    currentAnswer='';currentMeta=null;$('#exportBtn').disabled=true;$('#printBtn').disabled=true;
+    currentAnswer='';currentMeta=null;$('#exportBtn').disabled=true;$('#printBtn').disabled=true;$('#bookBtn').disabled=true;
   }
 
   function endRunUI(){
@@ -240,14 +248,24 @@
           if(data==='[DONE]')continue;
           try{
             const ev=JSON.parse(data);
-            if(ev.freellm){
-              const e=ev.freellm;
+            if(ev.nova){
+              const e=ev.nova;
               if(e.event==='research_done'){
                 currentMeta={...e,question:$('#q').value.trim(),model:$('#model').value,
                   created_at:new Date().toISOString()};
                 continue;
               }
               if(e.event==='research_answer')continue;
+              // The run's closing meta frame carries run_id with no `event`
+              // key — capture it so the textbook/PDF actions light up.
+              if(e.run_id&&e.event===undefined){
+                currentMeta={...(currentMeta||{}),...e,
+                  question:$('#q').value.trim(),model:$('#model').value,
+                  run_id:e.run_id,created_at:new Date().toISOString()};
+                $('#rxpad').innerHTML=renderRx(currentMeta);
+                $('#bookBtn').disabled=false;
+                continue;
+              }
               addStage(e);
             }else if(ev.choices&&ev.choices[0]&&ev.choices[0].delta&&ev.choices[0].delta.content){
               // OpenAI chunks ACCUMULATE — final answer is the full text.

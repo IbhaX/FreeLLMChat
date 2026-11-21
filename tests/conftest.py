@@ -4,13 +4,15 @@ import os
 import tempfile
 from pathlib import Path
 
-_TMP = tempfile.mkdtemp(prefix="freellm-test-")
+_TMP = tempfile.mkdtemp(prefix="nova-test-")
 os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_TMP}/test.db")
 os.environ["ENCRYPTION_KEY"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="  # noqa
 os.environ["ADMIN_TOKEN"] = "test-admin"
-os.environ["GATEWAY_API_KEY"] = ""
 # Tests exercise /v1 anonymously; auth enforcement is covered explicitly.
 os.environ.setdefault("NOVA_AUTH_REQUIRED", "false")
+# Referral gating is opt-in per test via monkeypatch; never inherit .env's.
+os.environ["REFERRAL_CODE"] = ""
+os.environ["GOOGLE_CLIENT_ID"] = ""
 os.environ["PROVIDERS_YAML"] = str(Path(__file__).parent.parent / "providers.yaml")
 
 # Prevent env-key seeding from the real .env during tests

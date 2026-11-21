@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Textbook — Nova Research</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/textbook.css">
+<style>html,body{margin:0;padding:0}</style>
+</head>
+<body class="tb">
+<div class="tb-top" id="tbTop">
+  <a class="tb-btn" href="/research" title="Back to research">← Research</a>
+  <span class="tb-logo">Nova</span>
+  <span class="tb-title" id="tbTitle">Textbook</span>
+  <button class="tb-btn primary" id="tbPdf" title="Export PDF">↓ PDF</button>
+  <div class="tb-progress" id="tbProg"></div>
+</div>
+<div class="tb-layout">
+  <aside class="tb-rail">
+    <h5>Contents</h5>
+    <nav class="tb-toc" id="tbRailToc"></nav>
+  </aside>
+  <main class="tb-book" id="tbBook">
+    <div class="tb-load"><div class="spin"></div><div>Composing your textbook…</div></div>
+  </main>
+</div>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/render/TextbookRenderer.js"></script>
+<script>
+(function () {
+  var m = location.pathname.match(/\/textbook\/(\d+)/);
+  var runId = m ? m[1] : null;
+  var printMode = /[?&]print=1/.test(location.search);
+  var book = document.getElementById('tbBook');
+  var pdfBtn = document.getElementById('tbPdf');
+  if (printMode) {
+    document.getElementById('tbTop').style.display = 'none';
+    document.querySelector('.tb-rail').style.display = 'none';
+    document.querySelector('.tb-layout').style.display = 'block';
+  }
+  if (pdfBtn) pdfBtn.onclick = function () {
+    pdfBtn.disabled = true; pdfBtn.textContent = 'Rendering…';
+    fetch((window.API_BASE || '') + '/v1/research/runs/' + runId + '/pdf',
+          { headers: hdrs() })
+      .then(function (r) {
+        if (!r.ok) throw new Error('pdf ' + r.status);
+        return r.blob();
+      })
+      .then(function (b) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'nova-research-' + runId + '.pdf';
+        a.click(); URL.revokeObjectURL(a.href);
+      })
+      .catch(function (e) { alert('PDF export failed: ' + e.message); })
+      .finally(function () { pdfBtn.disabled = false; pdfBtn.textContent = '↓ PDF'; });
+  };
+
+  function fail(msg) {
+    book.innerHTML = '<div class="tb-error"><h2>Couldn’t build the textbook</h2><p>'
+      + msg + '</p></div>';
+  }
+  if (!runId) { fail('Missing run id.'); return; }
+
+  // Only attach the user credential when present — the PDF exporter
+  // forwards its own auth at the browser level.
+  function hdrs() {
+    var h = {};
+    if (window.USER_TOKEN) h['X-User-Token'] = window.USER_TOKEN;
+    return h;
+  }
+
+  fetch((window.API_BASE || '') + '/v1/research/runs/' + runId + '/document',
+        { headers: hdrs() })
+    .then(function (r) {
+      if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent(location.pathname); throw r; }
+      if (!r.ok) throw new Error('document ' + r.status);
+      return r.json();
+    })
+    .then(function (doc) {
+      document.title = (doc.title || 'Textbook') + ' — Nova Research';
+      document.getElementById('tbTitle').textContent = doc.title || 'Textbook';
+      var res = window.NovaTextbook.render(doc, book, {});
+      if (!printMode) window.NovaTextbook.chrome(doc, res);
+    })
+    .catch(function (e) { fail(e && e.message ? e.message : 'unknown error'); });
+})();
+</script>
+</body>
+</html>

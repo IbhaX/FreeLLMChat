@@ -9,13 +9,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_gateway_key, require_user
+from app.api.deps import optional_user, require_user
 from app.db import get_session
 from app.models import CustomSkill, User
 from app.services.skills import load_custom_skills
 
 router = APIRouter(prefix="/v1/skills/manage", tags=["skills"],
-                   dependencies=[Depends(require_gateway_key), Depends(require_user)])
+                   dependencies=[Depends(require_user)])
 
 
 class SkillIn(BaseModel):

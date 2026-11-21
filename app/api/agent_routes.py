@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 if TYPE_CHECKING:
     from app.gateway import Gateway
 
-from app.api.deps import require_admin, require_gateway_key, require_user
+from app.api.deps import (
+    optional_user, require_admin, require_user,
+    require_user_or_admin)
 from app.db import get_session
 from app.models import AgentConfig
 from app.schemas import AgentChatRequest, AgentCreate, AgentOut, AgentUpdate
@@ -24,9 +26,12 @@ from app.services.agents import run_agent, stream_agent
 # Public chat router (gateway-key protected)
 chat_router = APIRouter(
     prefix="/v1/agents",
-    dependencies=[Depends(require_gateway_key), Depends(require_user)])
+    dependencies=[Depends(require_user)])
 # Admin CRUD router
 admin_router = APIRouter(prefix="/admin/agents", dependencies=[Depends(require_admin)])
+# Read-only listing — signed-in users browse agents; only writes need admin.
+admin_read_router = APIRouter(
+    prefix="/admin/agents", dependencies=[Depends(require_user_or_admin)])
 
 
 def _gateway(request: Request) -> Gateway:
@@ -57,7 +62,7 @@ async def _get_agent_by_name(session: AsyncSession, name: str) -> AgentConfig:
 
 # ---------- Admin CRUD ----------
 
-@admin_router.get("", response_model=list[AgentOut])
+@admin_read_router.get("", response_model=list[AgentOut])
 async def list_agents(session: AsyncSession = Depends(get_session)) -> list[AgentOut]:
     agents = (await session.execute(select(AgentConfig))).scalars().all()
     return [AgentOut.model_validate(a) for a in agents]
@@ -78,7 +83,7 @@ async def create_agent(
     return AgentOut.model_validate(a)
 
 
-@admin_router.get("/{agent_id}", response_model=AgentOut)
+@admin_read_router.get("/{agent_id}", response_model=AgentOut)
 async def get_agent(
     agent_id: int, session: AsyncSession = Depends(get_session)
 ) -> AgentOut:
@@ -160,6 +165,8 @@ async def agent_chat(
     if not a.enabled:
         raise HTTPException(403, "agent is disabled")
     gw = _gateway(request)
+    _user = await optional_user(request)
+    _owner = _user.id if _user else None
     from app.db import get_session_factory
     from app.services import agent_log
     from app.services.settings_store import get_custom_instructions
@@ -172,11 +179,27 @@ async def agent_chat(
     _t0 = time.monotonic()
     evq: asyncio.Queue = asyncio.Queue()
 
+    def _delta_text(raw: bytes) -> str:
+        """Pull delta.content text out of an SSE chunk for capture."""
+        try:
+            out = ""
+            for line in raw.decode("utf-8", "replace").split("data:"):
+                line = line.strip()
+                if not line or line == "[DONE]":
+                    continue
+                payload = json.loads(line)
+                for choice in payload.get("choices") or []:
+                    out += ((choice.get("delta") or {}).get("content")) or ""
+            return out
+        except Exception:
+            return ""
+
     async def _wrap_stream():
         def _drain() -> bytes:
             ev = evq.get_nowait()
-            return f"data: {json.dumps({'freellm': ev})}\n\n".encode()
+            return f"data: {json.dumps({'nova': ev})}\n\n".encode()
 
+        parts: list[str] = []
         try:
             async for chunk in stream_agent(gw, a, body.message, body.history,
                                             custom_instructions=custom,
@@ -185,9 +208,15 @@ async def agent_chat(
                                             emit=evq.put_nowait):
                 while not evq.empty():
                     yield _drain()
+                parts.append(_delta_text(chunk))
                 yield chunk
             while not evq.empty():
                 yield _drain()
+            from app.services import knowledge_capture
+
+            knowledge_capture.schedule(
+                _owner, "agent", body.message, "".join(parts),
+                title=f"Agent · {a.name}")
             async with factory() as ls:
                 await agent_log.finish_run(ls, arun, "done",
                     meta={"agent": a.name, "stream": True},
@@ -221,6 +250,10 @@ async def agent_chat(
             status_code=502,
             content={"error": {"message": str(e), "type": "agent_error"}},
         )
+    from app.services import knowledge_capture
+
+    knowledge_capture.schedule(
+        _owner, "agent", body.message, result, title=f"Agent · {a.name}")
     async with factory() as ls:
         await agent_log.finish_run(ls, arun, "done", meta={"agent": a.name},
             duration_ms=int((time.monotonic()-_t0)*1000))

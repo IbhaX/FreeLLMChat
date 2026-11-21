@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<title>Settings — FreeLLM Gateway</title>
+<title>Settings - Nova Gateway</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -67,6 +67,13 @@
         <button type="button" data-t="elevenlabs">ElevenLabs</button>
         <button type="button" data-t="light">Light</button>
       </div>
+      <div class="set-acc">
+        <button type="button" class="ui-btn ui-btn-sm" id="accentBtn">Customize appearance…</button>
+        <span class="set-acc-chip" id="accentChip" hidden>
+          <i id="accentDot"></i>Custom accent <b id="accentHex"></b>
+          <button type="button" class="set-acc-x" id="accentReset" title="Reset to theme accent">reset</button>
+        </span>
+      </div>
     </div>
 
     <div class="ui-card ui-card-pad set-card">
@@ -75,8 +82,6 @@
       <div class="set-grid">
         <div><label class="label">Gateway URL <span class="tx-3">(blank = same origin)</span></label>
           <input id="gwUrl" class="ui-input" placeholder="http://localhost:5000"></div>
-        <div><label class="label">Gateway API key</label>
-          <input id="gwKey" class="ui-input" type="password" placeholder="GATEWAY_API_KEY"></div>
         <div class="full" style="display:flex;gap:8px;align-items:center">
           <button class="ui-btn ui-btn-primary" onclick="saveConn()">Save</button>
           <button class="ui-btn" onclick="testConn()">Test connection</button>
@@ -87,11 +92,11 @@
 
     <div class="ui-card ui-card-pad set-card">
       <h3>Admin access</h3>
-      <div class="desc">Admin token for /admin endpoints (stored in this tab only)</div>
+      <div class="desc">Signed-in admins use /admin directly — this token is only needed for external tools (stored in this tab only)</div>
       <div style="display:flex;gap:8px">
         <input id="admTok" class="ui-input" type="password" placeholder="ADMIN_TOKEN" style="max-width:320px">
         <button class="ui-btn" onclick="saveTok()">Update</button>
-        <button class="ui-btn ui-btn-ghost" onclick="sessionStorage.removeItem('admin_token');location.reload()">Sign out</button>
+        <button class="ui-btn ui-btn-ghost" onclick="window.NovaAuth?NovaAuth.logout():location.href='/login'">Sign out</button>
       </div>
     </div>
 
@@ -154,5 +159,7 @@
 <script src="/static/js/app-nav.js"></script>
 <script src="/static/js/admin-shell.js"></script>
 <script src="/static/js/settings.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
 </body>
 </html>

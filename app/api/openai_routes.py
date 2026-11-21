@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_gateway_key, require_user
+from app.api.deps import require_user
 from app.db import get_session
 from app.gateway import Gateway, GatewayExhausted
 from app.logging_config import new_request_id
@@ -27,10 +27,10 @@ from app.services.model_policy import (
 )
 from app.schemas import ChatCompletionRequest
 
-_log = logging.getLogger("freellm.chat")
+_log = logging.getLogger("nova.chat")
 router = APIRouter(
     prefix="/v1",
-    dependencies=[Depends(require_gateway_key), Depends(require_user)])
+    dependencies=[Depends(require_user)])
 
 
 def _gateway(request: Request) -> Gateway:
@@ -306,16 +306,24 @@ def _stream_pieces(text: str) -> list[str]:
     return [text[i:i + size] for i in range(0, len(text), size)]
 
 
-def _remember(gateway, conv_id: str | None, user_text: str, reply: str) -> None:
-    """Fire-and-forget: store the turn in short-term memory and extract facts."""
-    if not conv_id:
-        return
+def _remember(gateway, conv_id: str | None, user_text: str, reply: str,
+              owner_id: int | None = None) -> None:
+    """Fire-and-forget: store the turn in short-term memory, extract
+    facts, and capture useful knowledge into the library."""
 
     from app.services import astra_memory
 
     from app.services.tools import _sanitize_final_text
 
     reply = _sanitize_final_text(reply) or ""
+
+    from app.services import knowledge_capture
+
+    knowledge_capture.schedule(
+        owner_id, "chat", user_text, reply,
+        title="Chat" + (f" · {conv_id}" if conv_id else ""))
+    if not conv_id:
+        return
 
     async def _bg() -> None:
         await asyncio.to_thread(
@@ -655,10 +663,10 @@ async def chat_completions(
 
         def _meta(ev: dict) -> bytes:
             chunk = {
-                "id": "freellm-activity",
+                "id": "nova-activity",
                 "object": "chat.completion.chunk",
                 "choices": [],
-                "freellm": ev,
+                "nova": ev,
             }
             return f"data: {_json.dumps(chunk)}\n\n".encode()
 
@@ -687,6 +695,16 @@ async def chat_completions(
                     trace = getattr(res, "trace", [])
                     failures = [str(f)[:200] for f in meta.get("failures", []) if f]
                     degraded = bool(getattr(res, "degraded", False) or failures)
+                if payload.get("nova_structured", True) and answer:
+                    from app.services.component_enforce import enforce_components
+                    from app.services.tools import _sanitize_final_text
+
+                    clean = _sanitize_final_text(answer) or answer
+                    fake = {"choices": [{"message": {
+                        "role": "assistant", "content": clean}}]}
+                    fake, _m = await enforce_components(
+                        gateway, session, payload, fake)
+                    answer = fake["choices"][0]["message"]["content"]
                 event = "degraded" if degraded else "orchestration_done"
                 text = ("Orchestration completed with partial results"
                         if degraded else "Orchestration complete")
@@ -699,7 +717,8 @@ async def chat_completions(
                              "steps": [{"expert": s.expert, "ok": s.ok}
                                        for s in getattr(res, "steps", [])]})
                 if last_user:
-                    _remember(gateway, conv_id, last_user, answer)
+                    _remember(gateway, conv_id, last_user, answer,
+                                        owner_id=_user.id if _user else None)
                 for piece in _stream_pieces(answer):
                     chunk = {"choices": [{"index": 0, "delta": {"content": piece}}]}
                     yield f"data: {_json.dumps(chunk)}\n\n".encode()
@@ -735,7 +754,8 @@ async def chat_completions(
                     )
                     answer = fake["choices"][0]["message"]["content"]
                 if last_user:
-                    _remember(gateway, conv_id, last_user, answer)
+                    _remember(gateway, conv_id, last_user, answer,
+                                        owner_id=_user.id if _user else None)
                 yield _meta({"event": "research_done",
                              "text": f"Research complete ({getattr(res, 'depth', '?')})"})
                 for piece in _stream_pieces(answer):
@@ -789,7 +809,8 @@ async def chat_completions(
                     while not events.empty():
                         yield _meta(events.get_nowait())
                 if last_user:
-                    _remember(gateway, conv_id, last_user, text)
+                    _remember(gateway, conv_id, last_user, text,
+                                        owner_id=_user.id if _user else None)
                 # The tool loop returns the answer in one piece; replay it in
                 # small deltas so the UI can render progressively.
                 for piece in _stream_pieces(text):
@@ -859,7 +880,8 @@ async def chat_completions(
                     yield _meta({"event": "replace_content", "content": fixed})
                 yield b"data: [DONE]\n\n"
             if last_user:
-                _remember(gateway, conv_id, last_user, reply)
+                _remember(gateway, conv_id, last_user, reply,
+                                    owner_id=_user.id if _user else None)
 
         if conv_id:
             from app.services import chat_jobs
@@ -888,7 +910,8 @@ async def chat_completions(
             reply = ""
             for c in (result or {}).get("choices", []):
                 reply += ((c.get("message") or {}).get("content")) or ""
-            _remember(gateway, conv_id, last_user, reply)
+            _remember(gateway, conv_id, last_user, reply,
+                                owner_id=_user.id if _user else None)
     except GatewayExhausted as e:
         return JSONResponse(
             status_code=e.last_status or 503,

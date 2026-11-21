@@ -37,7 +37,7 @@ def _mid() -> str:
 
 
 def _sse(ev: dict[str, Any]) -> bytes:
-    return f"data: {json.dumps({'freellm': ev}, ensure_ascii=False)}\n\n".encode()
+    return f"data: {json.dumps({'nova': ev}, ensure_ascii=False)}\n\n".encode()
 
 
 def normalize_room(room: RoleplayRoom) -> None:
@@ -500,7 +500,7 @@ async def _archive_research(session_factory: Any, room: RoleplayRoom,
                 owner_id=room.owner_id, collection_id=None)
             await doc_session.commit()
     except Exception:
-        logging.getLogger("freellm.roleplay").warning(
+        logging.getLogger("nova.roleplay").warning(
             "research archive failed", extra={"request_id": f"rp:{room.id}"},
             exc_info=True)
 
@@ -951,7 +951,7 @@ async def turn_stream(
     """Append the player's beat, then stream each character's reply.
 
     ``kind``: talk | narrate | ooc | whisper. ``emit`` receives gateway
-    activity dicts (usage etc.) forwarded as freellm frames. Owns its DB
+    activity dicts (usage etc.) forwarded as nova frames. Owns its DB
     session so it can run detached as a chat_jobs job.
     """
     import asyncio

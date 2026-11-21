@@ -257,8 +257,12 @@
 .nova-file-meta{display:flex;gap:8px;font-size:11px;color:var(--text-3);margin-top:2px}
 .nova-file-link{font-size:11px;font-weight:500;display:inline-block;margin-top:3px}
 
-/* ---------- Person card ---------- */
-.nova-person{display:flex;gap:14px;align-items:flex-start;margin:10px 0;padding:14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+/* ---------- Person card — dossier ---------- */
+.nova-person{margin:10px 0;padding:14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.np-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-4px 0 12px;padding-bottom:9px;border-bottom:1px solid var(--border-1);font-family:var(--font-mono);font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase}
+.np-doctype{color:var(--accent);font-weight:700}
+.np-file{color:var(--text-3);letter-spacing:1px;text-align:right}
+.np-main{display:flex;gap:14px;align-items:flex-start}
 .nova-person-avatar{width:64px;height:64px;border-radius:50%;flex:none;overflow:hidden;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:20px;font-weight:700;text-transform:uppercase}
 .nova-person-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .nova-person-body{flex:1;min-width:0}
@@ -267,6 +271,43 @@
 .nova-person-extract{font-size:13px;color:var(--text-2);line-height:1.55;margin-top:6px}
 .nova-person-link{display:inline-block;margin-top:8px;font-size:11.5px;font-weight:600;color:var(--accent);text-decoration:none}
 .nova-person-link:hover{text-decoration:underline}
+.nova-person-sec{margin-top:12px}
+.nova-person-sec .np-sec-title{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
+.nova-person-sec .np-sec-title::after{content:'';flex:1;height:1px;background:var(--border-1)}
+.nova-person-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px 16px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-1)}
+.nova-person-sec .nova-person-facts{margin-top:0;padding-top:0;border-top:none}
+.nova-person-fact .f-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)}
+.nova-person-fact .f-val{font-size:12.5px;font-weight:600;color:var(--text-1);margin-top:1px;word-break:break-word}
+.nova-person-socials{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.nova-person-social{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;background:var(--surface-2);border:1px solid var(--border-1);color:var(--text-2);text-decoration:none}
+.nova-person-social:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- People carousel — multiple dossier cards ---------- */
+.nova-people{margin:10px 0;padding:14px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-md)}
+.nova-people-row{display:flex;align-items:stretch;gap:8px}
+.nova-people-track{display:flex;gap:12px;flex:1;min-width:0;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:thin;padding-bottom:2px}
+.nova-people-track>.nova-person{flex:0 0 272px;margin:0;scroll-snap-align:start}
+.np-nav{align-self:center;flex:none;font-size:16px;line-height:1}
+.np-mini{padding:12px}
+.np-mini .nova-person-avatar{width:44px;height:44px;font-size:15px}
+.np-mini .np-main{gap:10px}
+.np-mini .nova-person-name{font-size:13.5px}
+.np-mini .nova-person-extract{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;font-size:12px}
+.np-mini .nova-person-facts{grid-template-columns:1fr 1fr;gap:6px 12px}
+.np-mini .nova-person-sec{margin-top:10px}
+.np-namerow{display:flex;align-items:center;gap:8px}
+.np-namerow .nova-person-name{flex:1;min-width:0}
+.np-src{flex:none;font-family:var(--font-mono);font-size:8.5px;letter-spacing:1px;padding:2px 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent);font-weight:700}
+.np-synth{margin:0 0 12px;padding:10px 12px;border:1px solid var(--border-1);border-left:3px solid var(--accent);border-radius:var(--r-sm);background:var(--surface-2)}
+.np-synth-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.np-synth-tag{font-family:var(--font-mono);font-size:8.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--accent);font-weight:700}
+.np-conf{font-family:var(--font-mono);font-size:8px;letter-spacing:1px;padding:1.5px 6px;border-radius:4px;font-weight:700}
+.np-conf-high{background:rgba(52,199,123,.15);color:#34c77b}
+.np-conf-medium{background:rgba(240,180,60,.15);color:#e8b23c}
+.np-conf-low{background:var(--surface-3);color:var(--muted)}
+.np-synth-sum{font-size:12.5px;line-height:1.5;color:var(--text-1)}
+.np-clusters{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.np-cluster{font-family:var(--font-mono);font-size:9.5px;padding:2px 8px;border-radius:10px;border:1px solid var(--border-1);color:var(--text-2)}
 
 /* ---------- Instructions ---------- */
 .nova-instructions{margin:10px 0}

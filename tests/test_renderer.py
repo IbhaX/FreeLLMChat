@@ -36,10 +36,11 @@ def test_convert_success_uses_fast_model_without_tools():
     assert sent["model"] == stage_models("auto:fast", role="fast")[0]
     assert not sent["model"].startswith("auto")
     assert sent["stream"] is False and sent["temperature"] == 0
-    assert "tools" not in sent
-    # conversation shape: system, assistant original, user instruction last
-    assert sent["messages"][-2]["role"] == "assistant"
-    assert sent["messages"][-1]["content"].startswith("Rewrite your previous answer")
+    assert "tools" not in sent and "tool_choice" not in sent
+    # dedicated renderer agent: system prompt + one user prompt carrying
+    # the source answer and the convert instruction
+    assert [m["role"] for m in sent["messages"]] == ["system", "user"]
+    assert "Rewrite your previous answer" in sent["messages"][-1]["content"]
 
 
 def test_convert_rejects_non_components_and_errors():
@@ -55,8 +56,11 @@ def test_convert_preserves_history():
         gw, None, MD,
         history=[{"role": "user", "content": "q?"}, {"role": "system", "content": "skip me"}],
     ))
-    roles = [m["role"] for m in gw.calls[0]["messages"]]
-    assert roles == ["system", "user", "assistant", "user"]
+    msgs = gw.calls[0]["messages"]
+    assert [m["role"] for m in msgs] == ["system", "user"]
+    # prior user/assistant turns fold into the prompt; system turns don't
+    assert "q?" in msgs[-1]["content"]
+    assert "skip me" not in msgs[-1]["content"]
 
 
 def test_rendered_output_is_renderable():

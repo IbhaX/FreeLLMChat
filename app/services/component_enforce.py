@@ -21,6 +21,7 @@ chronically fail components can be identified:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -34,7 +35,7 @@ from app.response_protocol import (
 
 _VALID_RT = {r.value for r in ResponseType}
 
-log = logging.getLogger("freellm.components")
+log = logging.getLogger("nova.components")
 
 # Same detection rules as the frontend ResponseClassifier, so backend and
 # frontend agree on what counts as a structured reply.
@@ -296,6 +297,175 @@ def markdown_to_envelope(text: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Person-card floor — real Wikipedia data for "who is X" questions
+# ---------------------------------------------------------------------------
+
+def _to_fence(env: dict[str, Any]) -> str:
+    return (
+        f"```{RESPONSE_FENCE_TAG}\n"
+        + json.dumps(env, ensure_ascii=False, indent=None)
+        + "\n```"
+    )
+
+
+async def _augment_person_card(
+        text: str, question: str,
+        messages: list[dict[str, Any]] | None = None,
+        gateway: Any = None) -> str:
+    """Guarantee a real-data ``person_card`` for who-is questions.
+
+    Models sometimes emit the card with invented/missing fields or skip it
+    entirely. When the user asked about a person, fetch the Wikipedia
+    summary and either merge missing fields into an existing card or lead
+    the components with a complete one. Replies without an envelope are
+    wrapped so the card still renders. Profile-ish follow-ups ("more
+    context", "give me all the profiles") resolve their subject from
+    earlier user turns. Never raises; returns ``text`` unchanged on any
+    failure or non-person question.
+    """
+    try:
+        from app.services.person import (
+            lookup_people, lookup_person, person_question_name,
+            profile_followup_name,
+        )
+
+        name = person_question_name(question)
+        if not name:
+            name = profile_followup_name(question, messages)
+        if not name:
+            return text
+        from app.services.person import name_matches
+
+        person, people = await asyncio.gather(
+            lookup_person(name), lookup_people(name))
+        # Opensearch is fuzzy — a weak title match ("Alvin Anthons" for
+        # "albin anthony") is the WRONG person. Strong match → single
+        # dossier plus a carousel of every other public profile found.
+        # Weak/no match → the carousel IS the answer.
+        if person is not None and not name_matches(
+                name, str(person.get("name") or "")):
+            person = None
+        if person is None:
+            return await _augment_people_carousel(
+                text, name, people, gateway=gateway)
+        card = {
+            "name": person.get("name") or name,
+            "description": person.get("description") or "",
+            "extract": person.get("extract") or "",
+            "thumbnail": person.get("thumbnail") or "",
+            "url": person.get("url") or "",
+            "source": person.get("source") or "wikipedia",
+            "qid": person.get("qid") or "",
+            "facts": person.get("facts") or [],
+            "socials": person.get("socials") or [],
+        }
+        env = extract_envelope(text)
+        if env is None:
+            out = _to_fence({
+                "response_type": "general",
+                "content": text.strip(),
+                "components": [{"type": "person_card", "data": card}],
+            })
+        else:
+            comps = env.get("components")
+            if not isinstance(comps, list):
+                comps = []
+                env["components"] = comps
+            for c in comps:
+                if isinstance(c, dict) and c.get("type") == "person_card":
+                    d = c.get("data")
+                    if not isinstance(d, dict):
+                        c["data"] = d = {}
+                    missing = {k: v for k, v in card.items()
+                               if v and not d.get(k)}
+                    d.update(missing)
+                    break
+            else:
+                comps.insert(0, {"type": "person_card", "data": card})
+            out = _resplice(text, env)
+        # Other public profiles still get a carousel below the dossier.
+        pn = str(person.get("name") or "").strip().lower()
+        rest = [p for p in people
+                if str(p.get("name") or "").strip().lower() != pn]
+        if rest:
+            out = await _augment_people_carousel(
+                out, name, rest, gateway=gateway)
+        return out
+    except Exception:
+        return text
+
+
+async def _augment_people_carousel(
+        text: str, name: str,
+        people: list[dict[str, Any]] | None = None,
+        gateway: Any = None) -> str:
+    """Insert a ``person_carousel`` of real profile candidates when no
+    single notable person resolved. ``people`` may be supplied by the
+    caller (already fetched in parallel); otherwise it is fetched here.
+    The dedicated synthesizer agent fuses the candidates into a summary
+    attached to the carousel data. Never raises; returns ``text``
+    unchanged when no candidates exist."""
+    try:
+        if people is None:
+            from app.services.person import lookup_people
+            people = await lookup_people(name)
+        if not people:
+            return text
+        comp = {"type": "person_carousel", "data": {"people": people}}
+        if gateway is not None:
+            try:
+                from app.agents.synthesizer import synthesize_person
+                synth = await synthesize_person(name, people, gateway)
+                if synth is not None:
+                    comp["data"]["synthesis"] = synth.model_dump(mode="json")
+            except Exception:
+                pass  # synthesis is optional — the carousel stands alone
+        env = extract_envelope(text)
+        if env is None:
+            return _to_fence({
+                "response_type": "general",
+                "content": text.strip(),
+                "components": [comp],
+            })
+        comps = env.get("components")
+        if not isinstance(comps, list):
+            comps = []
+            env["components"] = comps
+        for c in comps:
+            if isinstance(c, dict) and c.get("type") == "person_carousel":
+                d = c.get("data")
+                if isinstance(d, dict) and not d.get("people"):
+                    d["people"] = people
+                return _resplice(text, env)
+        # A leading person_card the lookup could not verify — no source,
+        # no URL — is a model guess, not a dossier. Drop it so the real
+        # candidates lead; cards citing a real source are kept.
+        lead = comps[0] if comps else None
+        ld = lead.get("data") if isinstance(lead, dict) else None
+        if (isinstance(lead, dict) and lead.get("type") == "person_card"
+                and isinstance(ld, dict)
+                and not ld.get("url") and not ld.get("source")):
+            comps.pop(0)
+        # The carousel is the answer when no dossier leads; otherwise it
+        # lists the other matches directly below the person_card.
+        lead = comps[0] if comps else None
+        at = 1 if isinstance(lead, dict) \
+            and lead.get("type") == "person_card" else 0
+        comps.insert(at, comp)
+        return _resplice(text, env)
+    except Exception:
+        return text
+
+
+def _resplice(text: str, env: dict[str, Any]) -> str:
+    """Replace the first response fence in ``text`` with ``env``."""
+    m = _FENCE_RE.search(text) or _FENCE_OPEN_RE.search(text) \
+        or _JSON_FENCE_RE.search(text) or _JSON_FENCE_OPEN_RE.search(text)
+    fenced = _to_fence(env)
+    return text[:m.start()] + fenced + text[m.end():] if m else fenced
+
+
+# ---------------------------------------------------------------------------
 # Enforcement
 # ---------------------------------------------------------------------------
 
@@ -338,10 +508,34 @@ async def enforce_components(
         text = _message_content(result)
         if not text.strip():
             return result, metrics
+        question = ""
+        for m_ in reversed((payload or {}).get("messages") or []):
+            if isinstance(m_, dict) and m_.get("role") == "user":
+                c_ = m_.get("content")
+                if isinstance(c_, str):
+                    question = c_
+                break
+
+        all_msgs = [
+            m for m in (payload or {}).get("messages") or []
+            if isinstance(m, dict)
+        ]
+
+        async def _person_floor(t: str) -> str:
+            return await _augment_person_card(
+                t, question, all_msgs, gateway=gateway) if question else t
+
         if has_renderable_components(text):
             metrics["component_used"] = True
+            fixed = await _person_floor(text)
+            if fixed != text:
+                _set_message_content(result, fixed)
             return result, metrics
         if is_trivial(text):
+            fixed = await _person_floor(text)
+            if fixed != text:
+                _set_message_content(result, fixed)
+                metrics["component_used"] = True
             return result, metrics
 
         # ONE renderer-agent call: dedicated component converter on a cheap
@@ -360,7 +554,8 @@ async def enforce_components(
             attempt_timeout=attempt_timeout,
         )
         if converted:
-            _set_message_content(result, converted)
+            fixed = await _person_floor(converted)
+            _set_message_content(result, fixed)
             metrics["repair_used"] = True
             metrics["component_used"] = True
             return result, metrics
@@ -371,6 +566,10 @@ async def enforce_components(
             _set_message_content(result, fenced)
             metrics["fallback_used"] = True
             metrics["component_used"] = True
+        final = _message_content(result)
+        fixed = await _person_floor(final)
+        if fixed != final:
+            _set_message_content(result, fixed)
         return result, metrics
     except Exception as exc:  # enforcement must never break chat
         log.warning("component enforcement failed: %s", exc)

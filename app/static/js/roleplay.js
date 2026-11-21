@@ -54,9 +54,11 @@
       if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
     $('#input').addEventListener('input',e=>{e.target.style.height='auto';
       e.target.style.height=Math.min(e.target.scrollHeight,140)+'px';});
-    $('#btnScenes').onclick=()=>{renderScenes();$('#scenesVeil').classList.add('open');};
+    $('#btnScenes').onclick=()=>{renderScenes();$('#scenesVeil').classList.add('open');
+      if(window.NovaMotion)NovaMotion.veil($('#scenesVeil'),true);};
     $('#btnCast').onclick=()=>{castPicks=[...(room?room.character_ids||[]:[])];
-      renderCastCards();$('#castVeil').classList.add('open');};
+      renderCastCards();$('#castVeil').classList.add('open');
+      if(window.NovaMotion)NovaMotion.veil($('#castVeil'),true);};
     $('#btnDirector').onclick=()=>$('#director').classList.toggle('open');
     $('#btnNewScene').onclick=newScene;
     $('#btnQuickNewScene').onclick=newScene;
@@ -96,7 +98,7 @@
               if(!line.startsWith('data:'))continue;
               const data=line.slice(5).trim();
               if(data==='[DONE]'){summarizing=false;return;}
-              try{const j=JSON.parse(data);const ev=j.freellm;
+              try{const j=JSON.parse(data);const ev=j.nova;
                 if(!ev)continue;
                 if(ev.event==='sum_delta'){
                   acc+=ev.text;box.textContent=acc;}
@@ -271,7 +273,7 @@
           const data=line.slice(5).trim();
           if(data==='[DONE]'){finalizeStrayStreams();return;}
           try{const j=JSON.parse(data);
-            if(j.freellm)onEvent(j.freellm);}catch{}
+            if(j.nova)onEvent(j.nova);}catch{}
         }
       }
     }
@@ -821,6 +823,8 @@
       host.appendChild(el);
     });
     if(!rooms.length)host.innerHTML='<div style="color:var(--stage-faint);padding:14px">No scenes yet.</div>';
+    if(window.NovaMotion)NovaMotion.stagger(host.querySelectorAll('.st-scene-item'),
+      {y:10,dur:.25,stagger:.04});
   }
 
   async function newScene(){
@@ -876,6 +880,12 @@
       host.appendChild(el);
     });
     if(!chars.length)host.innerHTML='<div style="color:var(--stage-faint);padding:14px">No characters yet — create one below.</div>';
+    if(window.NovaMotion){
+      if(!renderCastCards._painted){renderCastCards._painted=1;
+        NovaMotion.stagger(host.querySelectorAll('.st-card'),
+          {y:16,scale:.97,dur:.3,stagger:.045});}
+      NovaMotion.liftAll('.st-card',host,{y:-4,scale:1.02});
+    }
   }
 
   const F={name:'cf_name',emoji:'cf_emoji',tagline:'cf_tagline',description:'cf_desc',
@@ -889,6 +899,7 @@
     for(const[k,id]of Object.entries(F))
       document.getElementById(id).value=c?(c[k]||''):(k==='category'?'custom':'');
     $('#charVeil').classList.add('open');
+    if(window.NovaMotion)NovaMotion.veil($('#charVeil'),true);
   }
 
   async function saveCharacter(){
@@ -904,5 +915,9 @@
   }
 
   AppNav.attach(document.getElementById('appNavBtn'),'roleplay');
+  /* Transcript entrances: new beats rise in once; stream edits inside an
+     existing .st-msg never retrigger. Bulk room loads animate the tail. */
+  if(window.NovaMotion)NovaMotion.watch($('#transcript'),'.st-msg',
+    {batch:true,max:6,y:12,dur:.3});
   init();
 })();

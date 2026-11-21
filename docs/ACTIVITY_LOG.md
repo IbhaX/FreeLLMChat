@@ -116,7 +116,7 @@ Explicit status override: `status:"fail|failed|error"` forces `failed`
 ## 3. Where events flow
 
 - **Live SSE** (`/v1/chat/completions`, `/v1/agents/{id}/chat`,
-  `/v1/groupchat/stream`, `/v1/research/stream`): each `{"freellm": ev}`
+  `/v1/groupchat/stream`, `/v1/research/stream`): each `{"nova": ev}`
   data-frame is `ingest`ed. Events passing through `agent_log.tap_emit`
   arrive already enriched (`kind/status/title/…` merged into `ev`);
   the component normalizes the rest client-side.

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Profile - Nova</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  .pf-hero{overflow:hidden;padding:0}
+  .pf-cover{height:110px;background:
+    radial-gradient(120% 220% at 15% 0%,var(--accent) 0%,transparent 55%),
+    radial-gradient(140% 240% at 85% 20%,var(--accent-2,#6d5cff) 0%,transparent 55%),
+    var(--surface-2)}
+  .pf-hero-body{padding:0 22px 20px}
+  .pf-avatar{width:88px;height:88px;border-radius:24px;border:4px solid var(--surface-1);
+    margin-top:-44px;background:linear-gradient(135deg,var(--accent),var(--accent-2,#6d5cff));
+    display:grid;place-items:center;color:#fff;font-weight:800;font-size:32px;
+    overflow:hidden;flex:none}
+  .pf-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+  .pf-name-row{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+  .pf-id{flex:1;min-width:200px}
+  .pf-id h2{font-size:22px;font-weight:800;letter-spacing:-.01em}
+  .pf-id .handle{color:var(--text-3);font-size:13px}
+  .pf-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .pf-bio{margin-top:12px;color:var(--text-2);font-size:13.5px;line-height:1.55;max-width:60ch}
+  .pf-empty{color:var(--text-3);font-style:italic}
+  .pf-meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;
+    font-size:12px;color:var(--text-3)}
+  .pf-meta span b{color:var(--text-1);font-weight:600}
+  .pf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:16px}
+  .pf-stat{background:var(--surface-2);border:1px solid var(--border-1);
+    border-radius:12px;padding:12px 14px}
+  .pf-stat .n{font-size:20px;font-weight:800;letter-spacing:-.01em}
+  .pf-stat .l{font-size:11px;color:var(--text-3);margin-top:1px}
+
+  .gh-head{display:flex;gap:14px;align-items:center}
+  .gh-avatar{width:56px;height:56px;border-radius:16px;overflow:hidden;flex:none;
+    background:var(--surface-2);display:grid;place-items:center;
+    font-weight:800;font-size:20px;color:var(--text-3)}
+  .gh-avatar img{width:100%;height:100%;object-fit:cover}
+  .gh-meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-3);margin-top:10px}
+  .gh-repos{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
+  @media(max-width:640px){.gh-repos{grid-template-columns:1fr}}
+  .gh-repo{display:block;background:var(--surface-2);border:1px solid var(--border-1);
+    border-radius:12px;padding:12px 14px;text-decoration:none;color:inherit;
+    transition:border-color .15s}
+  .gh-repo:hover{border-color:var(--accent)}
+  .gh-repo .rname{font-weight:700;font-size:13px;color:var(--accent);word-break:break-all}
+  .gh-repo .rdesc{font-size:12px;color:var(--text-3);margin-top:3px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .gh-repo .rmeta{display:flex;gap:12px;font-size:11px;color:var(--text-3);margin-top:8px}
+  .gh-repo .dot{display:inline-block;width:9px;height:9px;border-radius:50%;
+    background:var(--accent);margin-right:5px;vertical-align:-1px}
+  .pf-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .pf-grid .full{grid-column:1/-1}
+  @media(max-width:640px){.pf-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page" style="max-width:860px">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" data-app-back="/" title="Back"></button>
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
+      <div>
+        <h1>Profile</h1>
+        <div class="sub">Your account, avatar, and connected GitHub</div>
+      </div>
+    </div>
+
+    <div class="ui-card pf-hero" style="margin-bottom:16px">
+      <div class="pf-cover"></div>
+      <div class="pf-hero-body">
+        <div class="pf-name-row">
+          <div class="pf-avatar" id="pfAvatar">?</div>
+          <div class="pf-id">
+            <h2 id="pfName">…</h2>
+            <div class="handle" id="pfHandle"></div>
+            <div class="pf-pills" id="pfPills"></div>
+          </div>
+          <div style="display:flex;gap:8px;align-self:flex-start;margin-top:6px;flex:none">
+            <button class="ui-btn ui-btn-sm" id="pfEdit">Edit profile</button>
+            <button class="ui-btn ui-btn-ghost ui-btn-sm" id="pfLogout">Sign out</button>
+          </div>
+        </div>
+        <div class="pf-bio" id="pfBio"></div>
+        <div class="pf-meta" id="pfMeta"></div>
+        <div class="pf-stats" id="pfStats" hidden></div>
+      </div>
+    </div>
+
+    <div class="ui-card ui-card-pad" style="margin-bottom:16px" id="editCard" hidden>
+      <h3 style="font-size:var(--t-md);margin-bottom:2px">Edit profile</h3>
+      <div class="t-xs tx-3" style="margin-bottom:14px">Shown across the workspace — GitHub drives your avatar when no custom URL is set</div>
+      <div class="pf-grid">
+        <div><label class="label">Username</label><input id="pfUserIn" class="ui-input" style="width:100%" disabled></div>
+        <div><label class="label">Email</label><input id="pfEmailIn" class="ui-input" style="width:100%" disabled></div>
+        <div><label class="label">Display name</label><input id="pfNameIn" class="ui-input" style="width:100%"></div>
+        <div><label class="label">Pronouns <span class="tx-3">(optional)</span></label><input id="pfProIn" class="ui-input" style="width:100%" placeholder="they/them"></div>
+        <div><label class="label">Company</label><input id="pfCoIn" class="ui-input" style="width:100%" placeholder="Acme Inc."></div>
+        <div><label class="label">Location</label><input id="pfLocIn" class="ui-input" style="width:100%" placeholder="City, Country"></div>
+        <div><label class="label">GitHub username</label><input id="pfGhIn" class="ui-input" style="width:100%" placeholder="octocat"></div>
+        <div><label class="label">Website <span class="tx-3">(optional)</span></label><input id="pfWebIn" class="ui-input" style="width:100%" placeholder="https://…"></div>
+        <div class="full"><label class="label">Avatar URL <span class="tx-3">(optional — GitHub avatar used when blank)</span></label><input id="pfAvIn" class="ui-input" style="width:100%" placeholder="https://…"></div>
+        <div class="full"><label class="label">Bio</label><textarea id="pfBioIn" class="ui-input" rows="3" style="width:100%;resize:vertical" placeholder="A line or two about you"></textarea></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px;align-items:center">
+        <button class="ui-btn ui-btn-primary ui-btn-sm" id="pfSave">Save changes</button>
+        <button class="ui-btn ui-btn-ghost ui-btn-sm" id="pfCancel">Cancel</button>
+        <span id="pfErr" class="t-xs" style="color:var(--error)"></span>
+      </div>
+    </div>
+
+    <div class="ui-card ui-card-pad" style="margin-bottom:16px" id="ghCard">
+      <h3 style="font-size:var(--t-md);margin-bottom:2px">GitHub</h3>
+      <div class="t-xs tx-3" style="margin-bottom:14px">Public profile for your linked GitHub account</div>
+      <div id="ghBody"><div class="t-sm tx-3">Link a GitHub username below to show your public profile and top repositories.</div></div>
+    </div>
+
+  </div>
+</main>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app-nav.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/profile.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
+</body>
+</html>

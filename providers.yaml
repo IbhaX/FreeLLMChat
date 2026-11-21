@@ -1,4 +1,4 @@
-# FreeLLM Gateway provider seed file.
+# Nova Gateway provider seed file.
 # Refreshed: 2026-11-08
 # IMPORTANT:
 # - Free-tier eligibility and quotas can vary by account, region, model, and provider policy.
@@ -79,7 +79,7 @@ providers:
     default_env_key: OPENROUTER_API_KEY
     extra_headers:
       HTTP-Referer: http://localhost:8000
-      X-Title: FreeLLM Gateway
+      X-Title: Nova Gateway
     default_models:
       - openrouter/free
     limits: {}
@@ -102,7 +102,7 @@ providers:
     default_models:
       - "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
       - "@cf/qwen/qwen2.5-coder-32b-instruct"
-      - "@cf/google/gemma-3-12b-it"
+      - "@cf/meta/llama-3.1-8b-instruct-fast"
     limits: {}
     daily_reset_tz: UTC
     requires_card: false

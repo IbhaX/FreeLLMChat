@@ -1,4 +1,4 @@
-"""PydanticAI ``Model`` adapter over the FreeLLM gateway.
+"""PydanticAI ``Model`` adapter over the Nova gateway.
 
 Every pydantic-ai agent call flows through ``gateway.chat`` /
 ``gateway.chat_stream``, so provider routing, key rotation, cooldowns and
@@ -9,7 +9,7 @@ of it for free.
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
@@ -170,7 +170,7 @@ class GatewayChatModel(Model):
 
     @property
     def system(self) -> str:
-        return "freellm-gateway"
+        return "nova-gateway"
 
     def _payload(
         self,
@@ -187,7 +187,13 @@ class GatewayChatModel(Model):
         }
         for k in ("temperature", "top_p", "max_tokens", "stop", "seed",
                   "presence_penalty", "frequency_penalty"):
-            v = getattr(model_settings, k, None) if model_settings else None
+            if model_settings is None:
+                continue
+            # ModelSettings is a TypedDict — it arrives as a plain dict at
+            # runtime, so getattr() would silently drop every setting.
+            v = (model_settings.get(k)
+                 if isinstance(model_settings, Mapping)
+                 else getattr(model_settings, k, None))
             if v is not None:
                 payload[k] = v
         tools = _openai_tools(params)

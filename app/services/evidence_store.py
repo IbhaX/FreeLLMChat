@@ -43,7 +43,7 @@ from app.models import (
 from app.services import astra_memory
 from app.services.source_score import ScoreResult, domain_of
 
-log = logging.getLogger("freellm.evidence")
+log = logging.getLogger("nova.evidence")
 
 _TRACKING_PARAMS = {
     "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
@@ -51,8 +51,9 @@ _TRACKING_PARAMS = {
 }
 
 VECTORIZE_SERVICE = {"provider": "nvidia", "modelName": "NV-Embed-QA"}
-# NV-Embed-QA hard-rejects inputs over 512 tokens (~2048 chars).
-VECTORIZE_MAX_CHARS = 1800
+# NV-Embed-QA hard-rejects inputs over 512 tokens — ~2.8 chars/token
+# worst case, so keep payloads comfortably under ~1430 chars.
+VECTORIZE_MAX_CHARS = 1200
 
 
 # ---------------------------------------------------------------- errors
@@ -155,7 +156,7 @@ def _index_evidence(
     col = _vector_collection()
     if col is None:
         return
-    vec_text = f"{summary}\n{quote}"[:3000].strip()
+    vec_text = f"{summary}\n{quote}"[:VECTORIZE_MAX_CHARS].strip()
     if not vec_text:
         return
     try:

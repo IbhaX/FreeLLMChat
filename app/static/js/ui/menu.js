@@ -36,6 +36,7 @@
       opened = true;
       menu.hidden = false;
       trigger.setAttribute('aria-expanded', 'true');
+      if (window.NovaMotion) NovaMotion.menu(menu, true);
       const available = items();
       available.forEach(item => {
         if (!itemState.has(item)) itemState.set(item, {

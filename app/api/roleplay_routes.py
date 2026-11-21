@@ -10,14 +10,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_gateway_key, require_user
+from app.api.deps import optional_user, require_user
 from app.db import get_session
 from app.models import RoleplayRoom, User
 from app.services import chat_jobs
 from app.services import roleplay as rp
 
 router = APIRouter(prefix="/v1/roleplay", tags=["roleplay"],
-                   dependencies=[Depends(require_gateway_key), Depends(require_user)])
+                   dependencies=[Depends(require_user)])
 
 
 class RoomIn(BaseModel):
@@ -148,7 +148,7 @@ def _stream_job(rid: int, agen: Any) -> StreamingResponse:
 @router.post("/rooms/{rid}/turn")
 async def run_turn(rid: int, body: TurnIn, request: Request,
                    session: AsyncSession = Depends(get_session)):
-    """Append a beat and stream each character's reply (SSE freellm frames)."""
+    """Append a beat and stream each character's reply (SSE nova frames)."""
     room = await session.get(RoleplayRoom, rid)
     if not room:
         raise HTTPException(404, "room not found")

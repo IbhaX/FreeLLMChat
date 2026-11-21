@@ -52,8 +52,8 @@ async def _collect(agen):
         for line in b.decode().splitlines():
             if line.startswith("data:") and line != "data: [DONE]":
                 j = json.loads(line[5:].strip())
-                if j.get("freellm"):
-                    frames.append(j["freellm"])
+                if j.get("nova"):
+                    frames.append(j["nova"])
     return frames
 
 

@@ -46,7 +46,7 @@ from app.services.netutil import (
 from app.services.safety import check_outbound_arg, strip_injection
 from app.services.source_score import score_source
 
-log = logging.getLogger("freellm.tools")
+log = logging.getLogger("nova.tools")
 
 ErrorCode = str  # timeout|blocked|not_found|paywalled|too_large|unsafe_url|
                  # sandbox_error|rate_limited|internal

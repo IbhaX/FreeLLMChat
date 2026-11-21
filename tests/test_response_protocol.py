@@ -185,21 +185,17 @@ def test_structured_system_prompt_is_nonempty_and_selfcontained():
     assert "MANDATORY" in p
 
 
-def test_render_protocol_endpoint_requires_gateway_key_when_set(monkeypatch):
+def test_render_protocol_endpoint_requires_user_session(monkeypatch):
     from app.config import get_settings
 
-    get_settings.cache_clear()
-    monkeypatch.setenv("GATEWAY_API_KEY", "secret")
-    get_settings.cache_clear()
-    try:
-        with TestClient(app) as c:
-            assert c.get("/v1/render-protocol").status_code == 401
-            assert c.get(
-                "/v1/render-protocol", headers={"Authorization": "Bearer secret"}
-            ).status_code == 200
-    finally:
-        monkeypatch.delenv("GATEWAY_API_KEY", raising=False)
-        get_settings.cache_clear()
+    monkeypatch.setattr(get_settings(), "auth_required", True)
+    with TestClient(app) as c:
+        assert c.get("/v1/render-protocol").status_code == 401
+        r = c.post("/v1/auth/register", json={
+            "username": "proto-user", "password": "password123"})
+        assert r.status_code == 201, r.text
+        assert c.get("/v1/render-protocol", headers={
+            "X-User-Token": r.json()["token"]}).status_code == 200
 
 
 # ---------- backward compatibility ----------

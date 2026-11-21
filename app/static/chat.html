@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nova — Chat</title>
+<title>Nova - Chat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/theme.css">
@@ -388,9 +388,12 @@
   </div>
   <div class="convo-list" id="convoList"></div>
   <div class="sb-foot">
-    <div class="avatar">A</div>
-    <div class="who"><b>Albin</b><span>Workspace</span></div>
+    <div class="avatar js-user-avatar">?</div>
+    <a class="who" href="/profile" title="Profile" style="text-decoration:none;color:inherit"><b class="js-user-name">…</b><span class="js-user-role">Workspace</span></a>
     <button class="ui-btn ui-btn-ghost ui-btn-icon" data-theme-btn title="Toggle theme"></button>
+    <button class="ui-btn ui-btn-ghost ui-btn-icon js-logout" title="Sign out">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+    </button>
   </div>
 </aside>
 
@@ -580,5 +583,7 @@
 <script src="/static/js/api.js"></script>
 <script src="/static/js/chat.js"></script>
 <script src="/static/js/wizard.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
 </body>
 </html>

@@ -30,6 +30,8 @@
         el.querySelector('button').onclick=async()=>{if(confirm('Delete collection?')){await v1Api('/v1/knowledge/collections/'+c.id,{method:'DELETE'});loadCols();loadDocs();}};
         host.appendChild(el);
       });
+      if(window.NovaMotion&&!loadCols._painted){loadCols._painted=1;
+        NovaMotion.stagger(host.children,{x:-8,y:0,dur:.25,stagger:.03});}
     }catch(e){toast(e.message,'err');}
   }
 
@@ -56,6 +58,8 @@
         tb.appendChild(tr);
       });
       if(!(d.documents||[]).length)tb.innerHTML='<tr><td colspan="6" class="tx-3" style="text-align:center;padding:18px">No documents yet — upload one above.</td></tr>';
+      if(window.NovaMotion&&!loadDocs._painted){loadDocs._painted=1;
+        NovaMotion.stagger(tb.children,{y:8,dur:.28,stagger:.03});}
     }catch(e){toast(e.message,'err');}
   }
 
@@ -65,7 +69,7 @@
     const col=$('#dcol').value;if(col)fd.append('collection_id',col);
     try{
       const r=await fetch(API_BASE+'/v1/knowledge/documents',{method:'POST',
-        headers:{'Authorization':'Bearer '+API_KEY,'X-User-Token':USER_TOKEN},body:fd});
+        headers:{'X-User-Token':USER_TOKEN},body:fd});
       const j=await r.json();
       if(!r.ok)throw new Error(j.detail||'upload failed');
       $('#file').value='';loadDocs();toast(j.status==='ready'?'Ingested':'Uploaded ('+j.status+')');
@@ -87,6 +91,7 @@
         host.appendChild(el);
       });
       if(!(d.results||[]).length)host.innerHTML='<div class="tx-3 t-sm" style="padding:8px 0 16px">No matches.</div>';
+      if(window.NovaMotion)NovaMotion.stagger(host.children,{y:10,dur:.3,stagger:.05});
     }catch(e){toast(e.message,'err');}
   }
 })();

@@ -220,5 +220,10 @@ document.addEventListener('click',e=>{
   if(e.target.id==='keyDrawer')return; // drawer stays until closed
 });
 
-window.addEventListener('admin-ready',refresh);
+window.addEventListener('admin-ready',()=>{
+  if(window.NovaMotion)NovaMotion.stagger(
+    document.querySelectorAll('.ui-page .ui-card'),{y:14,dur:.35,stagger:.05});
+  refresh().catch(e=>{
+  if(e.status===403)AdminShell.restricted();
+  else toast(e.message||'Failed to load','err');});});
 if(innerWidth<=820)document.getElementById('menuBtn').style.display='grid';

@@ -1,4 +1,4 @@
-# Verification
+  # Verification
 
 - Run the Python regression suite with `python -m pytest -q`.
 - Run renderer smoke checks with `node tests/render_smoke.js`.

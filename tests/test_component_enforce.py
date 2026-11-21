@@ -89,8 +89,14 @@ def test_enforce_repair_then_fallback():
     assert m == {"component_used": True, "repair_used": True, "fallback_used": False}
     sent = gw.calls[0]
     assert "tools" not in sent and sent["stream"] is False
-    assert sent["messages"][-1]["content"].startswith("Rewrite your previous answer")
-    assert r["choices"][0]["message"]["content"] == ENV
+    # The renderer agent's prompt carries the convert instruction.
+    assert "Rewrite your previous answer" in sent["messages"][-1]["content"]
+    # The envelope comes back re-serialized through ResponseEnvelope —
+    # same components, not necessarily byte-identical text.
+    env_out = extract_envelope(r["choices"][0]["message"]["content"])
+    assert env_out is not None
+    assert env_out["response_type"] == "general"
+    assert [c["type"] for c in env_out["components"]] == ["list"]
 
     gw = FakeGateway(MD)  # repair still markdown -> deterministic fallback
     r, m = asyncio.run(enforce_components(gw, None, payload, _res(MD)))
@@ -148,9 +154,9 @@ def test_stream_endpoint_replaces_markdown_with_components(monkeypatch):
             if line.startswith("data: {")
         ]
         repl = [
-            e["freellm"]
+            e["nova"]
             for e in events
-            if (e.get("freellm") or {}).get("event") == "replace_content"
+            if (e.get("nova") or {}).get("event") == "replace_content"
         ]
         assert repl, r.text
         assert has_renderable_components(repl[0]["content"])
@@ -200,6 +206,333 @@ def test_tool_loop_answer_is_replayed_in_deltas(monkeypatch):
         assert len(deltas) > 1, r.text
         assert "".join(deltas) == ENV
         assert r.text.count("[DONE]") == 1
+
+
+def _person(**over):
+    p = {"name": "Muhammad Ali", "description": "American boxer",
+         "extract": "Muhammad Ali was an American professional boxer.",
+         "thumbnail": "https://upload.wikimedia.org/ali.jpg",
+         "url": "https://en.wikipedia.org/wiki/Muhammad_Ali",
+         "source": "wikipedia"}
+    p.update(over)
+    return p
+
+
+def test_person_question_name():
+    from app.services.person import person_question_name
+
+    assert person_question_name("who is muhammad ali?") == "muhammad ali"
+    assert person_question_name("Who is Ada Lovelace?") == "ada lovelace"
+    assert person_question_name(
+        "who is muhammad ali and what did he do") == "muhammad ali"
+    assert person_question_name("tell me about nikola tesla") == "nikola tesla"
+    assert person_question_name("who are you") is None
+    assert person_question_name("who is he") is None
+    assert person_question_name("hello there") is None
+    assert person_question_name("") is None
+    # explicit profile-search asks name their subject
+    assert person_question_name(
+        "profiles of albin anthony") == "albin anthony"
+    assert person_question_name(
+        "find all profiles for ada lovelace") == "ada lovelace"
+    assert person_question_name(
+        "people named nikola tesla") == "nikola tesla"
+    # generic "profiles of <thing>" needs >=2 words to count as a name
+    assert person_question_name("profiles of the week") is None
+    assert person_question_name(
+        "give me all the profiles you can find") is None
+
+
+def test_profile_followup_name():
+    from app.services.person import profile_followup_name
+
+    msgs = [
+        {"role": "user", "content": "who is albin anthony?"},
+        {"role": "assistant", "content": "answer"},
+        {"role": "user", "content": "give me all the profiles you can find"},
+    ]
+    assert profile_followup_name(msgs[-1]["content"], msgs) == "albin anthony"
+    assert profile_followup_name(
+        "can you provide more context?", msgs) == "albin anthony"
+    # non-profile follow-ups never look backwards
+    assert profile_followup_name("what is the weather", msgs) is None
+    # profile ask with no person in history finds nothing
+    lonely = [{"role": "user", "content": "how do I cook pasta"}]
+    assert profile_followup_name("show me the profiles", lonely) is None
+
+
+def test_person_card_floor_wraps_plain_reply(monkeypatch):
+    async def fake_lookup(name):
+        return _person()
+
+    async def no_people(name):
+        return []
+
+    monkeypatch.setattr("app.services.person.lookup_person", fake_lookup)
+    monkeypatch.setattr("app.services.person.lookup_people", no_people)
+    payload = {"messages": [{"role": "user",
+                             "content": "who is muhammad ali?"}]}
+    reply = "Muhammad Ali was a legendary boxer and activist."
+    r, m = asyncio.run(enforce_components(
+        FakeGateway(reply), None, payload, _res(reply)))
+    env = extract_envelope(r["choices"][0]["message"]["content"])
+    assert env is not None and m["component_used"]
+    card = env["components"][0]
+    assert card["type"] == "person_card"
+    assert card["data"]["name"] == "Muhammad Ali"
+    assert card["data"]["url"] == "https://en.wikipedia.org/wiki/Muhammad_Ali"
+    assert "legendary boxer" in env["content"]
+
+
+def test_person_card_floor_leads_envelope(monkeypatch):
+    async def fake_lookup(name):
+        return _person(name=name.title())
+
+    async def no_people(name):
+        return []
+
+    monkeypatch.setattr("app.services.person.lookup_person", fake_lookup)
+    monkeypatch.setattr("app.services.person.lookup_people", no_people)
+    payload = {"messages": [{"role": "user", "content": "who is ada lovelace?"}]}
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(ENV), None, payload, _res(ENV)))
+    env = extract_envelope(r["choices"][0]["message"]["content"])
+    assert env["components"][0]["type"] == "person_card"
+    assert env["components"][1]["type"] == "list"
+
+
+def test_person_card_floor_merges_missing_fields(monkeypatch):
+    async def fake_lookup(name):
+        return _person()
+
+    async def no_people(name):
+        return []
+
+    monkeypatch.setattr("app.services.person.lookup_person", fake_lookup)
+    monkeypatch.setattr("app.services.person.lookup_people", no_people)
+    thin = (
+        '```nova-response\n{"response_type":"general","content":"Bio",'
+        '"components":[{"type":"person_card","data":{"name":"Muhammad Ali"}}'
+        ',{"type":"paragraph","data":{"text":"boxer"}}]}\n```'
+    )
+    payload = {"messages": [{"role": "user",
+                             "content": "who is muhammad ali?"}]}
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(thin), None, payload, _res(thin)))
+    env = extract_envelope(r["choices"][0]["message"]["content"])
+    cards = [c for c in env["components"] if c["type"] == "person_card"]
+    assert len(cards) == 1
+    assert cards[0]["data"]["thumbnail"].endswith("ali.jpg")
+    assert cards[0]["data"]["extract"].startswith("Muhammad Ali was")
+
+
+def test_people_carousel_when_no_notable(monkeypatch):
+    async def no_person(name):
+        return None
+
+    async def fake_people(name):
+        return [{"name": "Albin Anthony", "description": "GitHub user",
+                 "source": "github", "url": "https://github.com/albin",
+                 "facts": [{"label": "Username", "value": "@albin"}]},
+                {"name": "Albin A.", "source": "github",
+                 "url": "https://github.com/albina"}]
+
+    monkeypatch.setattr("app.services.person.lookup_person", no_person)
+    monkeypatch.setattr("app.services.person.lookup_people", fake_people)
+    payload = {"messages": [{"role": "user",
+                             "content": "who is albin anthony?"}]}
+    reply = "Albin Anthony is a software engineer."
+    r, m = asyncio.run(enforce_components(
+        FakeGateway(reply), None, payload, _res(reply)))
+    env = extract_envelope(r["choices"][0]["message"]["content"])
+    assert env is not None
+    comp = env["components"][0]
+    assert comp["type"] == "person_carousel"
+    assert len(comp["data"]["people"]) == 2
+    assert comp["data"]["people"][0]["name"] == "Albin Anthony"
+
+
+def test_people_carousel_empty_candidates_noop(monkeypatch):
+    async def no_person(name):
+        return None
+
+    async def no_people(name):
+        return []
+
+    monkeypatch.setattr("app.services.person.lookup_person", no_person)
+    monkeypatch.setattr("app.services.person.lookup_people", no_people)
+    payload = {"messages": [{"role": "user",
+                             "content": "who is albin anthony?"}]}
+    reply = "I could not find a public profile for that name."
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(reply), None, payload, _res(reply)))
+    assert r["choices"][0]["message"]["content"] == reply
+
+
+def test_card_and_carousel_for_strong_match(monkeypatch):
+    """A notable match gets the dossier; every other public profile
+    still gets listed in a carousel right below it."""
+    async def fake_lookup(name):
+        return _person()
+
+    async def fake_people(name):
+        return [{"name": "Muhammad Ali", "source": "wikipedia",
+                 "url": "https://en.wikipedia.org/wiki/Muhammad_Ali"},
+                {"name": "Muhammad Ali", "source": "github",
+                 "url": "https://github.com/muhammadali"},
+                {"name": "Muhammad Ali Jr", "source": "linkedin",
+                 "url": "https://linkedin.com/in/muhammad-ali-jr"}]
+
+    monkeypatch.setattr("app.services.person.lookup_person", fake_lookup)
+    monkeypatch.setattr("app.services.person.lookup_people", fake_people)
+    payload = {"messages": [{"role": "user",
+                             "content": "who is muhammad ali?"}]}
+    reply = "Muhammad Ali was a boxer."
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(reply), None, payload, _res(reply)))
+    env = extract_envelope(r["choices"][0]["message"]["content"])
+    types = [c["type"] for c in env["components"]]
+    assert types[0] == "person_card" and types[1] == "person_carousel"
+    people = env["components"][1]["data"]["people"]
+    names = {p["name"].strip().lower() for p in people}
+    assert "muhammad ali" not in names  # the dossier person isn't repeated
+    assert len(people) == 1
+
+
+def test_carousel_replaces_weak_match_card(monkeypatch):
+    """A fuzzy wiki match ("Alvin Anthons" for "albin anthony") must not
+    become the answer — the carousel of real candidates leads instead."""
+    async def wrong_person(name):
+        return _person(name="Alvin Anthons")
+
+    async def fake_people(name):
+        return [{"name": "Albin Anthony", "source": "github",
+                 "url": "https://github.com/albinanthony"}]
+
+    monkeypatch.setattr("app.services.person.lookup_person", wrong_person)
+    monkeypatch.setattr("app.services.person.lookup_people", fake_people)
+    payload = {"messages": [{"role": "user",
+                             "content": "who is albin anthony?"}]}
+    reply = "Albin Anthony is a developer."
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(reply), None, payload, _res(reply)))
+    env = extract_envelope(r["choices"][0]["message"]["content"])
+    types = [c["type"] for c in env["components"]]
+    assert "person_card" not in types
+    assert types[0] == "person_carousel"
+
+
+def test_profile_followup_uses_history_name(monkeypatch):
+    """"give me all the profiles you can find" carries no name — the
+    subject is resolved from the earlier who-is turn and the carousel
+    of real candidates is injected."""
+    async def no_person(name):
+        return None
+
+    async def fake_people(name):
+        return [{"name": "Albin Anthony", "source": "github",
+                 "url": "https://github.com/albinanthony"},
+                {"name": "Albin Anthony", "source": "linkedin",
+                 "url": "https://linkedin.com/in/albin-anthony"}]
+
+    monkeypatch.setattr("app.services.person.lookup_person", no_person)
+    monkeypatch.setattr("app.services.person.lookup_people", fake_people)
+    payload = {"messages": [
+        {"role": "user", "content": "who is albin anthony?"},
+        {"role": "assistant", "content": "He is hard to pin down."},
+        {"role": "user",
+         "content": "give me all the profiles you can find"},
+    ]}
+    reply = "- github.com/x\n- linkedin.com/in/y"
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(reply), None, payload, _res(reply)))
+    env = extract_envelope(r["choices"][0]["message"]["content"])
+    assert env is not None
+    assert env["components"][0]["type"] == "person_carousel"
+    assert len(env["components"][0]["data"]["people"]) == 2
+
+
+def test_unverified_model_card_dropped_for_carousel(monkeypatch):
+    """A model-emitted person_card with no source URL is a guess, not a
+    dossier — when lookup finds no notable person, the real candidates
+    lead and the thin card is removed."""
+    async def no_person(name):
+        return None
+
+    async def fake_people(name):
+        return [{"name": "Albin Anthony", "source": "github",
+                 "url": "https://github.com/albinanthony"}]
+
+    monkeypatch.setattr("app.services.person.lookup_person", no_person)
+    monkeypatch.setattr("app.services.person.lookup_people", fake_people)
+    env_in = (
+        '```nova-response\n{"response_type":"general","content":"x",'
+        '"components":[{"type":"person_card","data":{"name":"Albin '
+        'Anthony","extract":"A user of this AI model."}}]}\n```'
+    )
+    payload = {"messages": [{"role": "user",
+                             "content": "who is albin anthony?"}]}
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(env_in), None, payload, _res(env_in)))
+    env = extract_envelope(r["choices"][0]["message"]["content"])
+    types = [c["type"] for c in env["components"]]
+    assert types[0] == "person_carousel"
+    assert "person_card" not in types
+
+
+def test_sourced_model_card_kept_above_carousel(monkeypatch):
+    """A model card citing a real source stays; the carousel lists the
+    other candidates below it."""
+    async def no_person(name):
+        return None
+
+    async def fake_people(name):
+        return [{"name": "Albin Anthons", "source": "wikipedia",
+                 "url": "https://en.wikipedia.org/wiki/Albin_Anthons"}]
+
+    monkeypatch.setattr("app.services.person.lookup_person", no_person)
+    monkeypatch.setattr("app.services.person.lookup_people", fake_people)
+    env_in = (
+        '```nova-response\n{"response_type":"general","content":"x",'
+        '"components":[{"type":"person_card","data":{"name":"Albin '
+        'Anthons","url":"https://en.wikipedia.org/wiki/Albin_Anthons",'
+        '"source":"wikipedia"}}]}\n```'
+    )
+    payload = {"messages": [{"role": "user",
+                             "content": "who is albin anthony?"}]}
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(env_in), None, payload, _res(env_in)))
+    env = extract_envelope(r["choices"][0]["message"]["content"])
+    types = [c["type"] for c in env["components"]]
+    assert types[:2] == ["person_card", "person_carousel"]
+
+
+def test_profile_followup_without_history_is_noop(monkeypatch):
+    async def no_lookup(name):  # pragma: no cover - must not be called
+        raise AssertionError("lookup called with no resolvable name")
+
+    monkeypatch.setattr("app.services.person.lookup_person", no_lookup)
+    monkeypatch.setattr("app.services.person.lookup_people", no_lookup)
+    payload = {"messages": [
+        {"role": "user", "content": "how do I cook pasta"},
+        {"role": "assistant", "content": "Boil water."},
+        {"role": "user", "content": "show me the profiles"},
+    ]}
+    reply = "No prior subject to look up."
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(reply), None, payload, _res(reply)))
+    assert "person_carousel" not in r["choices"][0]["message"]["content"]
+
+
+def test_person_card_floor_skips_other_questions(monkeypatch):
+    async def fake_lookup(name):  # pragma: no cover - must not be called
+        raise AssertionError("lookup called for non-person question")
+
+    monkeypatch.setattr("app.services.person.lookup_person", fake_lookup)
+    payload = {"messages": [{"role": "user", "content": "hi"}]}
+    r, _ = asyncio.run(enforce_components(
+        FakeGateway(ENV), None, payload, _res(ENV)))
+    assert r["choices"][0]["message"]["content"] == ENV
 
 
 def test_markdown_fallback_extracts_trailing_sources():

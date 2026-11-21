@@ -154,6 +154,7 @@
       window.addEventListener('pagehide', dismiss, {once: true});
       document.body.append(dialog);
       dialog.showModal();
+      if (window.NovaMotion) NovaMotion.dialog(dialog);
       const first = controls.values().next().value;
       (first || cancel).focus();
     });

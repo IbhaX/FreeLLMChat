@@ -33,6 +33,7 @@
       button.onclick = options.action.run;
       section.append(button);
     }
+    if (window.NovaMotion) NovaMotion.enter(section, {y: 10});
     return section;
   }
 

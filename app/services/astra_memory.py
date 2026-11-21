@@ -25,10 +25,10 @@ from app.config import get_settings
 SHORT = "mem_short"
 LONG = "mem_long"
 _VECTORIZE = {"provider": "nvidia", "modelName": "NV-Embed-QA"}
-# NV-Embed-QA rejects inputs over 512 tokens (~2048 chars) with a 401/400 —
-# keep every vectorize payload comfortably under the provider limit while
-# retaining the full text in the document body.
-_VECTORIZE_MAX_CHARS = 1800
+# NV-Embed-QA rejects inputs over 512 tokens with a 400 — and 1800 chars
+# already measured 645 tokens (~2.8 chars/token worst case). Cap well
+# under ~1430 chars while retaining the full text in the document body.
+_VECTORIZE_MAX_CHARS = 1200
 
 
 def _vt(text: str) -> str:

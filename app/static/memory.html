@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Memory - Nova</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  /* Memory Explorer — neural graph workspace. Page-scoped styles;
+     shared chrome stays in ui.css. */
+  .mem-page{max-width:1380px}
+  .mem-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+  @media(max-width:860px){.mem-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .mem-stat{background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-lg);padding:14px 16px}
+  .mem-stat .num{font-size:24px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .mem-stat .lbl{font-size:11px;color:var(--text-3);margin-top:2px}
+  .mem-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .mem-toolbar .ui-input{flex:1;min-width:200px;max-width:340px}
+  .mem-cat{display:flex;gap:6px;flex-wrap:wrap}
+  .mem-stage{position:relative;background:#07090f;border:1px solid var(--border-1);border-radius:var(--r-lg);overflow:hidden;min-height:540px}
+  #memCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  #memCanvas.dragging{cursor:grabbing}
+  #memCanvas.point{cursor:pointer}
+  .mem-tip{position:absolute;pointer-events:none;background:var(--surface-1);border:1px solid var(--border-1);border-radius:8px;padding:6px 10px;font-size:12px;max-width:260px;display:none;z-index:6;box-shadow:var(--shadow-2)}
+  .mem-tip .c{font-size:10px;color:var(--text-3);text-transform:capitalize}
+  .mem-legend{position:absolute;left:14px;bottom:10px;display:flex;gap:14px;align-items:center;font-size:11px;color:var(--text-3);z-index:4;flex-wrap:wrap}
+  .mem-legend .lg{display:flex;align-items:center;gap:5px}
+  .mem-legend .dot{width:8px;height:8px;border-radius:50%}
+  .mem-legend .ln{width:16px;height:0;border-top:2px solid;display:inline-block}
+  .mem-zoom{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:6px;z-index:4}
+  .mem-detail{position:absolute;right:12px;top:12px;bottom:12px;width:340px;max-width:calc(100% - 24px);background:var(--surface-1);border:1px solid var(--border-1);border-radius:var(--r-lg);z-index:5;display:none;flex-direction:column;overflow:hidden}
+  .mem-detail.open{display:flex}
+  .mem-detail .hd{display:flex;align-items:flex-start;gap:8px;padding:14px 14px 10px;border-bottom:1px solid var(--border-1)}
+  .mem-detail .hd h3{margin:0;font-size:14px;line-height:1.35;flex:1;word-break:break-word}
+  .mem-detail .bd{padding:12px 14px;overflow-y:auto;flex:1}
+  .mem-detail .txt{font-size:13px;line-height:1.6;color:var(--text-2);white-space:pre-wrap;word-break:break-word;max-height:180px;overflow-y:auto;background:var(--surface-2);border-radius:8px;padding:10px 12px;margin:10px 0}
+  .mem-kv{display:grid;grid-template-columns:96px 1fr;gap:5px 10px;font-size:12px;margin-bottom:12px}
+  .mem-kv .k{color:var(--text-3)}
+  .mem-kv .v{color:var(--text-1);word-break:break-all;font-variant-numeric:tabular-nums}
+  .mem-rel{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:12px}
+  .mem-rel:hover{background:var(--surface-2)}
+  .mem-rel .w{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--text-3);font-size:11px}
+  .mem-rel .kind{font-size:9px;padding:1px 6px;border-radius:99px;border:1px solid var(--border-1);color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+  .mem-rel .kind.stored{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+  .mem-acts{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border-1)}
+  .mem-list{display:none}
+  .mem-page.list .mem-stage,.mem-page.list .mem-legend{display:none}
+  .mem-page.list .mem-list{display:block}
+  @media(max-width:700px){
+    .mem-stage{min-height:420px}
+    .mem-detail{top:auto;left:8px;right:8px;bottom:8px;width:auto;max-height:60%}
+    .mem-toolbar .ui-input{max-width:none}
+  }
+</style>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page mem-page" id="memPage">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" data-app-back="/" title="Back"></button>
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
+      <div style="flex:1"><h1>Memory Explorer</h1><div class="sub">Neural map of Astra DB memory — stored links and vector similarity</div></div>
+      <span class="pill mut" id="memStatus" style="font-size:10px">connecting…</span>
+    </div>
+
+    <div class="mem-stats">
+      <div class="mem-stat"><div class="num" id="stMem">0</div><div class="lbl">Memories</div></div>
+      <div class="mem-stat"><div class="num" id="stRel">0</div><div class="lbl">Connections</div></div>
+      <div class="mem-stat"><div class="num" id="stCat">0</div><div class="lbl">Categories</div></div>
+      <div class="mem-stat"><div class="num" id="stSim">—</div><div class="lbl">Avg. similarity</div></div>
+    </div>
+
+    <div class="mem-toolbar">
+      <input id="memSearch" class="ui-input" placeholder="Search memories… (Enter flies to match)">
+      <div class="mem-cat" id="memCats"></div>
+      <label class="ui-chip" style="gap:7px;cursor:pointer" title="Minimum cosine similarity for computed links">
+        <span style="font-size:11px;color:var(--text-3)">sim ≥</span>
+        <input type="range" id="memThr" min="0" max="90" value="55" style="width:80px">
+        <span id="memThrV" style="font-size:11px;font-variant-numeric:tabular-nums">0.55</span>
+      </label>
+      <button class="ui-btn ui-btn-ghost ui-btn-sm" id="memLbl" title="Toggle memory labels">Labels</button>
+      <button class="ui-btn ui-btn-ghost ui-btn-sm" id="memEdg" title="Toggle connections">Edges</button>
+      <button class="ui-btn ui-btn-ghost ui-btn-sm" id="memFocus" title="Isolate the selected memory's neighbourhood" disabled>Focus</button>
+      <div class="ui-seg" style="margin-left:auto">
+        <button id="vGraph" class="sel">Graph</button><button id="vList">List</button>
+      </div>
+    </div>
+
+    <div class="mem-stage" id="memStage">
+      <canvas id="memCanvas"></canvas>
+      <div class="mem-zoom">
+        <button class="ui-btn ui-btn-sm" id="zoomIn" title="Zoom in">＋</button>
+        <button class="ui-btn ui-btn-sm" id="zoomOut" title="Zoom out">－</button>
+        <button class="ui-btn ui-btn-sm" id="zoomFit" title="Reset view">⌂</button>
+      </div>
+      <div class="mem-tip" id="memTip"></div>
+      <div class="mem-legend" id="memLegend"></div>
+      <div class="mem-detail" id="memDetail"></div>
+    </div>
+
+    <div class="mem-list">
+      <div class="ui-table-scroll"><table class="ui-table"><thead><tr>
+        <th>Memory</th><th>Category</th><th>Links</th><th>Indexed</th><th></th>
+      </tr></thead><tbody id="memRows"></tbody></table></div>
+    </div>
+  </div>
+</main>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app-nav.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
+<script src="/static/js/memory.js"></script>
+</body>
+</html>

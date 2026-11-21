@@ -14,14 +14,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_gateway_key, require_user
+from app.api.deps import require_user
 from app.db import get_session
 from app.models import AgentConfig, SharedConversation
 from app.services.agents import run_agent
 
 router = APIRouter(
     prefix="/v1",
-    dependencies=[Depends(require_gateway_key), Depends(require_user)])
+    dependencies=[Depends(require_user)])
 
 ORCHESTRATOR_NAME = "Orchestrator"
 
@@ -86,7 +86,7 @@ def _gateway(request: Request):
 
 
 def _meta(ev: dict) -> bytes:
-    return f"data: {json.dumps({'freellm': ev})}\n\n".encode()
+    return f"data: {json.dumps({'nova': ev})}\n\n".encode()
 
 
 
@@ -99,7 +99,7 @@ async def group_stream(
     """Run a group chat turn: each selected agent answers solo in parallel,
     then the built-in Orchestrator synthesizes one structured reply.
 
-    SSE events are `{"freellm": {...}}` meta chunks:
+    SSE events are `{"nova": {...}}` meta chunks:
     agent_start / agent_message / group_done — plus a terminal error event.
     """
     agents = (

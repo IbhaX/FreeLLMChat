@@ -25,7 +25,7 @@ from typing import Any
 
 from app.services.intent import Complexity, Intent, IntentResult, classify, is_small_talk
 
-log = logging.getLogger("freellm.orchestrator")
+log = logging.getLogger("nova.orchestrator")
 
 
 async def classify_request(

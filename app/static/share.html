@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shared conversation — FreeLLM</title>
+<title>Shared conversation - Nova</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/theme.css">
@@ -125,7 +125,7 @@
   </div>
 </header>
 <main class="chat-inner" id="msgs"><div class="sh-empty">Loading…</div></main>
-<div class="sh-foot">Shared via <a href="/chat">Nova Chat</a> · FreeLLM Gateway</div>
+<div class="sh-foot">Shared via <a href="/chat">Nova Chat</a> · Nova Gateway</div>
 <script>
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const md=t=>{try{return window.NovaRender?.MarkdownRenderer?.render(t)||esc(t)}catch(e){return esc(t)}};
@@ -141,7 +141,7 @@ const fillBubble=(m,b)=>{
 const id=location.pathname.split('/').pop();
 fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
   document.getElementById('title').textContent=d.title||'Shared conversation';
-  document.title=(d.title||'Shared conversation')+' — FreeLLM';
+  document.title=(d.title||'Shared conversation')+' — Nova';
   document.getElementById('sub').textContent=(d.created_at?new Date(d.created_at).toLocaleString()+' · ':'')+(d.messages||[]).length+' messages';
   const host=document.getElementById('msgs');
   const msgs=d.messages||[];
@@ -161,6 +161,8 @@ fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(
     fillBubble(m,row.querySelector('.bubble'));
     host.append(row);
   });
+  if(window.NovaMotion)NovaMotion.stagger(host.querySelectorAll('.msg-row'),
+    {y:12,dur:.3,stagger:.04});
   // suggested-prompt chips are interactive in the app; inert here
   host.querySelectorAll('[data-q]').forEach(n=>n.removeAttribute('data-q'));
 }).catch(()=>{document.getElementById('msgs').innerHTML='<div class="sh-empty">Shared conversation not found.</div>';});
@@ -168,5 +170,7 @@ fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(
 <script src="/static/js/app-nav.js"></script>
 <script src="/static/js/theme.js"></script>
 <script>if(window.AppNav)AppNav.attach(document.getElementById('appNavBtn'),null);</script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
 </body>
 </html>

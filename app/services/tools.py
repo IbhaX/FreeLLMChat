@@ -113,7 +113,7 @@ async def _http_get(url: str, max_chars: int = 4000) -> str:
         async with httpx.AsyncClient(timeout=15, follow_redirects=False) as c:
             # Manually follow up to 3 redirects so each hop is re-checked.
             for _hop in range(3):
-                r = await c.get(url, headers={"User-Agent": "FreeLLM-Agent/1.0"})
+                r = await c.get(url, headers={"User-Agent": "Nova-Agent/1.0"})
                 if r.status_code in (301, 302, 303, 307, 308):
                     url = r.headers.get("location", "")
                     if not url or _ssrf_blocked(urljoin(str(r.url), url)):
@@ -544,7 +544,7 @@ async def _execute_tool_call(tc: dict[str, Any]) -> tuple[str, str, dict[str, An
     import logging
     import time
 
-    logger = logging.getLogger("freellm.agent.tools")
+    logger = logging.getLogger("nova.agent.tools")
     fn = tc.get("function", {}) if isinstance(tc, dict) else {}
     name = fn.get("name", "") if isinstance(fn, dict) else ""
     try:

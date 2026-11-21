@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<title>Sign in — FreeLLM</title>
+<title>Sign in - Nova</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23,27 +23,40 @@
   .login-switch{margin-top:16px;font-size:var(--t-xs);color:var(--text-3);text-align:center}
   .login-switch button{background:none;border:0;color:var(--accent);cursor:pointer;
     font:inherit;padding:0;text-decoration:underline}
-  .reg-only{display:none}
-  .reg .reg-only{display:block}
-  .reg .login-only{display:none}
+  .login-card .reg-only{display:none}
+  .login-card.reg .reg-only{display:block}
+  .login-card.reg .login-only{display:none}
 </style>
 </head>
 <body>
 <div class="ui-card login-card" id="card">
   <div class="avatar">F</div>
   <h1 id="title">Welcome back</h1>
-  <p class="sub" id="subtitle">Sign in to continue to FreeLLM.</p>
+  <p class="sub" id="subtitle">Sign in to continue to Nova.</p>
   <form id="loginForm" autocomplete="off">
-    <label class="label"><span class="t-xs tx-3">Username</span>
+    <label class="label"><span class="t-xs tx-3" id="u_name_lbl">Username or email</span>
       <input id="u_name" class="ui-input" required minlength="3" autocomplete="username"></label>
+    <label class="label reg-only"><span class="t-xs tx-3">Email (optional)</span>
+      <input id="u_email" type="email" class="ui-input" autocomplete="email"></label>
     <label class="label reg-only"><span class="t-xs tx-3">Display name (optional)</span>
       <input id="u_disp" class="ui-input" autocomplete="nickname"></label>
+    <label class="label reg-only" id="refWrap" style="display:none">
+      <span class="t-xs tx-3" id="ref_lbl">Referral code</span>
+      <input id="u_ref" class="ui-input" autocomplete="off"></label>
     <label class="label"><span class="t-xs tx-3">Password</span>
       <input id="u_pass" type="password" class="ui-input" required
              autocomplete="current-password"></label>
     <div id="loginErr" role="alert"></div>
     <button class="ui-btn ui-btn-primary" id="submitBtn" style="width:100%">Sign in</button>
   </form>
+  <div id="gWrap" style="display:none;margin-top:18px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span class="t-xs tx-3">or</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+    <div id="g_btn" style="display:flex;justify-content:center"></div>
+  </div>
   <p class="login-switch">
     <span class="login-only">No account yet?
       <button type="button" id="toReg">Create one</button></span>
@@ -56,15 +69,19 @@
 (function(){
   const card=document.getElementById('card'),form=document.getElementById('loginForm'),
         err=document.getElementById('loginErr'),btn=document.getElementById('submitBtn');
-  let registering=false;
+  let registering=false,refRequired=false;
   const next=()=>{const p=new URLSearchParams(location.search).get('next');
     return(p&&p.startsWith('/')&&!p.startsWith('//'))?p:'/chat';};
   function setMode(reg){
     registering=reg;card.classList.toggle('reg',reg);
+    document.getElementById('u_name_lbl').textContent=reg?'Username':'Username or email';
+    document.getElementById('u_ref').required=reg&&refRequired;
     document.getElementById('title').textContent=reg?'Create your account':'Welcome back';
     document.getElementById('subtitle').textContent=reg
-      ?'The first account becomes the administrator of this install.'
-      :'Sign in to continue to FreeLLM.';
+      ?(refRequired
+        ?'Registration is invite-only — enter your referral code.'
+        :'The first account becomes the administrator of this install.')
+      :'Sign in to continue to Nova.';
     btn.textContent=reg?'Create account':'Sign in';
     err.textContent='';
     document.getElementById('u_pass').autocomplete=reg?'new-password':'current-password';
@@ -75,7 +92,9 @@
     e.preventDefault();err.textContent='';btn.disabled=true;
     const body={username:document.getElementById('u_name').value.trim(),
                 password:document.getElementById('u_pass').value};
-    if(registering)body.display_name=document.getElementById('u_disp').value.trim();
+    if(registering){body.display_name=document.getElementById('u_disp').value.trim();
+      body.email=document.getElementById('u_email').value.trim();
+      body.referral_code=document.getElementById('u_ref').value.trim();}
     try{
       const d=await v1Api(registering?'/v1/auth/register':'/v1/auth/login',
         {method:'POST',body:JSON.stringify(body)});
@@ -84,11 +103,59 @@
       location.href=next();
     }catch(x){err.textContent=x.message||'Sign-in failed';btn.disabled=false;}
   };
-  // Already signed in? Skip straight through.
-  if(USER_TOKEN)v1Api('/v1/auth/me')
-    .then(d=>{if(d.user)location.replace(next());})
-    .catch(()=>{});
+  // Google Identity Services — one-tap sign-in when GOOGLE_CLIENT_ID is set.
+  let googleOn=false;
+  function initGoogle(clientId){
+    googleOn=true;
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';s.async=true;s.defer=true;
+    s.onload=()=>{
+      google.accounts.id.initialize({client_id:clientId,
+        callback:async resp=>{
+          err.textContent='';
+          try{
+            const d=await v1Api('/v1/auth/google',{method:'POST',
+              body:JSON.stringify({credential:resp.credential,
+                referral_code:document.getElementById('u_ref').value.trim()})});
+            USER_TOKEN=d.token;localStorage.setItem('nova_user_token',d.token);
+            localStorage.setItem('nova_user',JSON.stringify(d.user||{}));
+            location.href=next();
+          }catch(x){err.textContent=x.message||'Google sign-in failed';}
+        }});
+      google.accounts.id.renderButton(document.getElementById('g_btn'),
+        {theme:'filled_black',size:'large',width:340,shape:'pill'});
+      document.getElementById('gWrap').style.display='';
+    };
+    document.head.appendChild(s);
+  }
+  // Referral gate on? Show + require the code field in register mode.
+  v1Api('/v1/auth/me').then(d=>{
+    if(d.referral_required){
+      refRequired=true;
+      document.getElementById('refWrap').style.display='';
+      setMode(registering);
+    }
+    if(d.google_client_id){
+      initGoogle(d.google_client_id);
+      // New Google accounts also register — show the code in both modes.
+      if(refRequired){
+        document.getElementById('refWrap').classList.remove('reg-only');
+        document.getElementById('ref_lbl').textContent='Referral code (new accounts)';
+      }
+    }
+    if(d.user)location.replace(next());
+  }).catch(()=>{});
 })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
+<script>
+if(window.NovaMotion){
+  NovaMotion.enter(document.getElementById('card'),{y:22,scale:.97,dur:.5,ease:NovaMotion.E.expo});
+  NovaMotion.stagger(
+    document.querySelectorAll('#card .label,#card h1,#card .sub,#submitBtn'),
+    {y:10,dur:.35,stagger:.05,delay:.15});
+}
 </script>
 </body>
 </html>

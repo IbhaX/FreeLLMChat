@@ -40,7 +40,7 @@ from app.services.jobqueue import (
     request_cancel,
 )
 
-log = logging.getLogger("freellm.research_v2")
+log = logging.getLogger("nova.research_v2")
 
 # ---------------------------------------------------------------- budgets
 

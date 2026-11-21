@@ -50,6 +50,28 @@ class SynthesisResult(BaseModel):
     sources: list[dict[str, str]] = Field(default_factory=list)
 
 
+class ProfileCluster(BaseModel):
+    """Candidate profiles the synthesizer judges to be the same person."""
+
+    label: str = ""
+    urls: list[str] = Field(default_factory=list)
+    confidence: str = "low"
+
+
+class PersonSynthesis(BaseModel):
+    """Synthesizer output — one fused view across N profile candidates.
+
+    Produced by the dedicated synthesizer agent from raw ``lookup_people``
+    results: which profiles likely describe the same person, a one-line
+    synthesized identity and overall confidence.
+    """
+
+    summary: str = ""
+    clusters: list[ProfileCluster] = Field(default_factory=list)
+    confidence: str = "low"
+    notes: str = ""
+
+
 class RoleplayTurn(BaseModel):
     """Structured character-turn output inside roleplay orchestration."""
 

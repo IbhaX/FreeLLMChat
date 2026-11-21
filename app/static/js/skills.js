@@ -78,6 +78,9 @@
         ct.appendChild(tr);
       });
       if(!(c.skills||[]).length)ct.innerHTML='<tr><td colspan="6" class="tx-3" style="text-align:center;padding:18px">No custom skills yet.</td></tr>';
+      if(window.NovaMotion&&!load._painted){load._painted=1;
+        NovaMotion.stagger(document.querySelectorAll('#builtin tbody tr'),{y:8,dur:.28,stagger:.035});
+        NovaMotion.stagger(document.querySelectorAll('#custom tbody tr'),{y:8,dur:.28,stagger:.035,delay:.08});}
     }catch(e){toast(e.message,'err');}
   }
 
@@ -93,6 +96,7 @@
     $('#sk_tools').value=saved.filter(t=>!known.has(t)).join(', ');
     $('#sk_enabled').checked=s?s.enabled!==false:true;
     $('#modal').style.display='grid';
+    if(window.NovaMotion)NovaMotion.veil($('#modal'),true);
   }
 
   async function save(){

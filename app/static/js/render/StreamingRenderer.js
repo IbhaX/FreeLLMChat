@@ -27,8 +27,8 @@
 
   const NO_LIVE = new Set([
     "chart", "sparkline", "heatmap", "gauge", "interactive", "math",
-    "image_gallery", "video", "audio", "person_card", "product_card", "weather",
-    "file_preview",
+    "image_gallery", "video", "audio", "person_card", "person_carousel",
+    "product_card", "weather", "file_preview",
   ]);
 
   // Skeleton shapes by component type ("intro"/"block"/"sources" are the
@@ -38,7 +38,8 @@
     stat_grid: "stats", metric_card: "stats", gauge: "media", progress: "lines",
     list: "lines", instructions: "lines", timeline: "lines", search_result: "lines",
     chart: "media", sparkline: "media", image_gallery: "media", video: "media",
-    person_card: "profile", product_card: "profile", business_card: "profile",
+    person_card: "profile", person_carousel: "profile",
+    product_card: "profile", business_card: "profile",
     sources: "chips", intro: "intro",
   };
 

@@ -10,12 +10,12 @@ import uuid
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_gateway_key, require_user
+from app.api.deps import optional_user, require_user
 from app.db import get_session
 from app.models import ResearchRun
 from app.services import agent_log
@@ -23,7 +23,7 @@ from app.services.research import run_research
 
 router = APIRouter(
     prefix="/v1",
-    dependencies=[Depends(require_gateway_key), Depends(require_user)])
+    dependencies=[Depends(require_user)])
 
 Depth = Literal["quick", "standard", "deep"]
 
@@ -51,7 +51,7 @@ def _messages(body: ResearchRequest) -> list[dict[str, Any]]:
 
 
 def _meta(ev: dict) -> bytes:
-    return f"data: {json.dumps({'freellm': ev})}\n\n".encode()
+    return f"data: {json.dumps({'nova': ev})}\n\n".encode()
 
 
 def _state_payload(state) -> tuple[list, list, list]:
@@ -123,6 +123,12 @@ async def research(
     done = next((e for e in reversed(events) if e.get("event") == "research_done"), {})
     meta = {k: v for k, v in done.items() if k not in ("event", "text")}
     rid = await _persist(session, body, state, answer)
+    _user = await optional_user(request)
+    from app.services import knowledge_capture
+
+    knowledge_capture.schedule(
+        _user.id if _user else None, "research", body.message, answer,
+        title=f"Research · {meta.get('depth', body.depth or 'standard')}")
     return {"answer": answer, "meta": meta, "run_id": rid, "events": events[-50:]}
 
 
@@ -156,6 +162,9 @@ async def research_stream(
         await ls.commit()
     _t0 = time.monotonic()
 
+    _user = await optional_user(request)
+    _owner = _user.id if _user else None
+
     async def run() -> None:
         # The run must outlive the HTTP request: it gets its OWN sessions
         # (the request-scoped one is closed as soon as this handler returns
@@ -171,6 +180,11 @@ async def research_stream(
             state_box["state"] = state
             async with factory() as ps:
                 rid = await _persist(ps, body, state, state.answer)
+            from app.services import knowledge_capture
+
+            knowledge_capture.schedule(
+                _owner, "research", body.message, state.answer,
+                title=f"Research · {getattr(state, 'depth', body.depth or 'standard')}")
             queue.put_nowait({"event": "research_answer", "answer": state.answer,
                               "run_id": rid, **(state.meta or {})})
             async with factory() as ls:
@@ -309,8 +323,115 @@ async def get_run(run_id: int, session: AsyncSession = Depends(get_session)):
     r = await session.get(ResearchRun, run_id)
     if r is None:
         return JSONResponse(status_code=404, content={"error": {"message": "not found"}})
+    meta = dict(r.meta or {})
+    meta.pop("document", None)   # cached textbook doc is served via /document
     return {
         "id": r.id, "question": r.question, "depth": r.depth, "answer": r.answer,
-        "plan": r.plan, "findings": r.findings, "sources": r.sources, "meta": r.meta,
+        "plan": r.plan, "findings": r.findings, "sources": r.sources, "meta": meta,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }
+
+
+# ---------- textbook document + PDF export ----------
+
+
+async def _document_for_run(
+    session: AsyncSession, request: Request, run_id: int,
+) -> tuple[ResearchRun | None, Any]:
+    """Load the composed ResearchDocument for a run, composing + caching it
+    (in ``run.meta["document"]``) on first request. The composer agent is
+    the primary path; the deterministic fallback keeps the book view alive
+    when no candidate model produces a valid document."""
+    from app.services.research_composer import (
+        compose_document, markdown_to_document)
+    from app.services.research_doc import validate_document
+
+    r = await session.get(ResearchRun, run_id)
+    if r is None:
+        return None, None
+    meta = dict(r.meta or {})
+    cached = meta.get("document")
+    if isinstance(cached, dict):
+        try:
+            return r, validate_document(cached)
+        except Exception:
+            pass
+    doc = await compose_document(
+        _gateway(request), r.question, r.answer or "",
+        sources=r.sources or [], run_id=r.id)
+    if doc is None:
+        doc = markdown_to_document(
+            r.question, r.answer or "", sources=r.sources or [], run_id=r.id)
+    if doc is None:
+        return r, None
+    meta["document"] = doc.model_dump(mode="json")
+    r.meta = meta
+    await session.commit()
+    return r, doc
+
+
+@router.get("/research/runs/{run_id}/document")
+async def research_document(
+    run_id: int, request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """The structured textbook document for a saved run (composes lazily)."""
+    r, doc = await _document_for_run(session, request, run_id)
+    if r is None:
+        return JSONResponse(status_code=404,
+                            content={"error": {"message": "not found"}})
+    if doc is None:
+        return JSONResponse(
+            status_code=422,
+            content={"error": {"message": "run has no answer to compose"}})
+    return doc.model_dump(mode="json")
+
+
+@router.get("/research/runs/{run_id}/pdf")
+async def research_pdf(
+    run_id: int, request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Export the textbook as a print-faithful PDF. The headless browser
+    loads the same ``/textbook`` page users see — one renderer for screen
+    and paper — then prints it with backgrounds."""
+    r, doc = await _document_for_run(session, request, run_id)
+    if r is None:
+        return JSONResponse(status_code=404,
+                            content={"error": {"message": "not found"}})
+    if doc is None:
+        return JSONResponse(
+            status_code=422,
+            content={"error": {"message": "run has no answer to compose"}})
+    base = str(request.base_url).rstrip("/")
+    # Forward the caller's credentials so the headless page's document
+    # fetch authenticates exactly like the on-screen one.
+    headers: dict[str, str] = {}
+    if request.headers.get("x-user-token"):
+        headers["x-user-token"] = request.headers["x-user-token"]
+    if request.headers.get("authorization"):
+        headers["authorization"] = request.headers["authorization"]
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return JSONResponse(
+            status_code=501,
+            content={"error": {"message": "PDF export requires playwright"}})
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch()
+        try:
+            page = await browser.new_page()
+            if headers:
+                await page.set_extra_http_headers(headers)
+            await page.goto(f"{base}/textbook/{run_id}?print=1",
+                            wait_until="networkidle", timeout=90000)
+            await page.wait_for_selector(".tb-cover, .tb-error",
+                                         timeout=45000)
+            pdf = await page.pdf(format="A4", print_background=True,
+                                 prefer_css_page_size=True)
+        finally:
+            await browser.close()
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition":
+                 f'attachment; filename="nova-research-{run_id}.pdf"'})

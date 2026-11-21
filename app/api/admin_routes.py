@@ -14,7 +14,7 @@ from sqlalchemy import Integer, case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_admin
+from app.api.deps import require_admin, require_user_or_admin
 from app.crypto import decrypt_key
 from app.db import get_session
 from app.gateway import Gateway
@@ -39,6 +39,10 @@ from app.schemas import (
 from app.services.keys import add_key
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
+# Read-only dashboard data — any signed-in user (admin token, gateway key,
+# or open mode too). Writes and settings stay on `router` behind require_admin.
+user_router = APIRouter(
+    prefix="/admin", dependencies=[Depends(require_user_or_admin)])
 
 
 def _gateway(request: Request) -> Gateway:
@@ -81,7 +85,7 @@ def _key_out(k: ApiKey) -> KeyOut:
 
 # ---------- providers ----------
 
-@router.get("/providers", response_model=list[ProviderOut])
+@user_router.get("/providers", response_model=list[ProviderOut])
 async def list_providers(session: AsyncSession = Depends(get_session)) -> list[ProviderOut]:
     providers = (
         (await session.execute(select(Provider).options(selectinload(Provider.keys))))
@@ -226,7 +230,7 @@ async def ollama_scan(session: AsyncSession = Depends(get_session)) -> dict:
 
 # ---------- keys ----------
 
-@router.get("/keys", response_model=list[KeyOut])
+@user_router.get("/keys", response_model=list[KeyOut])
 async def list_keys(
     provider: str | None = None, session: AsyncSession = Depends(get_session)
 ) -> list[KeyOut]:
@@ -328,7 +332,7 @@ async def _key(session: AsyncSession, key_id: int) -> ApiKey:
     return k
 
 
-@router.get("/keys/{key_id}", response_model=KeyOut)
+@user_router.get("/keys/{key_id}", response_model=KeyOut)
 async def get_key(key_id: int, session: AsyncSession = Depends(get_session)) -> KeyOut:
     return _key_out(await _key(session, key_id))
 
@@ -665,9 +669,24 @@ async def delete_memory(mem_id: int, session: AsyncSession = Depends(get_session
     await session.commit()
 
 
+@user_router.get("/memory/graph")
+async def memory_graph() -> dict:
+    """Node/edge graph of Astra memory for the Memory Explorer page.
+
+    Read-only, user-level (same as /admin/stats): returns real stored
+    memories plus conversation chains and labeled vector-similarity
+    edges. The Astra scan + similarity matmul is synchronous and
+    TTL-cached — run it off the event loop."""
+    import asyncio
+
+    from app.services import memory_graph as mg
+
+    return await asyncio.to_thread(mg.graph_cached)
+
+
 # ---------- tools (agent plugins) ----------
 
-@router.get("/tools")
+@user_router.get("/tools")
 async def list_available_tools() -> list[dict]:
     """Built-in tool plugins that agents can enable."""
     from app.services.tools import list_tools
@@ -677,7 +696,7 @@ async def list_available_tools() -> list[dict]:
 
 # ---------- stats ----------
 
-@router.get("/stats", response_model=StatsOut)
+@user_router.get("/stats", response_model=StatsOut)
 async def stats(session: AsyncSession = Depends(get_session)) -> StatsOut:
     day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
     total = (await session.execute(select(func.count(RequestLog.id)))).scalar() or 0
@@ -765,7 +784,7 @@ async def stats(session: AsyncSession = Depends(get_session)) -> StatsOut:
     )
 
 
-@router.get("/requests")
+@user_router.get("/requests")
 async def recent_requests(
     limit: int = 50, session: AsyncSession = Depends(get_session)
 ) -> list[dict]:

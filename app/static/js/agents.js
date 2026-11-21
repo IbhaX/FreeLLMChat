@@ -4,7 +4,9 @@
   const $=s=>document.querySelector(s);
   let experts=[],agents=[],models=[],toolDefs=[];
   AdminShell.mount('agents');
-  window.addEventListener('admin-ready',init);
+  window.addEventListener('admin-ready',()=>Promise.resolve(init()).catch(e=>{
+    if(e&&e.status===403&&window.AdminShell)AdminShell.restricted();
+    else if(window.toast)toast((e&&e.message)||'Failed to load','err');}));
   if(ADMIN_TOKEN)init();
 
   async function init(){
@@ -59,9 +61,9 @@
         ${row?`<span class="ag-skill" title="model">${esc(row.model||'auto')}</span>`:''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <a class="ui-btn ui-btn-sm ui-btn-primary" href="/chat?agent=${encodeURIComponent(e.name)}">Use agent →</a>
-        ${row?'<button class="ui-btn ui-btn-sm" data-edit>Edit</button>':''}
-        ${customized?'<button class="ui-btn ui-btn-sm" data-reset title="Restore the platform default">Reset</button>':''}
-        ${row&&!(row.config||{}).builtin?'<button class="ui-btn ui-btn-sm" data-del style="color:var(--error)">Delete</button>':''}
+        ${row?'<button class="ui-btn ui-btn-sm" data-admin="1" data-edit>Edit</button>':''}
+        ${customized?'<button class="ui-btn ui-btn-sm" data-admin="1" data-reset title="Restore the platform default">Reset</button>':''}
+        ${row&&!(row.config||{}).builtin?'<button class="ui-btn ui-btn-sm" data-admin="1" data-del style="color:var(--error)">Delete</button>':''}
       </div>`;
     if(row){
       el.querySelector('[data-edit]').onclick=()=>editDialog(row,e);
@@ -84,6 +86,12 @@
     agents.filter(a=>!names.has(a.name)&&match(a.name+' '+(a.description||'')))
       .forEach(a=>g.appendChild(card({name:a.name,domain:'custom',skills:[]},a)));
     if(!g.children.length)g.innerHTML='<div class="tx-3">No agents match.</div>';
+    window.NovaAuth&&NovaAuth.applyRoleNav();
+    if(window.NovaMotion){
+      if(!render._painted){render._painted=1;
+        NovaMotion.stagger(g.children,{y:16,dur:.35,stagger:.035});}
+      NovaMotion.liftAll('#grid .ui-card',g,{y:-4});
+    }
   }
 
   async function editDialog(row,expert){

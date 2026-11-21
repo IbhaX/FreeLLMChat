@@ -35,7 +35,7 @@ def _load_or_create_key() -> bytes:
     except OSError:
         pass  # best-effort on Windows
     print(
-        "\n=== FreeLLM Gateway ===\n"
+        "\n=== Nova Gateway ===\n"
         f"Generated new ENCRYPTION_KEY (saved to {key_file}).\n"
         f"To keep keys portable across machines set:\n"
         f"ENCRYPTION_KEY={key.decode()}\n"

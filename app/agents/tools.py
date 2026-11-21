@@ -66,7 +66,7 @@ class RegistryToolset(AbstractToolset[AgentDeps]):
         actor: str | None = None,
     ) -> None:
         super().__init__()
-        if names is True or names in (None, [], "*"):
+        if names is True or names in (None, "*"):
             names = ["*"]
         if names == ["*"]:
             self._names = list(registry.TOOLS)

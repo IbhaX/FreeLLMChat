@@ -19,7 +19,7 @@ from typing import Any
 
 from app.response_protocol import structured_system_prompt
 
-log = logging.getLogger("freellm.renderer")
+log = logging.getLogger("nova.renderer")
 
 # Cheap/fast model for formatting work; override with RENDERER_MODEL.
 RENDERER_MODEL = os.environ.get("RENDERER_MODEL", "auto:fast")
@@ -53,50 +53,20 @@ async def convert_to_components(
 ) -> str | None:
     """Convert ``content`` into a ``nova-response`` fence.
 
-    Returns the fenced envelope text when the renderer produced a valid
-    component response, else None (caller falls back to the deterministic
-    markdown converter). Never raises.
+    Thin wrapper over the dedicated renderer agent
+    (``app.agents.renderer.render_envelope``): the agent produces a
+    validated ``ResponseEnvelope`` through PromptedOutput with native
+    output retries; this function serializes it back to the fence text the
+    callers resplice. Returns None when no candidate model produced a
+    valid envelope (caller falls back to the deterministic markdown
+    converter). Never raises.
     """
     try:
-        # Lazy import: component_enforce imports this module for its repair
-        # step, so a top-level import here would be circular.
-        from app.services.component_enforce import (
-            _message_content,
-            has_renderable_components,
-        )
+        from app.agents.renderer import render_envelope
 
-        if not isinstance(content, str) or not content.strip():
-            return None
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": RENDERER_SYSTEM}
-        ]
-        for m in (history or [])[-12:]:
-            if isinstance(m, dict) and m.get("role") in ("user", "assistant"):
-                messages.append({"role": m["role"], "content": str(m.get("content") or "")})
-        messages.append({"role": "assistant", "content": content})
-        messages.append({"role": "user", "content": CONVERT_INSTRUCTION})
-        from app.services.model_policy import stage_models
-
-        for cand in stage_models(model or renderer_model(), role="fast"):
-            payload = {
-                "model": cand,
-                "messages": messages,
-                "stream": False,
-                "temperature": 0,
-                "max_tokens": 4096,
-            }
-            try:
-                result, _p, _k, _m = await gateway.chat(
-                    session, payload, attempt_timeout=attempt_timeout
-                )
-            except Exception as exc:
-                log.debug("renderer call failed (model=%s): %s", cand, exc)
-                continue
-            text = _message_content(result or {})
-            if has_renderable_components(text):
-                return text.strip()
-            log.info("renderer produced no components (model=%s)", cand)
-        return None
+        return await render_envelope(
+            gateway, content, model=model, history=history,
+            attempt_timeout=attempt_timeout)
     except Exception as exc:  # rendering is best-effort; caller falls back
         log.debug("component renderer call failed: %s", exc)
         return None

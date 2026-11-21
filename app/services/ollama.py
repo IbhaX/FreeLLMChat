@@ -22,7 +22,7 @@ from app.models import ModelCache, Provider
 from app.providers.ollama import candidate_hosts, normalize_host
 from app.services.keys import add_key
 
-log = logging.getLogger("freellm.ollama")
+log = logging.getLogger("nova.ollama")
 
 OLLAMA_PROVIDER_NAME = "ollama"
 # Deterministic sentinel — never sent upstream, only satisfies key rotation.

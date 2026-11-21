@@ -23,14 +23,21 @@ class Settings(BaseSettings):
 
     database_url: str = f"sqlite+aiosqlite:///{BASE_DIR / 'data' / 'gateway.db'}"
 
-    # Optional bearer token protecting the gateway itself (/v1/*).
-    gateway_api_key: Optional[str] = None
     # Required token for /admin/* endpoints.
     admin_token: str = "admin-change-me"
+    # Comma-separated emails always granted the admin role — assigned on
+    # registration and promoted on login. Env var: ADMIN_EMAILS.
+    admin_emails: str = ""
     # When true, /v1 app endpoints require a user session token issued by
     # /v1/auth/login. Env var: NOVA_AUTH_REQUIRED (bool).
     auth_required: bool = Field(default=True,
                                 validation_alias="NOVA_AUTH_REQUIRED")
+    # When set, /v1/auth/register requires this referral code.
+    # Env var: REFERRAL_CODE.
+    referral_code: Optional[str] = None
+    # Google Identity Services client id; enables "Sign in with Google".
+    # Env var: GOOGLE_CLIENT_ID.
+    google_client_id: Optional[str] = None
 
     # Fernet master key; auto-generated on first run if unset.
     encryption_key: Optional[str] = None

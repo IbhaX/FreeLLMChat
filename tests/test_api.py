@@ -21,8 +21,11 @@ def test_models_lists_auto_aliases():
 
 
 def test_admin_requires_token():
+    """Writes need ADMIN_TOKEN; read-only dashboard GETs are open in
+    single-tenant mode (auth off) and to signed-in users when auth is on."""
     with TestClient(app) as c:
-        assert c.get("/admin/providers").status_code == 401
+        assert c.get("/admin/providers").status_code == 200
+        assert c.post("/admin/providers", json={}).status_code == 401
         assert c.get("/admin/providers", headers=ADMIN).status_code == 200
 
 
@@ -49,21 +52,19 @@ def test_duplicate_key_skipped():
         assert r.json()["skipped"] == 1
 
 
-def test_gateway_key_guard(monkeypatch):
+def test_user_auth_guard(monkeypatch):
+    """With auth required, /v1 needs a user session — anonymous 401s,
+    a registered user's token passes."""
     from app.config import get_settings
 
-    get_settings.cache_clear()
-    monkeypatch.setenv("GATEWAY_API_KEY", "secret")
-    get_settings.cache_clear()
-    try:
-        with TestClient(app) as c:
-            assert c.get("/v1/models").status_code == 401
-            assert c.get(
-                "/v1/models", headers={"Authorization": "Bearer secret"}
-            ).status_code == 200
-    finally:
-        monkeypatch.delenv("GATEWAY_API_KEY", raising=False)
-        get_settings.cache_clear()
+    monkeypatch.setattr(get_settings(), "auth_required", True)
+    with TestClient(app) as c:
+        assert c.get("/v1/models").status_code == 401
+        r = c.post("/v1/auth/register", json={
+            "username": "api-guard-user", "password": "password123"})
+        assert r.status_code == 201, r.text
+        assert c.get("/v1/models", headers={
+            "X-User-Token": r.json()["token"]}).status_code == 200
 
 
 def test_undecryptable_key_flagged():

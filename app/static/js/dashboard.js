@@ -23,13 +23,16 @@ async function refresh(){
     ['Keys healthy',stats.keys_healthy+'/'+stats.keys_total,ICONS.key],
     ['In cooldown',stats.keys_in_cooldown,ICONS.cd],
   ].map(([l,v,i])=>`<div class="ui-card stat-card"><div class="ico">${i}</div><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+  if(window.NovaMotion&&!refresh._statsPainted){refresh._statsPainted=1;
+    NovaMotion.stagger(document.querySelectorAll('#stats .stat-card'),{y:14,dur:.35,stagger:.05});}
+  if(window.NovaMotion)NovaMotion.liftAll('#stats .stat-card',null,{y:-3});
 
   const fmtTok=n=>n==null?'—':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'k':n;
   document.querySelector('#budget tbody').innerHTML=(stats.token_budget||[]).map(b=>{
     const pct=b.est_daily?Math.min(100,(b.used_24h/b.est_daily)*100):null;
     const bar=pct==null?'<span class="tx-3 t-xs">no estimate</span>':
       `<div style="background:var(--bg-3,#222);border-radius:6px;height:8px;overflow:hidden">
-        <div style="width:${pct.toFixed(1)}%;height:100%;background:${pct>85?'var(--danger,#e5484d)':pct>60?'var(--warn,#f5a524)':'var(--accent,#7c5cff)'}"></div>
+        <div class="budget-fill" style="width:${pct.toFixed(1)}%;height:100%;background:${pct>85?'var(--danger,#e5484d)':pct>60?'var(--warn,#f5a524)':'var(--accent,#7c5cff)'}"></div>
       </div><div class="tx-3 t-xs" style="margin-top:3px">${pct.toFixed(1)}% used</div>`;
     return `<tr><td><b>${esc(b.provider)}</b></td><td>${b.keys}</td>
       <td>${fmtTok(b.used_24h)}</td><td>${b.est_daily?'~'+fmtTok(b.est_daily):'—'}</td><td>${bar}</td></tr>`;
@@ -46,7 +49,7 @@ async function refresh(){
     <td><b>${esc(p.name)}</b><br><span class="tx-3 t-xs">${esc(p.display_name)}</span></td>
     <td class="tx-2">${p.rotation_strategy}</td><td>${p.key_count}</td><td>${p.healthy_key_count}</td>
     <td class="tx-3 t-xs">${fmt.limits(p.limits)}</td>
-    <td><div class="actions">
+    <td><div class="actions" data-admin="1">
       <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="toggleP('${p.name}',${!p.enabled})">${p.enabled?'disable':'enable'}</button>
       <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="refreshModels('${p.name}')">refresh models</button>
     </div></td>
@@ -79,7 +82,7 @@ async function refresh(){
       <td>${k.daily_request_count}</td><td>${k.daily_token_count}</td>
       <td class="tx-3">${k.cooldown_until?fmt.time(k.cooldown_until):'—'}</td>
       <td><span class="pill ${status[0]}"${undecryptable?' title="ENCRYPTION_KEY changed — delete and re-enter this key"':''}>${status[1]}</span></td>
-      <td><div class="actions">
+      <td><div class="actions" data-admin="1">
         <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="testKey(${k.id})">test</button>
         <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="resetKey(${k.id})">reset</button>
         <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="toggleK(${k.id},${!k.enabled})">${k.enabled?'disable':'enable'}</button>
@@ -105,6 +108,17 @@ async function refresh(){
     <td><span class="pill ${r.status==='ok'?'ok':'bad'}">${r.status}</span></td>
     <td class="tx-2">${r.latency_ms?Math.round(r.latency_ms):'—'}</td></tr>
     <tr class="rq-detail" style="display:none"><td colspan="7"><div class="rq-grid">${reqMeta(r)}</div></td></tr>`).join('');
+  window.NovaAuth&&NovaAuth.applyRoleNav();
+  if(window.NovaMotion&&window.gsap){
+    /* Budget bars sweep in on each refresh — cheap transform-only anim. */
+    document.querySelectorAll('#budget .budget-fill').forEach((b,i)=>{
+      if(b._mo)return;b._mo=1;
+      gsap.fromTo(b,{scaleX:0},{scaleX:1,transformOrigin:'left center',
+        duration:.55,ease:'power3.out',delay:i*.04,clearProps:'transform'});
+    });
+    if(!refresh._rowsPainted){refresh._rowsPainted=1;
+      NovaMotion.stagger(document.querySelectorAll('#reqs .rq-row'),{y:8,dur:.25,stagger:.02});}
+  }
   document.querySelectorAll('#reqs .rq-row').forEach(row=>row.onclick=()=>{
     const d=row.nextElementSibling,open=d.style.display!=='none';
     d.style.display=open?'none':'table-row';row.classList.toggle('open',!open);
@@ -128,6 +142,8 @@ async function testKey(id){const r=await adminApi(`/admin/keys/${id}/test`,{meth
 async function refreshModels(name){const r=await adminApi(`/admin/providers/${name}/refresh-models`,{method:'POST'});
   toast(`${r.count} models cached`,'ok');}
 
-window.addEventListener('admin-ready',refresh);
-setInterval(()=>{if(document.getElementById('loginGate').style.display==='none')refresh();},15000);
+window.addEventListener('admin-ready',()=>refresh().catch(e=>{
+  if(e.status===403)AdminShell.restricted();
+  else toast(e.message||'Failed to load','err');}));
+setInterval(()=>{const d=document.getElementById('adminDot');if(d&&d.classList.contains('ok'))refresh();},15000);
 if(innerWidth<=820)document.getElementById('menuBtn').style.display='grid';

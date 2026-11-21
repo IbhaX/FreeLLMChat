@@ -1,5 +1,5 @@
 /* ==========================================================================
-   FreeLLM Gateway — Design System
+   Nova Gateway — Design System
    Token-driven theme + reusable component classes.
    Dark = deep charcoal + indigo. Light = soft off-white.
    ========================================================================== */
@@ -107,6 +107,7 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.2}
 }
 .ui-textarea{resize:vertical;min-height:72px;line-height:1.5}
 .ui-input.err,.ui-textarea.err{border-color:var(--error)}
+.ui-input:disabled{opacity:.55;cursor:not-allowed}
 .ui-input.err:focus{box-shadow:0 0 0 3px var(--error-soft)}
 .ui-select{cursor:pointer}
 .field{margin-bottom:14px}
@@ -175,6 +176,7 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.2}
   border-radius:var(--r-lg);box-shadow:var(--shadow-1);
 }
 .ui-card-pad{padding:16px 18px}
+.ui-card-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ui-card-hover{transition:box-shadow .2s,transform .2s,border-color .2s}
 .ui-card-hover:hover{box-shadow:var(--shadow-3);transform:translateY(-2px);border-color:var(--border-2)}
 .ui-panel{
@@ -483,6 +485,11 @@ body:not(.has-shell) .app-topnav{display:flex}
 @media(max-width:820px){.app-topnav{display:flex}}
 /* Mobile: collapse link strip to brand + hamburger */
 .app-topnav .tn-burger{display:none;margin-left:auto;flex:none}
+/* Signed-in chip stays pinned while the link strip scrolls under it —
+   otherwise it overflows off the right edge on narrow windows. */
+.app-topnav .tn-user{position:sticky;right:0;flex:none;margin-left:auto;
+  background:var(--bg-1);padding-left:10px;
+  box-shadow:-8px 0 8px -6px var(--bg-1)}
 @media(max-width:820px){
   .app-topnav .tn-link{display:none}
   .app-topnav .tn-burger{display:grid}
@@ -520,6 +527,40 @@ body:has(.app-topnav) .sh-top-in>#appNavBtn{display:none}
 .nova-dialog-field{display:grid;gap:6px;margin:16px 0;font-size:var(--t-sm)}
 .nova-dialog-field:has(> input[type="checkbox"]){display:flex;align-items:center;justify-content:space-between}
 .nova-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:24px;flex-wrap:wrap}
+.ua-dialog{width:min(520px,calc(100vw - 32px))}
+.ua-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.ua-t{display:grid;gap:6px;padding:0;background:none;border:0;cursor:pointer;
+  color:var(--text-3);font:inherit}
+.ua-pv{display:block;height:52px;border-radius:10px;background:var(--swb);
+  border:1px solid var(--border-2);position:relative;overflow:hidden;
+  transition:border-color .15s,box-shadow .15s}
+.ua-pv i{position:absolute;background:var(--sws);border-radius:4px}
+.ua-pv i:nth-child(1){left:8%;top:16%;width:42%;height:20%}
+.ua-pv i:nth-child(2){left:8%;top:50%;width:26%;height:22%;background:var(--swa)}
+.ua-pv i:nth-child(3){right:8%;top:16%;width:20%;height:56%;border-radius:6px}
+.ua-t.sel .ua-pv{border-color:var(--accent);box-shadow:var(--ring)}
+.ua-t:hover .ua-pv{border-color:var(--border-3)}
+.ua-nm{font-size:var(--t-xs);text-align:center}
+.ua-t.sel .ua-nm{color:var(--text-1)}
+.ua-cap{font-size:var(--t-sm);color:var(--text-2);margin:18px 0 8px}
+.ua-acc{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ua-acc input[type="color"]{width:44px;height:32px;padding:0;
+  border:1px solid var(--border-2);border-radius:8px;background:none;cursor:pointer}
+.ua-acc input[type="color"]::-webkit-color-swatch-wrapper{padding:2px}
+.ua-acc input[type="color"]::-webkit-color-swatch{border:0;border-radius:5px}
+.ua-acc input[type="color"]::-moz-color-swatch{border:0;border-radius:5px}
+.ua-presets{display:flex;gap:6px;flex-wrap:wrap}
+.ua-dot{width:22px;height:22px;border-radius:50%;padding:0;cursor:pointer;
+  border:1px solid var(--border-3);transition:transform .12s}
+.ua-dot:hover{transform:scale(1.15)}
+.ua-reset{margin-left:auto}
+@media(max-width:520px){.ua-grid{grid-template-columns:repeat(2,1fr)}}
+.set-acc{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.set-acc-chip{display:inline-flex;align-items:center;gap:6px;font-size:var(--t-xs);
+  color:var(--text-2);border:1px solid var(--border-2);border-radius:999px;padding:4px 10px}
+.set-acc-chip i{width:10px;height:10px;border-radius:50%;flex:none}
+.set-acc-x{background:none;border:0;color:var(--accent);cursor:pointer;
+  font:inherit;font-size:var(--t-xs);padding:0;text-decoration:underline}
 .nova-dialog-ms{display:grid;gap:2px;max-height:200px;overflow-y:auto;
   width:100%;border:1px solid var(--line);border-radius:8px;padding:6px;
   background:var(--surface-2)}

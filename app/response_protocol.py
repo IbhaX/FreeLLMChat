@@ -135,6 +135,7 @@ class ComponentType(str, Enum):
     HEATMAP = "heatmap"
     TAGCLOUD = "tagcloud"
     PERSON_CARD = "person_card"
+    PERSON_CAROUSEL = "person_carousel"
     ARCHITECTURE_DIAGRAM = "architecture_diagram"
     FLOWCHART = "flowchart"
     # Text primitives — so a reply can be composed ENTIRELY of components,
@@ -473,8 +474,16 @@ def component_schemas() -> dict[str, dict[str, Any]]:
         },
         ComponentType.PERSON_CARD.value: {
             "required": ["name"],
-            "optional": ["description", "extract", "thumbnail", "url", "source"],
+            "optional": ["description", "extract", "thumbnail", "url",
+                         "source", "qid", "facts", "socials"],
             "description": "A person profile card with photo, bio and source link.",
+        },
+        ComponentType.PERSON_CAROUSEL.value: {
+            "required": ["people"],
+            "optional": ["title"],
+            "description": ("A horizontal carousel of person dossier cards "
+                            "when several profiles match a name; each entry "
+                            "has the person_card shape plus a source pill."),
         },
         ComponentType.HEADING.value: {
             "required": ["text"],
@@ -537,7 +546,8 @@ _COMPONENT_GUIDE: dict[str, dict[str, Any]] = {
     "list": {"when": "bullet or numbered items (features, pros/cons, steps as plain list)", "example": {"title": "Pros", "items": ["Fast setup", "Free tier", "Open source"]}},
     "instructions": {"when": "ordered steps the user should follow", "example": {"title": "Setup", "steps": ["Install the CLI", "Run init", "Add your key"]}},
     "timeline": {"when": "events in chronological order with dates", "example": {"title": "Roadmap", "events": [{"date": "2026 Q1", "title": "Launch", "description": "Public beta"}]}},
-    "person_card": {"when": "a specific person is discussed", "example": {"name": "Ada Lovelace", "description": "Mathematician", "url": "https://en.wikipedia.org/wiki/Ada_Lovelace"}},
+    "person_card": {"when": "a specific person is discussed", "example": {"name": "Ada Lovelace", "description": "Mathematician", "url": "https://en.wikipedia.org/wiki/Ada_Lovelace", "facts": [{"label": "Born", "value": "Dec 10, 1815"}, {"label": "Occupation", "value": "Mathematician"}], "socials": [{"label": "Website", "url": "https://example.com"}]}},
+    "person_carousel": {"when": "several people match a name, or the subject is not a single notable figure", "example": {"people": [{"name": "Jane Doe", "description": "GitHub user", "thumbnail": "https://avatars.example.com/u/1", "url": "https://github.com/janedoe", "source": "github", "facts": [{"label": "Username", "value": "@janedoe"}], "socials": [{"label": "GitHub", "url": "https://github.com/janedoe"}]}]}},
     "search_result": {"when": "web search hits or source list", "example": {"query": "latest AI news", "results": [{"title": "Article", "url": "https://example.com", "snippet": "..."}]}},
     "quote": {"when": "a notable quote with attribution", "example": {"text": "Simplicity is the soul of efficiency.", "author": "Austin Freeman"}},
     "callout": {"when": "warnings, tips, or key takeaways (variant: info|tip|important|warning)", "example": {"variant": "tip", "title": "Note", "message": "Free tiers change often; verify limits."}},

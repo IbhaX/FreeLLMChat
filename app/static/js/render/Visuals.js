@@ -46,9 +46,11 @@
       card.append(head);
       const val = el("div", { class: "nova-metric-value" }, fmtNum(s.value, s.unit));
       if (s.delta != null) {
-        const d = el("span", { class: "nova-metric-delta " + (s.delta >= 0 ? "up" : "down") },
-          (s.delta >= 0 ? "▲ " : "▼ ") + Math.abs(s.delta) + (s.delta_unit || "%"));
-        val.append(d);
+        const dn = Number(s.delta);
+        val.append(Number.isFinite(dn)
+          ? el("span", { class: "nova-metric-delta " + (dn >= 0 ? "up" : "down") },
+            (dn >= 0 ? "▲ " : "▼ ") + Math.abs(dn) + (s.delta_unit || "%"))
+          : el("span", { class: "nova-metric-delta" }, String(s.delta)));
       }
       card.append(val);
       // Percentages get a proportional bar so shares are readable at a glance.

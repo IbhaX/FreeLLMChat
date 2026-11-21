@@ -43,7 +43,7 @@ async def patched_factory(engine, monkeypatch):
 class TestJobLifecycle:
     async def test_stream_replays_and_finishes(self):
         frames = [
-            _frame({"freellm": {"event": "routing", "text": "r"}}),
+            _frame({"nova": {"event": "routing", "text": "r"}}),
             _frame({"choices": [{"delta": {"content": "Hello "}}]}),
             _frame({"choices": [{"delta": {"content": "world"}}]}),
         ]
@@ -56,7 +56,7 @@ class TestJobLifecycle:
     async def test_replace_content_wins(self):
         frames = [
             _frame({"choices": [{"delta": {"content": "raw "}}]}),
-            _frame({"freellm": {"event": "replace_content",
+            _frame({"nova": {"event": "replace_content",
                                 "content": "enforced answer"}}),
         ]
         job = chat_jobs.start("c2", _fake_gen(frames))

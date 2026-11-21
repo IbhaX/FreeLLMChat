@@ -6,5 +6,10 @@
   let selected=fallback;
   try{selected=localStorage.getItem('ui-theme')||fallback;}catch(error){}
   root.dataset.theme=selected;
+  try{
+    const custom=JSON.parse(localStorage.getItem('ui-theme-custom')||'null');
+    if(custom&&custom.vars)for(const k in custom.vars)
+      root.style.setProperty(k,custom.vars[k]);
+  }catch(error){}
 })();
 </script>

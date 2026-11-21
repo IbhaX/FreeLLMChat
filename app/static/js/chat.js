@@ -17,8 +17,8 @@ async function loadModels(silent){
   try{
     const r=await fetch(API_BASE+'/v1/models?usable=1',{headers:apiHeaders()});
     if(r.status===401){
-      localStorage.removeItem('gateway_key');API_KEY='';
-      if(askGatewayKey())return loadModels();
+      const j=await r.json().catch(()=>({}));
+      if(window.NovaAuth)NovaAuth.on401(j);
     }
     if(!r.ok)throw new Error('HTTP '+r.status);
     const data=((await r.json()).data||[]).filter(m=>m.usable!==false);
@@ -148,7 +148,7 @@ function mkConv(name){return{id:Math.random().toString(36).slice(2,9),name,msgs:
 function seed(){
   const c=mkConv('Welcome chat');
   c.msgs.push({role:'assistant',t:Date.now(),
-    text:"Welcome to **Nova Chat** — powered by your FreeLLM Gateway.\n\nTry:\n- Asking me anything (I stream replies)\n- Typing `/` for commands\n- Agents & modes from **＋** in the message box\n- Switching models in the top bar"});
+    text:"Welcome to **Nova Chat** — powered by your Nova Gateway.\n\nTry:\n- Asking me anything (I stream replies)\n- Typing `/` for commands\n- Agents & modes from **＋** in the message box\n- Switching models in the top bar"});
   state.conversations.push(c);state.current=c;
 }
 
@@ -278,6 +278,11 @@ function renderSidebar(filter=''){
     el.onclick=()=>{state.current=c;renderAll();checkLive(c);if(innerWidth<1024)closeSidebar();};
     list.appendChild(el);
   }
+  if(!renderSidebar._painted&&convs.length){
+    renderSidebar._painted=1;
+    if(window.NovaMotion)NovaMotion.stagger(list.querySelectorAll('.conv'),
+      {x:-8,y:0,dur:NovaMotion.D.fast,stagger:.03});
+  }
 }
 function delConv(c){
   state.conversations=state.conversations.filter(x=>x!==c);
@@ -290,7 +295,13 @@ function renderChat(){
   const inner=$('#chatInner');inner.innerHTML='';
   const c=state.current;
   $('#chatName').textContent=c.name;
-  if(!c.msgs.length){inner.appendChild(heroEl());return;}
+  if(!c.msgs.length){const h=heroEl();inner.appendChild(h);
+    if(window.NovaMotion){
+      NovaMotion.enter(h.querySelector('.hero'),{y:10});
+      NovaMotion.stagger(h.querySelectorAll('.hero-cards > *'),
+        {y:14,dur:NovaMotion.D.med,stagger:.06,delay:.08});
+      NovaMotion.liftAll('.hero-cards > *',h);
+    }return;}
   for(const m of c.msgs)inner.appendChild(msgEl(m));
   scrollBottom(false);
 }
@@ -639,8 +650,8 @@ async function streamAPIReply(c,live){
   try{
     let resp=await doFetch();
     if(resp.status===401){
-      localStorage.removeItem('gateway_key');API_KEY='';
-      if(askGatewayKey())resp=await doFetch();
+      const j=await resp.json().catch(()=>({}));
+      if(window.NovaAuth)NovaAuth.on401(j);
     }
     if(!resp.ok||!resp.body){
       const errText=await resp.text().catch(()=>'');
@@ -666,7 +677,7 @@ async function streamAPIReply(c,live){
         if(data==='[DONE]')continue;
         try{
           const j=JSON.parse(data);
-          if(j.freellm){const ev=j.freellm;
+          if(j.nova){const ev=j.nova;
             if(ev.event==='replace_content'){acc=ev.content||'';msg.text=collapseRepeats(acc);
               if(sr)sr.setText(acc);else if(bubble){bubble.innerHTML=md(acc)+'<span class="cursor"></span>';scrollBottom();}
               continue;}
@@ -758,13 +769,9 @@ const SLASH=[
   {cmd:'/clear',desc:'Clear all messages'},
 ];
 async function adminFetch(path,opts={}){
-  let r=await fetch(API_BASE+path,{...opts,headers:apiHeaders(true)});
-  if(r.status===401){
-    const t=prompt('Admin token required (ADMIN_TOKEN):');
-    if(t){ADMIN_TOKEN=t;sessionStorage.setItem('admin_token',t);
-      r=await fetch(API_BASE+path,{...opts,headers:apiHeaders(true)});}
-  }
-  return r;
+  // Admin ops ride on the user session (X-User-Token); a 401/403 means
+  // the account lacks the admin role — never prompt for a second password.
+  return fetch(API_BASE+path,{...opts,headers:apiHeaders(true)});
 }
 function renderSlash(q){
   const menu=$('#slashMenu');
@@ -1001,8 +1008,8 @@ async function streamGroupReply(c,live){
       ?()=>fetch(API_BASE+'/v1/conversations/'+c.id+'/live/stream',{headers:apiHeaders(),signal:ctrl.signal})
       :()=>fetch(API_BASE+'/v1/groupchat/stream',{method:'POST',headers:apiHeaders(),signal:ctrl.signal,body:JSON.stringify(payload)});
     let resp=await doFetch();
-    if(resp.status===401){localStorage.removeItem('gateway_key');API_KEY='';
-      if(askGatewayKey())resp=await doFetch();}
+    if(resp.status===401){const j=await resp.json().catch(()=>({}));
+      if(window.NovaAuth)NovaAuth.on401(j);}
     if(!resp.ok||!resp.body){
       const et=await resp.text().catch(()=>'');throw new Error(`HTTP ${resp.status} ${et.slice(0,200)}`);}
     const reader=resp.body.getReader(),dec=new TextDecoder();
@@ -1019,7 +1026,7 @@ async function streamGroupReply(c,live){
         if(data==='[DONE]')continue;
         try{
           const j=JSON.parse(data);
-          const ev=j.freellm;if(!ev)continue;
+          const ev=j.nova;if(!ev)continue;
           if(ev.event==='agent_start')startTurn(ev.agent);
           else if(ev.event==='agent_message'){
             setStageLive(ev.agent,true);
@@ -1185,8 +1192,8 @@ async function streamResearchReply(c){
   try{
     const doFetch=()=>fetch(API_BASE+'/v1/research/stream',{method:'POST',headers:apiHeaders(),signal:ctrl.signal,body:JSON.stringify(payload)});
     let resp=await doFetch();
-    if(resp.status===401){localStorage.removeItem('gateway_key');API_KEY='';
-      if(askGatewayKey())resp=await doFetch();}
+    if(resp.status===401){const j=await resp.json().catch(()=>({}));
+      if(window.NovaAuth)NovaAuth.on401(j);}
     if(!resp.ok||!resp.body){
       const et=await resp.text().catch(()=>'');throw new Error(`HTTP ${resp.status} ${et.slice(0,200)}`);}
     startTurn();
@@ -1204,7 +1211,7 @@ async function streamResearchReply(c){
         if(data==='[DONE]')continue;
         try{
           const j=JSON.parse(data);
-          const ev=j.freellm;
+          const ev=j.nova;
           if(ev&&ev.event==='research_answer'){answer=ev.answer||answer;meta=ev;continue;}
           if(ev&&ev.event==='error'){addAct({event:'error',text:ev.text});continue;}
           if(ev)addAct(ev);
@@ -1586,6 +1593,12 @@ function collapseRepeats(text){
 // --- Init --------------------------------------------------------------------
 if(!loadState())seed();
 AppNav.attach(document.getElementById('appNavBtn'),'chat');
+/* Message entrances: appended rows (user msg, typing row, streamed reply)
+   fade-rise once; streaming token edits inside a row never retrigger.
+   Long history hydrations only animate the last few rows. */
+if(window.NovaMotion)NovaMotion.watch($('#chatInner'),'.msg-row',
+  {batch:true,max:8,y:12,dur:NovaMotion.D.fast,
+   onEach:el=>NovaMotion.typing(el)});
 renderModels();renderAll();loadModels();refreshTokenMeter();
 // checkLive runs after loadAgents resolves: the restored agent/group mode
 // decides which reader re-attaches to a running job.

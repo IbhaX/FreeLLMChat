@@ -26,16 +26,28 @@ if(themeSeg){
 window.addEventListener('nova:themechange',syncThemeSeg);
 syncThemeSeg();
 
+// accent customization
+const accentChip=$('#accentChip'),accentDot=$('#accentDot'),accentHex=$('#accentHex');
+function syncAccent(){
+  const hex=window.UITheme&&UITheme.accent();
+  if(accentChip)accentChip.hidden=!hex;
+  if(hex){accentDot.style.background=hex;accentHex.textContent=hex;}
+}
+const accentBtn=$('#accentBtn');
+if(accentBtn)accentBtn.onclick=()=>UITheme.pick();
+const accentReset=$('#accentReset');
+if(accentReset)accentReset.onclick=()=>UITheme.clearAccent();
+window.addEventListener('nova:themecustom',syncAccent);
+syncAccent();
+
 // connection
 $('#gwUrl').value=localStorage.getItem('gateway_url')||'';
-$('#gwKey').value=localStorage.getItem('gateway_key')||'';
 $('#admTok').value=sessionStorage.getItem('admin_token')?'••••••••':'';
 
 function saveConn(){
-  const u=$('#gwUrl').value.trim(),k=$('#gwKey').value.trim();
+  const u=$('#gwUrl').value.trim();
   if(u)localStorage.setItem('gateway_url',u);else localStorage.removeItem('gateway_url');
-  if(k)localStorage.setItem('gateway_key',k);else localStorage.removeItem('gateway_key');
-  API_BASE=u;API_KEY=k;
+  API_BASE=u;
   toast('Connection saved','ok');
 }
 async function testConn(){
@@ -53,13 +65,19 @@ function saveTok(){
   if(!v||v==='••••••••')return;
   ADMIN_TOKEN=v;sessionStorage.setItem('admin_token',v);
   toast('Admin token updated — verifying…');
-  adminApi('/admin/stats').then(()=>{AdminShell.unlock();toast('Token verified','ok');})
+  adminApi('/admin/stats').then(()=>{toast('Token verified','ok');})
     .catch(()=>toast('Token rejected','err'));
 }
 
 // provider defaults accordion
+const _denied='<div class="t-sm tx-3">Requires the admin role — your account sees appearance and account settings only.</div>';
 async function loadProviders(){
-  PROVIDERS=await adminApi('/admin/providers');
+  try{PROVIDERS=await adminApi('/admin/providers');}
+  catch(e){
+    if(e.status===403){$('#provAcc').innerHTML=_denied;return;}
+    $('#provAcc').innerHTML='<div class="t-sm" style="color:var(--error)">'+esc(e.message)+'</div>';
+    return;
+  }
   $('#provAcc').innerHTML=PROVIDERS.map(p=>`
     <details class="ui-acc" style="margin-bottom:8px">
       <summary>
@@ -116,9 +134,16 @@ async function addProvider(){
 
 // system info
 async function loadSys(){
-  const [h,st]=await Promise.all([
-    fetch(API_BASE+'/healthz').then(r=>r.json()).catch(()=>null),
-    adminApi('/admin/stats')]);
+  let h,st;
+  try{
+    [h,st]=await Promise.all([
+      fetch(API_BASE+'/healthz').then(r=>r.json()).catch(()=>null),
+      adminApi('/admin/stats')]);
+  }catch(e){
+    $('#sysInfo').innerHTML=e.status===403?_denied
+      :'<div class="t-sm" style="color:var(--error)">'+esc(e.message)+'</div>';
+    return;
+  }
   $('#sysInfo').innerHTML=[
     ['Status',h?'● online':'● down',h?'ok':'bad'],
     ['Total requests',st.total_requests],
@@ -173,7 +198,10 @@ async function delMem(id){
   if(r.ok||r.status===204){loadMem();toast('Memory deleted');}else toast('Delete failed','err');
 }
 
-window.addEventListener('admin-ready',()=>{loadProviders();loadSys();loadMem();loadCI();});
+window.addEventListener('admin-ready',()=>{
+  if(window.NovaMotion)NovaMotion.stagger(
+    document.querySelectorAll('.set-card'),{y:14,dur:.35,stagger:.05});
+  loadProviders();loadSys();loadMem();loadCI();});
 if(innerWidth<=820)document.getElementById('menuBtn').style.display='grid';
 
 /* ---- Account (user auth + plan + usage) ---- */
