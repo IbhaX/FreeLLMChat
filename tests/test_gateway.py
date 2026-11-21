@@ -340,8 +340,8 @@ async def test_model_fault_tries_next_model_without_cooling(session, monkeypatch
     assert k1.cooldown_until is None
 
 
-async def test_auto_backstops_on_local_ollama(session, monkeypatch):
-    """auto must land locally when every cloud provider fails."""
+async def test_auto_does_not_implicitly_fall_back_to_local_ollama(session, monkeypatch):
+    """Auto stays hosted-only even if a local Ollama key is available."""
     import app.routing.fallback as fb
 
     p1 = await _provider(session, "p1", "https://p1.example/v1", ["m1"])
@@ -356,18 +356,18 @@ async def test_auto_backstops_on_local_ollama(session, monkeypatch):
         respx.post("https://p1.example/v1/chat/completions").mock(
             return_value=httpx.Response(429, json={"error": "rate limited"})
         )
-        respx.post("http://localhost:11434/v1/chat/completions").mock(
-            return_value=httpx.Response(200, json=_ok_payload("llama3.2:1b"))
-        )
+        local = respx.post("http://localhost:11434/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_ok_payload("llama3.2:1b")))
         gw = Gateway()
-        result, provider, key, model = await gw.chat(
-            session, {"model": "auto",
-                      "messages": [{"role": "user", "content": "hi"}]}
-        )
-        await gw.close()
+        try:
+            with pytest.raises(GatewayExhausted):
+                await gw.chat(
+                    session, {"model": "auto",
+                              "messages": [{"role": "user", "content": "hi"}]})
+        finally:
+            await gw.close()
 
-    assert provider.name == "ollama"
-    assert model == "llama3.2:1b"
+    assert local.call_count == 0
 
 
 async def test_auto_budget_scales_with_plan(session, monkeypatch):

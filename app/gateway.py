@@ -496,10 +496,9 @@ class Gateway:
         - Each provider carries up to 3 model alternates (curated
           ``default_models`` first) so a model-level rejection retries the
           next model instead of abandoning the provider.
-        - On ``auto*`` the local ``ollama`` provider is appended last as a
-          backstop, so requests still land when every cloud provider fails.
+        - Auto routes follow their configured provider chain only. A locally
+          hosted Ollama instance is never added implicitly.
         """
-        is_auto = requested.startswith("auto")
         groups: dict[str, tuple[Provider, list[str]]] = {}
         for p, m in candidates:
             entry = groups.setdefault(p.name, (p, []))
@@ -513,30 +512,17 @@ class Gateway:
                 continue
             min_fail = min(k.consecutive_failures or 0 for k in healthy)
             scored.append((min_fail, chain_idx, p, models))
-        # Strict chain order — the configured fallback order is the policy
-        # (e.g. groq -> openrouter -> ... -> ollama last resort). Providers
+        # Strict chain order — the configured fallback order is the policy.
+        # Providers
         # with no live key are already filtered above; consecutive-failure
         # counts only decide which key within a provider is tried first.
         scored.sort(key=lambda t: t[1])
 
         plan: list[tuple[Provider, list[str]]] = []
-        ollama_entry: tuple[Provider, list[str]] | None = None
         for _f, _i, p, models in scored:
-            entry = (p, self._order_models(p, models))
-            if is_auto and p.name == "ollama":
-                ollama_entry = entry
+            if requested.startswith("auto") and p.name == "ollama":
                 continue
-            plan.append(entry)
-
-        if is_auto and ollama_entry is None:
-            # Local backstop not in the fallback chain — add it if alive.
-            catalog = await self.provider_catalog(session)
-            if "ollama" in catalog:
-                p, models = catalog["ollama"]
-                if models and await self.rotator.healthy_keys(session, p):
-                    ollama_entry = (p, self._order_models(p, list(models)))
-        if ollama_entry is not None:
-            plan.append(ollama_entry)
+            plan.append((p, self._order_models(p, models)))
         return plan
 
     _SIZE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*b(?:illion)?\b", re.I)

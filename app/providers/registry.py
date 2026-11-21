@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models import Provider
+from app.providers.ai_horde import AIHordeAdapter
 from app.providers.base import BaseAdapter
 from app.providers.cloudflare import CloudflareAdapter
 from app.providers.gemini import GeminiAdapter
@@ -20,6 +21,7 @@ from app.providers.openai_compat import OpenAICompatAdapter
 
 ADAPTERS: dict[str, type[BaseAdapter]] = {
     "openai_compat": OpenAICompatAdapter,
+    "ai_horde": AIHordeAdapter,
     "gemini": GeminiAdapter,
     "cloudflare": CloudflareAdapter,
     "ollama": OllamaAdapter,
@@ -105,9 +107,8 @@ async def seed_providers(session: AsyncSession) -> int:
     await session.commit()
 
     # Import env-var keys for providers that have none yet.
-    from app.services.keys import add_key
-
     from app.models import ApiKey
+    from app.services.keys import add_key
 
     for provider in (await session.execute(select(Provider))).scalars().all():
         has_keys = (
@@ -118,10 +119,10 @@ async def seed_providers(session: AsyncSession) -> int:
         if has_keys:
             continue
         if provider.auth_style == "none":
-            # Keyless providers (e.g. local Ollama) still need a key row so
-            # rotation can pick them; the placeholder is never sent upstream.
+            # Keyless providers still need a key row for rotation. Adapters
+            # translate this internal placeholder when required.
             await add_key(
-                session, provider, "ollama-local", label="local (no key needed)"
+                session, provider, "ollama-local", label="no key required"
             )
             continue
         if not provider.default_env_key:

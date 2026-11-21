@@ -620,7 +620,26 @@ providers:
     verified_on: "2026-11-10"
     pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "free tier"}
 
+  - name: ai-horde
+    display_name: AI Horde (community-hosted)
+    adapter: ai_horde
+    base_url: https://oai.aihorde.net/v1
+    auth_style: none
+    default_models: []
+    limits: {request_timeout_s: 180}
+    requires_card: false
+    commercial_ok: false
+    rotation_strategy: round_robin
+    auto_route_tags: [general]
+    docs_url: https://oai.aihorde.net/
+    notes: >-
+      Free volunteer-hosted inference with live model discovery. Anonymous access
+      uses the lowest queue priority, so worker availability and response latency
+      vary. A registered Horde API key can optionally be added in Admin → Keys.
+    verified_on: "2026-11-21"
+    pricing: {input_per_mtok: 0.0, output_per_mtok: 0.0, currency: USD, note: "community-hosted; queue and availability vary"}
+
 fallback:
-  auto: [groq, openrouter, mistral, nvidia, gemini, cerebras, sambanova, deepseek, huggingface, siliconflow, requesty, modelscope, zhipu, inception, nous-research, deepinfra, hyperbolic, fireworks, nebius, cloudflare, typhoon, stepfun, baichuan, hunyuan, doubao, novita, friendliai, sealion, ollama-cloud, cohere, ollama]
-  "auto:coding": [groq, openrouter, mistral, nvidia, cerebras, deepseek, gemini, sambanova, siliconflow, zhipu, inception, requesty, cloudflare, cohere, ollama]
-  "auto:fast": [groq, openrouter, nvidia, cerebras, inception, gemini, cloudflare, mistral, fireworks, cohere, ollama]
+  auto: [groq, openrouter, mistral, nvidia, gemini, cerebras, sambanova, deepseek, huggingface, siliconflow, requesty, modelscope, zhipu, inception, nous-research, deepinfra, hyperbolic, fireworks, nebius, cloudflare, typhoon, stepfun, baichuan, hunyuan, doubao, novita, friendliai, sealion, ollama-cloud, cohere, ai-horde]
+  "auto:coding": [groq, openrouter, mistral, nvidia, cerebras, deepseek, gemini, sambanova, siliconflow, zhipu, inception, requesty, cloudflare, cohere]
+  "auto:fast": [groq, openrouter, nvidia, cerebras, inception, gemini, cloudflare, mistral, fireworks, cohere]
