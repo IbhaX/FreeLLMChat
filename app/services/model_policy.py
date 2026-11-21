@@ -123,16 +123,34 @@ def pinned_request_model(payload: dict[str, Any]) -> str | None:
 
 def failover_note(emit: Callable[[dict[str, Any]], None] | None,
                   requested: str,
-                  error: BaseException | str | None = None) -> None:
-    """Activity note shown when a pinned provider is being bypassed.
+                  error: BaseException | str | None = None,
+                  resolved: str | None = None) -> None:
+    """Activity note shown when a pinned provider is bypassed.
     Credit/quota exhaustion is named explicitly — the user should see it
-    is a billing problem, not a transient outage."""
-    if emit is not None:
-        from app.providers.base import is_billing_failure
-        reason = " — provider out of credit" if is_billing_failure(error) else ""
-        emit({"event": "note",
-              "text": f"{requested} unavailable{reason}; "
-                      "trying another provider"})
+    is a billing problem, not a transient outage. ``resolved`` is the
+    model that actually served the request; emitted only once the
+    outcome is known so the note never claims a failover that landed
+    back on the same provider."""
+    if emit is None:
+        return
+    from app.providers.base import is_billing_failure
+    reason = " — provider out of credit" if is_billing_failure(error) else ""
+    if resolved and resolved != requested:
+        tail = f" — served by {resolved}"
+    elif resolved:
+        tail = " — retry succeeded"
+    else:
+        tail = ""
+    emit({"event": "note",
+          "text": f"{requested} unavailable{reason}{tail}"})
+
+
+def _via_label(res: tuple[Any, Any, Any, Any]) -> str:
+    """``provider/model`` label for a gateway result tuple."""
+    prov, model = res[1], res[3]
+    pname = str(getattr(prov, "id", "") or getattr(prov, "name", "") or "")
+    label = str(model or "")
+    return f"{pname}/{label}" if pname and label else label or pname
 
 
 async def chat_or_auto(
@@ -148,9 +166,14 @@ async def chat_or_auto(
         pinned = pinned_request_model(payload)
         if pinned is None:
             raise
-        failover_note(emit, pinned, e)
-        return await gateway.chat(session, {**payload, "model": "auto"},
-                                  on_event=emit)
+        try:
+            out = await gateway.chat(session, {**payload, "model": "auto"},
+                                     on_event=emit)
+        except Exception:
+            failover_note(emit, pinned, e)
+            raise
+        failover_note(emit, pinned, e, resolved=_via_label(out))
+        return out
 
 
 async def chat_stream_or_auto(
@@ -165,9 +188,14 @@ async def chat_stream_or_auto(
         pinned = pinned_request_model(payload)
         if pinned is None:
             raise
-        failover_note(emit, pinned, e)
-        return await gateway.chat_stream(
-            session, {**payload, "model": "auto"}, on_event=emit)
+        try:
+            out = await gateway.chat_stream(
+                session, {**payload, "model": "auto"}, on_event=emit)
+        except Exception:
+            failover_note(emit, pinned, e)
+            raise
+        failover_note(emit, pinned, e, resolved=_via_label(out))
+        return out
 
 
 class SSEDeltaParser:

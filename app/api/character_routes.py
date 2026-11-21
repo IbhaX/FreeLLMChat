@@ -6,13 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_gateway_key
+from app.api.deps import optional_user, require_gateway_key, require_user
 from app.db import get_session
 from app.models import Character, User
 from app.schemas import CharacterIn, CharacterOut, CharacterSyncIn
 from app.services.characters import add_missing
 
-router = APIRouter(prefix="/v1/characters", dependencies=[Depends(require_gateway_key)])
+router = APIRouter(
+    prefix="/v1/characters",
+    dependencies=[Depends(require_gateway_key), Depends(require_user)])
 
 
 def _out(c: Character) -> CharacterOut:

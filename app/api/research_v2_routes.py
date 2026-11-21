@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_gateway_key
+from app.api.deps import optional_user, require_gateway_key, require_user
 from app.db import get_session, get_session_factory
 from app.models import (
     Claim,
@@ -31,7 +31,7 @@ from app.services import research_v2 as rv2
 from app.services.research import classify_depth
 
 router = APIRouter(prefix="/v1/research2",
-                   dependencies=[Depends(require_gateway_key)])
+                   dependencies=[Depends(require_gateway_key), Depends(require_user)])
 
 Depth = Literal["quick", "standard", "deep"]
 

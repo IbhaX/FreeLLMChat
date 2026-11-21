@@ -15,14 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 if TYPE_CHECKING:
     from app.gateway import Gateway
 
-from app.api.deps import require_admin, require_gateway_key
+from app.api.deps import require_admin, require_gateway_key, require_user
 from app.db import get_session
 from app.models import AgentConfig
 from app.schemas import AgentChatRequest, AgentCreate, AgentOut, AgentUpdate
 from app.services.agents import run_agent, stream_agent
 
 # Public chat router (gateway-key protected)
-chat_router = APIRouter(prefix="/v1/agents", dependencies=[Depends(require_gateway_key)])
+chat_router = APIRouter(
+    prefix="/v1/agents",
+    dependencies=[Depends(require_gateway_key), Depends(require_user)])
 # Admin CRUD router
 admin_router = APIRouter(prefix="/admin/agents", dependencies=[Depends(require_admin)])
 

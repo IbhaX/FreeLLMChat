@@ -15,6 +15,7 @@
     const r=await fetch(API_BASE+path,{...opts,headers:{...apiHeaders(false),...(opts.headers||{})}});
     if(r.status===204)return null;
     const j=await r.json().catch(()=>({}));
+    if(r.status===401&&window.NovaAuth&&NovaAuth.on401(j))throw Object.assign(new Error('Authentication required'),{status:401,body:j});
     if(!r.ok)throw Object.assign(new Error(j.detail?.error?.message||j.detail||j.error?.message||('HTTP '+r.status)),{status:r.status,body:j});
     return j;
   };

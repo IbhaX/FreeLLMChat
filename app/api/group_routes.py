@@ -14,12 +14,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_gateway_key
+from app.api.deps import require_gateway_key, require_user
 from app.db import get_session
 from app.models import AgentConfig, SharedConversation
 from app.services.agents import run_agent
 
-router = APIRouter(prefix="/v1", dependencies=[Depends(require_gateway_key)])
+router = APIRouter(
+    prefix="/v1",
+    dependencies=[Depends(require_gateway_key), Depends(require_user)])
 
 ORCHESTRATOR_NAME = "Orchestrator"
 

@@ -9,6 +9,8 @@ os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_TMP}/test.db")
 os.environ["ENCRYPTION_KEY"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="  # noqa
 os.environ["ADMIN_TOKEN"] = "test-admin"
 os.environ["GATEWAY_API_KEY"] = ""
+# Tests exercise /v1 anonymously; auth enforcement is covered explicitly.
+os.environ.setdefault("NOVA_AUTH_REQUIRED", "false")
 os.environ["PROVIDERS_YAML"] = str(Path(__file__).parent.parent / "providers.yaml")
 
 # Prevent env-key seeding from the real .env during tests

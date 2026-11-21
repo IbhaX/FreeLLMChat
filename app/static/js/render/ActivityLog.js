@@ -312,6 +312,7 @@
     const seenEvents = new Set();     // event_id dedupe (replay-safe)
     const MAX_SEEN = 2000;
     let openGroup = null;             // most recent running group
+    let lastNote = null;              // consecutive-note coalescing (rec/title/parent/count)
     let counter = 0;
     let doneCount = 0, total = 0;
     let paused = false;               // user scrolled up
@@ -740,8 +741,22 @@
             // Legacy unidentified events only.
             parentRec = openGroup;
           }
+          // Coalesce a burst of identical notes (provider failover storms)
+          // into one row with a ×N suffix instead of flooding the log.
+          if (data.kind === 'note' && !data.group && lastNote &&
+              lastNote.title === data.title && lastNote.parent === parentRec &&
+              lastNote.rec.el.isConnected) {
+            lastNote.count++;
+            lastNote.rec.el.querySelector('.alog-title').textContent =
+              data.title + ' ×' + lastNote.count;
+            maybeScroll();
+            return;
+          }
           const id = tkey ? 't:' + tkey : ('s' + (++counter));
           const rec = addStep(parentRec, data, id);
+          lastNote = (data.kind === 'note' && !data.group)
+            ? { rec: rec, title: data.title, parent: parentRec, count: 1 }
+            : null;
           rec.el._rec = rec;
           if (tkey) taskIndex.set(tkey, rec);
           if (data.kind !== 'usage') trackStep(data, undefined);

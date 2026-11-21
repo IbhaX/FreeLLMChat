@@ -247,6 +247,11 @@ async def share_page(share_id: str) -> Response:
     return render_page(static_dir=static_dir, name="share.html")
 
 
+@app.get("/login", include_in_schema=False)
+async def login_page() -> Response:
+    return render_page(static_dir=static_dir, name="login.html")
+
+
 @app.get("/healthz")
 async def healthz() -> dict:
     return {"status": "ok"}

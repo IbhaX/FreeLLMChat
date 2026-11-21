@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_gateway_key
+from app.api.deps import require_gateway_key, require_user
 from app.db import get_session
 from app.gateway import Gateway, GatewayExhausted
 from app.logging_config import new_request_id
@@ -28,7 +28,9 @@ from app.services.model_policy import (
 from app.schemas import ChatCompletionRequest
 
 _log = logging.getLogger("freellm.chat")
-router = APIRouter(prefix="/v1", dependencies=[Depends(require_gateway_key)])
+router = APIRouter(
+    prefix="/v1",
+    dependencies=[Depends(require_gateway_key), Depends(require_user)])
 
 
 def _gateway(request: Request) -> Gateway:

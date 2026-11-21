@@ -46,6 +46,7 @@
       try{localStorage.setItem(MODEL_KEY,$('#model').value);}catch(_){}
     });
     $('#runBtn').onclick=runResearch;
+    paintNeural(false);
     $('#stopBtn').onclick=stopResearch;
     $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')runResearch();});
     $('#exportBtn').onclick=exportMd;
@@ -180,8 +181,27 @@
   const saveRun=()=>sessionStorage.setItem(RUN_KEY,JSON.stringify({runId,q:$('#q').value.trim()}));
   const clearRun=()=>sessionStorage.removeItem(RUN_KEY);
 
+  /* Ambient backdrop — GSAP-drifting nodes; runs faster while a run is live. */
+  let neuralTl=null;
+  function paintNeural(live){
+    const backdrop=$('#backdrop');if(backdrop)backdrop.classList.toggle('is-live',live);
+    const nodes=document.querySelectorAll('#backdrop .rs-neural i');
+    if(!window.gsap||!nodes.length)return;
+    if(matchMedia('(prefers-reduced-motion: reduce)').matches){
+      gsap.set(nodes,{clearProps:'transform,opacity'});return;}
+    if(!neuralTl){
+      const spots=[[12,22],[66,12],[86,44],[28,68],[52,38]];
+      nodes.forEach((n,i)=>gsap.set(n,
+        {left:spots[i%spots.length][0]+'%',top:spots[i%spots.length][1]+'%'}));
+      neuralTl=gsap.timeline({repeat:-1,yoyo:true}).to(nodes,
+        {x:42,y:-30,scale:1.7,opacity:.35,duration:4,stagger:.5,ease:'sine.inOut'});
+    }
+    neuralTl.timeScale(live?3:1);
+  }
+
   function beginRunUI(progressText){
-    running=true;$('#runBtn').disabled=true;
+    running=true;paintNeural(true);
+    $('#runBtn').disabled=true;
     $('#runBtn').textContent=progressText||'Researching…';
     $('#stopBtn').style.display='';$('#stopBtn').disabled=false;
     $('#stages').innerHTML='';$('#rxpad').innerHTML='';
@@ -198,7 +218,8 @@
   function endRunUI(){
     if(liveRun){try{liveRun.finish('done');}catch(_){}liveRun=null;}
     if(actLog)actLog.finish();
-    running=false;$('#runBtn').disabled=false;$('#runBtn').textContent='Run research';
+    running=false;paintNeural(false);
+    $('#runBtn').disabled=false;$('#runBtn').textContent='Run research';
     $('#stopBtn').style.display='none';
     clearRun();
   }

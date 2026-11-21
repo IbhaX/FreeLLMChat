@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Sign in — FreeLLM</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  body{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg-1)}
+  .login-card{width:400px;max-width:100%;padding:32px}
+  .login-card .avatar{width:44px;height:44px;border-radius:13px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    display:grid;place-items:center;color:var(--on-accent);font-weight:700;
+    font-size:19px;margin-bottom:16px}
+  .login-card h1{font-size:var(--t-lg);margin-bottom:4px}
+  .login-card .sub{color:var(--text-3);font-size:var(--t-sm);margin-bottom:22px}
+  .login-card .label{display:block;margin-bottom:12px}
+  .login-card .ui-input{width:100%;margin-top:4px}
+  #loginErr{color:var(--error);font-size:var(--t-xs);min-height:16px;margin:10px 0 2px}
+  .login-switch{margin-top:16px;font-size:var(--t-xs);color:var(--text-3);text-align:center}
+  .login-switch button{background:none;border:0;color:var(--accent);cursor:pointer;
+    font:inherit;padding:0;text-decoration:underline}
+  .reg-only{display:none}
+  .reg .reg-only{display:block}
+  .reg .login-only{display:none}
+</style>
+</head>
+<body>
+<div class="ui-card login-card" id="card">
+  <div class="avatar">F</div>
+  <h1 id="title">Welcome back</h1>
+  <p class="sub" id="subtitle">Sign in to continue to FreeLLM.</p>
+  <form id="loginForm" autocomplete="off">
+    <label class="label"><span class="t-xs tx-3">Username</span>
+      <input id="u_name" class="ui-input" required minlength="3" autocomplete="username"></label>
+    <label class="label reg-only"><span class="t-xs tx-3">Display name (optional)</span>
+      <input id="u_disp" class="ui-input" autocomplete="nickname"></label>
+    <label class="label"><span class="t-xs tx-3">Password</span>
+      <input id="u_pass" type="password" class="ui-input" required
+             autocomplete="current-password"></label>
+    <div id="loginErr" role="alert"></div>
+    <button class="ui-btn ui-btn-primary" id="submitBtn" style="width:100%">Sign in</button>
+  </form>
+  <p class="login-switch">
+    <span class="login-only">No account yet?
+      <button type="button" id="toReg">Create one</button></span>
+    <span class="reg-only">Already have an account?
+      <button type="button" id="toLogin">Sign in</button></span>
+  </p>
+</div>
+<script src="/static/js/api.js"></script>
+<script>
+(function(){
+  const card=document.getElementById('card'),form=document.getElementById('loginForm'),
+        err=document.getElementById('loginErr'),btn=document.getElementById('submitBtn');
+  let registering=false;
+  const next=()=>{const p=new URLSearchParams(location.search).get('next');
+    return(p&&p.startsWith('/')&&!p.startsWith('//'))?p:'/chat';};
+  function setMode(reg){
+    registering=reg;card.classList.toggle('reg',reg);
+    document.getElementById('title').textContent=reg?'Create your account':'Welcome back';
+    document.getElementById('subtitle').textContent=reg
+      ?'The first account becomes the administrator of this install.'
+      :'Sign in to continue to FreeLLM.';
+    btn.textContent=reg?'Create account':'Sign in';
+    err.textContent='';
+    document.getElementById('u_pass').autocomplete=reg?'new-password':'current-password';
+  }
+  document.getElementById('toReg').onclick=()=>setMode(true);
+  document.getElementById('toLogin').onclick=()=>setMode(false);
+  form.onsubmit=async e=>{
+    e.preventDefault();err.textContent='';btn.disabled=true;
+    const body={username:document.getElementById('u_name').value.trim(),
+                password:document.getElementById('u_pass').value};
+    if(registering)body.display_name=document.getElementById('u_disp').value.trim();
+    try{
+      const d=await v1Api(registering?'/v1/auth/register':'/v1/auth/login',
+        {method:'POST',body:JSON.stringify(body)});
+      USER_TOKEN=d.token;localStorage.setItem('nova_user_token',d.token);
+      localStorage.setItem('nova_user',JSON.stringify(d.user||{}));
+      location.href=next();
+    }catch(x){err.textContent=x.message||'Sign-in failed';btn.disabled=false;}
+  };
+  // Already signed in? Skip straight through.
+  if(USER_TOKEN)v1Api('/v1/auth/me')
+    .then(d=>{if(d.user)location.replace(next());})
+    .catch(()=>{});
+})();
+</script>
+</body>
+</html>

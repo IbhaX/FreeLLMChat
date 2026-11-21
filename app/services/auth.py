@@ -1,9 +1,8 @@
 """User authentication: accounts, opaque session tokens, plan context.
 
-Optional by design — when ``NOVA_AUTH_REQUIRED`` is false (the default for
-local installs) every request resolves to an anonymous local context and all
-existing single-tenant behavior is preserved. When enabled, protected
-endpoints require a bearer token issued by ``/v1/auth/login``.
+When ``NOVA_AUTH_REQUIRED`` is true (the default) /v1 endpoints require a
+bearer token issued by ``/v1/auth/login``; set it false only for trusted
+single-tenant local installs where anonymous access is acceptable.
 """
 
 from __future__ import annotations
@@ -19,7 +18,15 @@ from sqlalchemy import select
 from app.models import AuthToken, User
 
 TOKEN_TTL_DAYS = int(os.environ.get("NOVA_TOKEN_TTL_DAYS", "30"))
-AUTH_REQUIRED = os.environ.get("NOVA_AUTH_REQUIRED", "").lower() in ("1", "true", "yes")
+
+
+def auth_required() -> bool:
+    """Whether /v1 endpoints require an authenticated user session.
+
+    Sourced from ``Settings.auth_required`` (env ``NOVA_AUTH_REQUIRED`` or
+    .env) — read lazily so tests can flip it without re-importing."""
+    from app.config import get_settings
+    return bool(get_settings().auth_required)
 
 MIN_USERNAME = 3
 MIN_PASSWORD = 8

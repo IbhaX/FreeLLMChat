@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     gateway_api_key: Optional[str] = None
     # Required token for /admin/* endpoints.
     admin_token: str = "admin-change-me"
+    # When true, /v1 app endpoints require a user session token issued by
+    # /v1/auth/login. Env var: NOVA_AUTH_REQUIRED (bool).
+    auth_required: bool = Field(default=True,
+                                validation_alias="NOVA_AUTH_REQUIRED")
 
     # Fernet master key; auto-generated on first run if unset.
     encryption_key: Optional[str] = None

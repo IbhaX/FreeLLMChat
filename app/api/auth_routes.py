@@ -11,7 +11,7 @@ from app.api.deps import optional_user, require_gateway_key, subject_for
 from app.db import get_session_factory
 from app.models import User
 from app.services import usage as usage_svc
-from app.services.auth import (AUTH_REQUIRED, PLAN_LIMITS, authenticate,
+from app.services.auth import (PLAN_LIMITS, authenticate, auth_required,
                                bearer_token, create_user, issue_token,
                                plan_limits, revoke_token)
 
@@ -78,9 +78,9 @@ async def logout(request: Request) -> dict[str, bool]:
 @router.get("/me")
 async def me(user: User | None = Depends(optional_user)) -> dict[str, Any]:
     if not user:
-        return {"user": None, "auth_required": AUTH_REQUIRED,
+        return {"user": None, "auth_required": auth_required(),
                 "plan": "free", "limits": plan_limits("free")}
-    return {"user": _public_user(user), "auth_required": AUTH_REQUIRED,
+    return {"user": _public_user(user), "auth_required": auth_required(),
             "plan": user.plan, "limits": plan_limits(user.plan)}
 
 

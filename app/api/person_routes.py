@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.deps import require_gateway_key
+from app.api.deps import require_gateway_key, require_user
 from app.services.person import lookup_person
 
-router = APIRouter(prefix="/v1/person", dependencies=[Depends(require_gateway_key)])
+router = APIRouter(
+    prefix="/v1/person",
+    dependencies=[Depends(require_gateway_key), Depends(require_user)])
 
 
 @router.get("/lookup")

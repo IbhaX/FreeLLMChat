@@ -65,9 +65,30 @@
       --accent-soft:#f5f5f5;--accent-line:#cccccc;background:#fff;color:#111}
     .msg-actions,.alog-dash,.ui-btn,.alog,.alog-dash{display:none!important}
   }
+  /* Ambient backdrop — accent grid + GSAP-drifting nodes; brighter while a
+     run is live. Decorative only; hidden from print and screen readers. */
+  .rs-backdrop{position:fixed;inset:0;pointer-events:none;z-index:0;
+    overflow:hidden;transition:background 1s}
+  .rs-backdrop.is-live{background:
+    radial-gradient(ellipse at 25% 15%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 55%),
+    radial-gradient(ellipse at 80% 62%,color-mix(in srgb,var(--success) 7%,transparent),transparent 55%)}
+  .rs-neural{position:absolute;inset:0;
+    background-image:
+      repeating-linear-gradient(0deg,color-mix(in srgb,var(--accent) 8%,transparent) 0 1px,transparent 1px 40px),
+      repeating-linear-gradient(90deg,color-mix(in srgb,var(--accent) 8%,transparent) 0 1px,transparent 1px 40px);
+    -webkit-mask-image:radial-gradient(ellipse at 50% 35%,#000 0%,transparent 72%);
+    mask-image:radial-gradient(ellipse at 50% 35%,#000 0%,transparent 72%)}
+  .rs-neural i{position:absolute;width:6px;height:6px;border-radius:50%;
+    background:var(--accent);opacity:.6;
+    box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 15%,transparent),
+      0 0 16px color-mix(in srgb,var(--accent) 50%,transparent)}
+  .ui-main{position:relative;z-index:1}
+  @media print{.rs-backdrop{display:none}}
+  @media (prefers-reduced-motion: reduce){.rs-neural i{display:none}}
 </style>
 </head>
 <body>
+<div class="rs-backdrop" id="backdrop" aria-hidden="true"><div class="rs-neural"><i></i><i></i><i></i><i></i><i></i></div></div>
 <main class="ui-main">
   <div class="ui-page" style="max-width:1200px">
     <div class="ui-pagehead">
@@ -127,6 +148,7 @@
 <script src="/static/js/api.js"></script>
 <script src="/static/js/app-nav.js"></script>
 <script src="/static/js/admin-shell.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
 <script src="/static/js/render/ns.js"></script>
 <script src="/static/js/render/ComponentRegistry.js"></script>
 <script src="/static/js/render/ResponseClassifier.js"></script>

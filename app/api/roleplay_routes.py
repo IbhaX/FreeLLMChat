@@ -10,14 +10,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_gateway_key
+from app.api.deps import optional_user, require_gateway_key, require_user
 from app.db import get_session
 from app.models import RoleplayRoom, User
 from app.services import chat_jobs
 from app.services import roleplay as rp
 
 router = APIRouter(prefix="/v1/roleplay", tags=["roleplay"],
-                   dependencies=[Depends(require_gateway_key)])
+                   dependencies=[Depends(require_gateway_key), Depends(require_user)])
 
 
 class RoomIn(BaseModel):
