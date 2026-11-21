@@ -14,11 +14,11 @@ from sqlalchemy import Integer, case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_admin, require_user_or_admin
+from app.api.deps import optional_user, require_admin, require_user_or_admin
 from app.crypto import decrypt_key
 from app.db import get_session
 from app.gateway import Gateway
-from app.models import ApiKey, KeyUsage, Provider, RequestLog
+from app.models import ApiKey, KeyUsage, Provider, RequestLog, User
 from app.providers.registry import build_adapter, seed_providers
 from app.schemas import (
     KeyBulkTestItem,
@@ -43,6 +43,13 @@ router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
 # or open mode too). Writes and settings stay on `router` behind require_admin.
 user_router = APIRouter(
     prefix="/admin", dependencies=[Depends(require_user_or_admin)])
+
+
+def _memory_owner_id(user: User | None) -> int | None:
+    """Tenant id for SQL memory rows: the authenticated account id, or
+    None for admin-token tooling (which sees only unowned rows). Never
+    derived from request payloads."""
+    return user.id if user is not None else None
 
 
 def _gateway(request: Request) -> Gateway:
@@ -628,11 +635,17 @@ async def put_custom_instructions(
 # ---------- memories ----------
 
 @router.get("/memories")
-async def list_memories(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def list_memories(
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
+) -> list[dict]:
     from app.models import Memory
 
     rows = (
-        await session.execute(select(Memory).order_by(Memory.id.desc()).limit(100))
+        await session.execute(
+            select(Memory)
+            .where(Memory.owner_id == _memory_owner_id(user))
+            .order_by(Memory.id.desc()).limit(100))
     ).scalars().all()
     return [
         {"id": m.id, "content": m.content, "source": m.source,
@@ -643,25 +656,37 @@ async def list_memories(session: AsyncSession = Depends(get_session)) -> list[di
 
 @router.post("/memories", status_code=201)
 async def create_memory(
-    body: dict, session: AsyncSession = Depends(get_session)
+    body: dict, session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
 ) -> dict:
     from app.models import Memory
 
     content = (body.get("content") or "").strip()
     if not content:
         raise HTTPException(400, "content required")
-    m = Memory(content=content, source=body.get("source", "user"))
+    # owner_id comes from verified auth only — an "owner_id"/"user_id"
+    # key in the request body is ignored, never trusted.
+    m = Memory(content=content, source=body.get("source", "user"),
+               owner_id=_memory_owner_id(user))
     session.add(m)
     await session.commit()
     return {"id": m.id, "content": m.content}
 
 
 @router.delete("/memories/{mem_id}", status_code=204)
-async def delete_memory(mem_id: int, session: AsyncSession = Depends(get_session)) -> None:
+async def delete_memory(
+    mem_id: int, session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
+) -> None:
     from app.models import Memory
 
+    # id + owner in the same predicate: a memory owned by another user
+    # resolves to 404 — no existence leak, no cross-tenant delete.
     m = (
-        await session.execute(select(Memory).where(Memory.id == mem_id))
+        await session.execute(
+            select(Memory).where(
+                Memory.id == mem_id,
+                Memory.owner_id == _memory_owner_id(user)))
     ).scalar_one_or_none()
     if m is None:
         raise HTTPException(404, "memory not found")
@@ -670,18 +695,21 @@ async def delete_memory(mem_id: int, session: AsyncSession = Depends(get_session
 
 
 @user_router.get("/memory/graph")
-async def memory_graph() -> dict:
+async def memory_graph(user: User | None = Depends(require_user_or_admin)) -> dict:
     """Node/edge graph of Astra memory for the Memory Explorer page.
 
-    Read-only, user-level (same as /admin/stats): returns real stored
-    memories plus conversation chains and labeled vector-similarity
-    edges. The Astra scan + similarity matmul is synchronous and
-    TTL-cached — run it off the event loop."""
+    Read-only, user-level (same as /admin/stats): returns the *caller's*
+    stored memories plus conversation chains and labeled vector-similarity
+    edges. The Astra scan is filtered by tenant inside the query and the
+    result cache is keyed per-tenant. The scan + matmul is synchronous —
+    run it off the event loop."""
     import asyncio
 
+    from app.services import astra_memory
     from app.services import memory_graph as mg
 
-    return await asyncio.to_thread(mg.graph_cached)
+    return await asyncio.to_thread(
+        mg.graph_cached, astra_memory.tenant_key(user))
 
 
 # ---------- tools (agent plugins) ----------

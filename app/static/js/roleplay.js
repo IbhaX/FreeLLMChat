@@ -1130,9 +1130,8 @@
     const nodeSvg=nodeIds.map(id=>{
       const p=pos[id],isYou=id==='user';
       const c=isYou?{name:'You',emoji:'🧑'}:charById(id);
-      return `<g class="rel-node" data-cid="${id}" transform="translate(${p.x},${p.y})">
-        <circle r="24" fill="${isYou?'#24304a':'#1b2133'}"
-          stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>
+      return `<g class="rel-node${isYou?' you':''}" data-cid="${id}" transform="translate(${p.x},${p.y})">
+        <circle r="24" stroke-width="1.5"/>
         <text y="5" text-anchor="middle" font-size="17">${esc(c.emoji||'🎭')}</text>
         <text y="40" text-anchor="middle" font-size="11.5"
           font-weight="600">${esc(c.name.slice(0,14))}</text></g>`;}).join('');

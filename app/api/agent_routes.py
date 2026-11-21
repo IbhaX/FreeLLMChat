@@ -205,7 +205,7 @@ async def agent_chat(
                                             custom_instructions=custom,
                                             conversation_id=body.conversation_id,
                                             model_override=body.model,
-                                            emit=evq.put_nowait):
+                                            emit=evq.put_nowait, user=_user):
                 while not evq.empty():
                     yield _drain()
                 parts.append(_delta_text(chunk))
@@ -239,7 +239,7 @@ async def agent_chat(
     try:
         result = await run_agent(gw, a, body.message, body.history,
                                  custom_instructions=custom, conversation_id=body.conversation_id,
-                                 model_override=body.model)
+                                 model_override=body.model, user=_user)
     except Exception as e:
         async with factory() as ls:
             await agent_log.finish_run(ls, arun, "failed",

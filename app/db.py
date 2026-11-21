@@ -149,6 +149,15 @@ async def init_db() -> None:
             if u_cols and col not in u_cols:
                 await conn.exec_driver_sql(
                     f"ALTER TABLE users ADD COLUMN {col} {ddl}")
+        # Per-user memory isolation on persistent snippets.
+        mem_cols = {
+            r[1]
+            for r in (await conn.exec_driver_sql(
+                "PRAGMA table_info(memories)")).fetchall()
+        }
+        if mem_cols and "owner_id" not in mem_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE memories ADD COLUMN owner_id INTEGER")
         # Activity-log v2: normalized event fields on the agent ledger.
         ae_cols = {
             r[1]

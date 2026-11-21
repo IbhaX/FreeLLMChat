@@ -14,9 +14,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_user
+from app.api.deps import optional_user, require_user
 from app.db import get_session
-from app.models import AgentConfig, SharedConversation
+from app.models import AgentConfig, SharedConversation, User
 from app.services.agents import run_agent
 
 router = APIRouter(
@@ -95,6 +95,7 @@ async def group_stream(
     body: GroupChatRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
 ):
     """Run a group chat turn: each selected agent answers solo in parallel,
     then the built-in Orchestrator synthesizes one structured reply.
@@ -164,11 +165,12 @@ async def group_stream(
     from app.services.settings_store import get_custom_instructions
 
     custom = await get_custom_instructions(session)
+    tenant = astra_memory.tenant_key(user)
     # astrapy calls are synchronous HTTP — never block the loop on them.
     asyncio.ensure_future(asyncio.to_thread(astra_memory.ensure_collections))
     if conv_id:
         asyncio.ensure_future(asyncio.to_thread(
-            astra_memory.store_short, conv_id, "user", body.message))
+            astra_memory.store_short, tenant, conv_id, "user", body.message))
 
     transcript: list[dict[str, Any]] = list(body.history or [])
     transcript.append({"role": "user", "name": "You", "content": body.message})
@@ -187,14 +189,14 @@ async def group_stream(
             )
         try:
             return a, await run_agent(gw, a, prompt, [], custom_instructions=custom,
-                                  emit=emit)
+                                  emit=emit, user=user)
         except Exception as e:
             return a, f"*(error: {e})*"
 
     async def orchestrate(prompt: str) -> str:
         try:
             return await run_agent(gw, orc, prompt, [], custom_instructions=custom,
-                             emit=emit)
+                             emit=emit, user=user)
         except Exception as e:
             return f"*(orchestrator error: {e})*"
 
@@ -249,7 +251,7 @@ async def group_stream(
                     try:
                         _t = asyncio.ensure_future(run_agent(
                             gw, a, prompt, [], custom_instructions=custom,
-                            emit=emit))
+                            emit=emit, user=user))
                         async for _f in _live(_t):
                             yield _f
                         text = _t.result()
@@ -262,9 +264,9 @@ async def group_stream(
                     prev_name, prev_out = a.name, text
                 if conv_id:
                     asyncio.ensure_future(asyncio.to_thread(
-                        astra_memory.store_short, conv_id, "assistant", prev_out))
+                        astra_memory.store_short, tenant, conv_id, "assistant", prev_out))
                     asyncio.ensure_future(
-                        astra_memory.extract_and_store(gw, body.message, prev_out)
+                        astra_memory.extract_and_store(gw, tenant, body.message, prev_out)
                     )
                 yield _meta({"event": "group_done", "text": "Done"})
                 yield b"data: [DONE]\n\n"
@@ -349,9 +351,9 @@ async def group_stream(
                                    "content": final})
                 if conv_id:
                     asyncio.ensure_future(asyncio.to_thread(
-                        astra_memory.store_short, conv_id, "assistant", final))
+                        astra_memory.store_short, tenant, conv_id, "assistant", final))
                     asyncio.ensure_future(
-                        astra_memory.extract_and_store(gw, body.message, final))
+                        astra_memory.extract_and_store(gw, tenant, body.message, final))
                 yield _meta({"event": "agent_message",
                              "agent": ORCHESTRATOR_NAME, "content": final})
                 yield _meta({"event": "group_done", "text": "Done"})
@@ -404,9 +406,9 @@ async def group_stream(
                                    "content": final})
                 if conv_id:
                     asyncio.ensure_future(asyncio.to_thread(
-                        astra_memory.store_short, conv_id, "assistant", final))
+                        astra_memory.store_short, tenant, conv_id, "assistant", final))
                     asyncio.ensure_future(
-                        astra_memory.extract_and_store(gw, body.message, final))
+                        astra_memory.extract_and_store(gw, tenant, body.message, final))
                 yield _meta({"event": "agent_message",
                              "agent": ORCHESTRATOR_NAME, "content": final})
                 yield _meta({"event": "group_done", "text": "Done"})
@@ -468,9 +470,9 @@ async def group_stream(
                                    "content": final})
                 if conv_id:
                     asyncio.ensure_future(asyncio.to_thread(
-                        astra_memory.store_short, conv_id, "assistant", final))
+                        astra_memory.store_short, tenant, conv_id, "assistant", final))
                     asyncio.ensure_future(
-                        astra_memory.extract_and_store(gw, body.message, final))
+                        astra_memory.extract_and_store(gw, tenant, body.message, final))
                 yield _meta({"event": "agent_message",
                              "agent": ORCHESTRATOR_NAME, "content": final})
                 yield _meta({"event": "group_done", "text": "Done"})
@@ -512,7 +514,7 @@ async def group_stream(
                 f"--- {a.name} ---\n{text}" for a, text in answers
             )
             mem = await asyncio.to_thread(
-                astra_memory.recall_text, body.message, conv_id)
+                astra_memory.recall_text, body.message, tenant, conv_id)
             synth = (
                 f"The user asked:\n{body.message}\n\n"
                 + (f"{mem}\n\n" if mem else "")
@@ -524,7 +526,8 @@ async def group_stream(
             )
             try:
                 _t = asyncio.ensure_future(run_agent(
-                    gw, orc, synth, [], custom_instructions=custom, emit=emit))
+                    gw, orc, synth, [], custom_instructions=custom, emit=emit,
+                    user=user))
                 async for _f in _live(_t):
                     yield _f
                 final = _t.result()
@@ -535,9 +538,9 @@ async def group_stream(
             )
             if conv_id:
                 asyncio.ensure_future(asyncio.to_thread(
-                        astra_memory.store_short, conv_id, "assistant", final))
+                        astra_memory.store_short, tenant, conv_id, "assistant", final))
                 asyncio.ensure_future(
-                    astra_memory.extract_and_store(gw, body.message, final)
+                    astra_memory.extract_and_store(gw, tenant, body.message, final)
                 )
             yield _meta({"event": "agent_message",
                          "agent": ORCHESTRATOR_NAME, "content": final})

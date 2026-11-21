@@ -150,11 +150,27 @@ def ensure_vector_collection() -> None:
         pass
 
 
+async def _run_tenant(session: AsyncSession, run_id: str) -> str:
+    """Tenant key for a research run's evidence: ``u<owner_id>`` from the
+    owning ``ResearchRunV2`` row, ``"anon"`` when the run has no owner.
+    An unknown run id resolves to ``anon`` — evidence can only be written
+    for runs that exist, and anon runs only match anon docs, so an
+    unresolvable run id can never borrow another user's namespace."""
+    from app.models import ResearchRunV2
+
+    try:
+        run = await session.get(ResearchRunV2, run_id)
+    except Exception:
+        run = None
+    owner = getattr(run, "owner_id", None)
+    return f"u{owner}" if owner is not None else astra_memory.ANON_TENANT
+
+
 def _index_evidence(
-    ev: Evidence, *, domain: str, quote: str, summary: str
+    ev: Evidence, *, domain: str, quote: str, summary: str, tenant: str
 ) -> None:
     col = _vector_collection()
-    if col is None:
+    if col is None or not tenant:
         return
     vec_text = f"{summary}\n{quote}"[:VECTORIZE_MAX_CHARS].strip()
     if not vec_text:
@@ -163,6 +179,7 @@ def _index_evidence(
         col.insert_one({
             "_id": ev.id,
             "$vectorize": vec_text,
+            "user_id": tenant,
             "run_id": ev.run_id,
             "question_id": ev.question_id,
             "source_id": ev.source_id,
@@ -174,12 +191,17 @@ def _index_evidence(
         log.debug("astra evidence index failed: %s", e)
 
 
-def delete_run_vectors(run_id: str) -> None:
+def delete_run_vectors(run_id: str, user_id: Optional[str] = None) -> None:
+    """Delete a run's vector docs. When ``user_id`` is provided the tenant
+    filter is included — belt-and-braces over the already-unique run id."""
     col = _vector_collection()
     if col is None:
         return
+    flt: dict[str, Any] = {"run_id": run_id}
+    if user_id:
+        flt["user_id"] = user_id
     try:
-        col.delete_many(filter={"run_id": run_id})
+        col.delete_many(filter=flt)
     except Exception:
         pass
 
@@ -296,10 +318,11 @@ async def add_evidence(
     )
     session.add(ev)
     await session.flush()
+    tenant = await _run_tenant(session, run_id)
     # astrapy insert is synchronous — index off the event loop.
     await asyncio.to_thread(
         _index_evidence, ev, domain=source.domain, quote=quote,
-        summary=ev.summary)
+        summary=ev.summary, tenant=tenant)
     return ev
 
 
@@ -324,17 +347,23 @@ async def recall_evidence(
     limit: int = 10,
 ) -> list[Evidence]:
     """Similarity recall of this run's evidence via Astra $vectorize, with a
-    SQLite LIKE fallback when Astra is unavailable."""
+    SQLite LIKE fallback when Astra is unavailable.
+
+    Tenant-scoped: the Astra filter carries both ``run_id`` and the run
+    owner's ``user_id``, resolved from the ResearchRunV2 row — evidence
+    indexed before tenancy existed (no ``user_id`` field) simply stops
+    matching until the migration stamps or quarantines it."""
     query = (query or "").strip()
     if not query:
         return []
+    tenant = await _run_tenant(session, run_id)
     col = _vector_collection()
     if col is not None:
         try:
             # astrapy is synchronous — keep the event loop free.
             docs = await asyncio.to_thread(
                 col.find,
-                filter={"run_id": run_id},
+                filter={"run_id": run_id, "user_id": tenant},
                 sort={"$vectorize": query[:VECTORIZE_MAX_CHARS]},
                 limit=limit,
                 projection={"_id": 1},

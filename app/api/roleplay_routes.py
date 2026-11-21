@@ -103,22 +103,29 @@ async def create_room(body: RoomIn,
     return _room_out(room)
 
 
-@router.get("/rooms/{rid}")
-async def get_room(rid: int, session: AsyncSession = Depends(get_session)):
+async def _owned_room(session: AsyncSession, rid: int,
+                      user: User | None) -> RoleplayRoom:
+    """Fetch a room AND enforce ownership. A room owned by another user is
+    indistinguishable from a missing one — 404, no existence leak. Rooms
+    with no owner (pre-tenancy legacy) stay readable by anyone."""
     room = await session.get(RoleplayRoom, rid)
-    if not room:
+    if room is None or (room.owner_id is not None
+                        and (user is None or room.owner_id != user.id)):
         raise HTTPException(404, "room not found")
+    return room
+
+
+@router.get("/rooms/{rid}")
+async def get_room(rid: int, session: AsyncSession = Depends(get_session),
+                   user: User | None = Depends(optional_user)):
+    room = await _owned_room(session, rid, user)
     return _room_out(room)
 
 
 @router.delete("/rooms/{rid}")
 async def delete_room(rid: int, session: AsyncSession = Depends(get_session),
                       user: User | None = Depends(optional_user)):
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
-    if room.owner_id is not None and (not user or room.owner_id != user.id):
-        raise HTTPException(403, "not your room")
+    room = await _owned_room(session, rid, user)
     await session.delete(room)
     await session.commit()
     return {"ok": True}
@@ -126,10 +133,9 @@ async def delete_room(rid: int, session: AsyncSession = Depends(get_session),
 
 @router.post("/rooms/{rid}/message")
 async def send_message(rid: int, body: MessageIn, request: Request,
-                       session: AsyncSession = Depends(get_session)):
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
+                       session: AsyncSession = Depends(get_session),
+                       user: User | None = Depends(optional_user)):
+    room = await _owned_room(session, rid, user)
     replies = await rp.room_turn(_gateway(request), session, room,
                                  body.text, speaker_filter=body.speaker)
     await session.commit()
@@ -152,11 +158,10 @@ def _stream_job(rid: int, agen: Any) -> StreamingResponse:
 
 @router.post("/rooms/{rid}/turn")
 async def run_turn(rid: int, body: TurnIn, request: Request,
-                   session: AsyncSession = Depends(get_session)):
+                   session: AsyncSession = Depends(get_session),
+                   user: User | None = Depends(optional_user)):
     """Append a beat and stream each character's reply (SSE nova frames)."""
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
+    room = await _owned_room(session, rid, user)
     kind = body.kind if body.kind in ("talk", "narrate", "ooc", "whisper") else "talk"
     if not body.text.strip():
         raise HTTPException(400, "text required")
@@ -172,7 +177,9 @@ async def run_turn(rid: int, body: TurnIn, request: Request,
 
 
 @router.get("/rooms/{rid}/live")
-async def turn_live(rid: int):
+async def turn_live(rid: int, session: AsyncSession = Depends(get_session),
+                    user: User | None = Depends(optional_user)):
+    await _owned_room(session, rid, user)
     job = chat_jobs.get(_job_key(rid))
     if not job:
         return {"running": False}
@@ -181,9 +188,12 @@ async def turn_live(rid: int):
 
 
 @router.delete("/rooms/{rid}/live")
-async def turn_live_cancel(rid: int):
+async def turn_live_cancel(rid: int,
+                           session: AsyncSession = Depends(get_session),
+                           user: User | None = Depends(optional_user)):
     """Cancel the in-flight turn job (completed messages are preserved;
     the visible partial is finalized as interrupted server-side)."""
+    await _owned_room(session, rid, user)
     job = chat_jobs.get(_job_key(rid))
     if job is None or job.done:
         return {"stopped": False}
@@ -192,7 +202,10 @@ async def turn_live_cancel(rid: int):
 
 
 @router.get("/rooms/{rid}/live/stream")
-async def turn_live_stream(rid: int):
+async def turn_live_stream(rid: int,
+                           session: AsyncSession = Depends(get_session),
+                           user: User | None = Depends(optional_user)):
+    await _owned_room(session, rid, user)
     job = chat_jobs.get(_job_key(rid))
     if not job:
         raise HTTPException(404, "no turn in flight")
@@ -203,11 +216,10 @@ async def turn_live_stream(rid: int):
 
 @router.post("/rooms/{rid}/retry")
 async def retry_turn(rid: int, body: RetryIn, request: Request,
-                     session: AsyncSession = Depends(get_session)):
+                     session: AsyncSession = Depends(get_session),
+                     user: User | None = Depends(optional_user)):
     """Regenerate one character turn — appends a swipe variant (SSE)."""
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
+    room = await _owned_room(session, rid, user)
     from app.db import get_session_factory
     agen = rp.retry_stream(_gateway(request), get_session_factory(), rid,
                            message_id=body.message_id)
@@ -216,10 +228,9 @@ async def retry_turn(rid: int, body: RetryIn, request: Request,
 
 @router.patch("/rooms/{rid}/messages/{mid}")
 async def edit_message(rid: int, mid: str, body: EditIn,
-                       session: AsyncSession = Depends(get_session)):
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
+                       session: AsyncSession = Depends(get_session),
+                       user: User | None = Depends(optional_user)):
+    room = await _owned_room(session, rid, user)
     rp.normalize_room(room)
     msg = next((m for m in room.messages or [] if m.get("id") == mid), None)
     if not msg:
@@ -236,10 +247,9 @@ async def edit_message(rid: int, mid: str, body: EditIn,
 
 @router.delete("/rooms/{rid}/messages/{mid}")
 async def delete_message(rid: int, mid: str,
-                         session: AsyncSession = Depends(get_session)):
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
+                         session: AsyncSession = Depends(get_session),
+                         user: User | None = Depends(optional_user)):
+    room = await _owned_room(session, rid, user)
     rp.normalize_room(room)
     before = len(room.messages or [])
     room.messages = [m for m in room.messages or [] if m.get("id") != mid]
@@ -252,10 +262,9 @@ async def delete_message(rid: int, mid: str,
 
 @router.patch("/rooms/{rid}")
 async def patch_room(rid: int, body: RoomPatch,
-                     session: AsyncSession = Depends(get_session)):
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
+                     session: AsyncSession = Depends(get_session),
+                     user: User | None = Depends(optional_user)):
+    room = await _owned_room(session, rid, user)
     data = body.model_dump(exclude_unset=True)
     world_patch = data.pop("world", None)
     if world_patch is not None:
@@ -274,10 +283,9 @@ async def patch_room(rid: int, body: RoomPatch,
 
 @router.post("/rooms/{rid}/summary")
 async def summarize(rid: int, request: Request,
-                    session: AsyncSession = Depends(get_session)):
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
+                    session: AsyncSession = Depends(get_session),
+                    user: User | None = Depends(optional_user)):
+    room = await _owned_room(session, rid, user)
     from app.db import get_session_factory
     agen = rp.summarize_stream(_gateway(request), get_session_factory(), rid)
     job = chat_jobs.start(f"rp-sum-{rid}", agen)
@@ -352,11 +360,10 @@ async def enter_world(wid: str, body: WorldEnterIn,
 
 @router.post("/rooms/{rid}/choices")
 async def room_choices(rid: int, request: Request,
-                       session: AsyncSession = Depends(get_session)):
+                       session: AsyncSession = Depends(get_session),
+                       user: User | None = Depends(optional_user)):
     """Contextual 'what do you do' options for the current beat."""
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
+    room = await _owned_room(session, rid, user)
     cast = await rp.room_characters(session, room)
     choices = await wd.suggest_choices(_gateway(request), room, cast)
     return {"choices": choices}
@@ -364,11 +371,10 @@ async def room_choices(rid: int, request: Request,
 
 @router.post("/rooms/{rid}/world/events")
 async def world_log_event(rid: int, body: WorldEventIn,
-                          session: AsyncSession = Depends(get_session)):
+                          session: AsyncSession = Depends(get_session),
+                          user: User | None = Depends(optional_user)):
     """Director logs a story event into the world's curated event feed."""
-    room = await session.get(RoleplayRoom, rid)
-    if not room:
-        raise HTTPException(404, "room not found")
+    room = await _owned_room(session, rid, user)
     world = wd.normalize_world(room)
     wd.log_event(world, body.text, kind=body.kind[:24])
     room.world = world

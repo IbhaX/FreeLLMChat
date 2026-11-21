@@ -9,27 +9,29 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/static/img/favicon.png">
 <link rel="stylesheet" href="/static/css/theme.css">
 <script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
 <style>
 /* ==========================================================================
-   Nova landing — fixed dark art direction (own palette; independent of the
-   app theme so the marketing page reads the same for every visitor).
+   Nova landing — palette derived from the app theme vars so the marketing
+   page follows whichever theme the visitor has selected.
    ========================================================================== */
 :root{
-  --ln-bg:#04060c;
-  --ln-bg2:#080b14;
-  --ln-surface:rgba(255,255,255,.035);
-  --ln-surface2:rgba(255,255,255,.06);
-  --ln-line:rgba(255,255,255,.09);
-  --ln-line2:rgba(255,255,255,.16);
-  --ln-text:#eceef6;
-  --ln-text2:#a7adc2;
-  --ln-text3:#6b7288;
-  --ln-acc:#7c5cff;
-  --ln-acc2:#4dd8ff;
+  /* Derived from the app theme — the landing now follows the active theme. */
+  --ln-bg:var(--bg-0,#04060c);
+  --ln-bg2:var(--bg-1,#080b14);
+  --ln-surface:color-mix(in srgb,var(--text-1,#fff) 3.5%,transparent);
+  --ln-surface2:color-mix(in srgb,var(--text-1,#fff) 6%,transparent);
+  --ln-line:color-mix(in srgb,var(--text-1,#fff) 9%,transparent);
+  --ln-line2:color-mix(in srgb,var(--text-1,#fff) 16%,transparent);
+  --ln-text:var(--text-1,#eceef6);
+  --ln-text2:var(--text-2,#a7adc2);
+  --ln-text3:var(--text-3,#6b7288);
+  --ln-acc:var(--accent,#7c5cff);
+  --ln-acc2:var(--accent-2,#4dd8ff);
   --ln-acc3:#ff5c8a;
-  --ln-grad:linear-gradient(120deg,#7c5cff,#4dd8ff);
+  --ln-grad:linear-gradient(120deg,var(--ln-acc),var(--ln-acc2));
   --ln-font:'Inter',system-ui,sans-serif;
   --ln-disp:'Space Grotesk','Inter',sans-serif;
   --ln-mono:'JetBrains Mono',ui-monospace,monospace;
@@ -41,7 +43,7 @@ body{font-family:var(--ln-font);background:var(--ln-bg);color:var(--ln-text);
   min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 a{color:inherit}
 img{max-width:100%}
-::selection{background:rgba(124,92,255,.4)}
+::selection{background:color-mix(in srgb,var(--ln-acc) 40%,transparent)}
 /* The landing keeps its own type system — per-theme h1-h4 fonts (ui.css)
    must not override it. */
 [data-theme] .lp-title,[data-theme] .lp-h2,[data-theme] .lp-mmenu a,
@@ -66,21 +68,21 @@ img{max-width:100%}
 .lp-progress{position:fixed;top:0;left:0;height:2px;width:0;z-index:200;
   background:var(--ln-grad)}
 .lp-cursor{position:fixed;width:340px;height:340px;border-radius:50%;pointer-events:none;
-  z-index:1;background:radial-gradient(circle,rgba(124,92,255,.08),transparent 65%);
+  z-index:1;background:radial-gradient(circle,color-mix(in srgb,var(--ln-acc) 8%,transparent),transparent 65%);
   transform:translate(-50%,-50%);display:none}
 @media(pointer:fine){.lp-cursor{display:block}}
 
 /* ---------- nav ---------- */
 .lp-nav{position:fixed;top:0;left:0;right:0;z-index:100;transition:.3s;
   border-bottom:1px solid transparent}
-.lp-nav.scrolled{background:rgba(4,6,12,.72);backdrop-filter:blur(16px);
+.lp-nav.scrolled{background:color-mix(in srgb,var(--ln-bg) 72%,transparent);backdrop-filter:blur(16px);
   -webkit-backdrop-filter:blur(16px);border-bottom-color:var(--ln-line)}
 .lp-nav-in{display:flex;align-items:center;gap:26px;height:68px;
   max-width:1240px;margin:0 auto;padding:0 clamp(20px,4vw,48px)}
 .lp-brand{display:flex;align-items:center;gap:10px;font-family:var(--ln-disp);
   font-weight:700;font-size:18px;text-decoration:none;letter-spacing:-.01em}
-.lp-mark{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;
-  background:var(--ln-grad);color:#fff;font-size:16px;box-shadow:0 0 24px rgba(124,92,255,.45)}
+.lp-mark{width:34px;height:34px;border-radius:9px;object-fit:cover;flex:none;
+  box-shadow:0 0 24px color-mix(in srgb,var(--ln-acc) 45%,transparent)}
 .lp-links{display:flex;gap:2px;margin-left:14px}
 .lp-links a{padding:8px 13px;border-radius:9px;font-size:13.5px;font-weight:500;
   color:var(--ln-text2);text-decoration:none;transition:.2s;position:relative}
@@ -139,10 +141,10 @@ img{max-width:100%}
   font-size:14.5px;font-weight:600;text-decoration:none;border:1px solid var(--ln-line2);
   color:var(--ln-text);background:var(--ln-surface);transition:transform .18s,box-shadow .25s,
   border-color .18s,background .18s;position:relative;white-space:nowrap}
-.lp-btn:hover{transform:translateY(-2px);border-color:rgba(124,92,255,.6);background:var(--ln-surface2)}
-.lp-btn.pri{background:var(--ln-grad);border:none;color:#fff;
-  box-shadow:0 10px 34px -10px rgba(124,92,255,.65)}
-.lp-btn.pri:hover{box-shadow:0 16px 44px -10px rgba(124,92,255,.8)}
+.lp-btn:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--ln-acc) 60%,transparent);background:var(--ln-surface2)}
+.lp-btn.pri{background:var(--ln-grad);border:none;color:var(--on-accent,#fff);
+  box-shadow:0 10px 34px -10px color-mix(in srgb,var(--ln-acc) 65%,transparent)}
+.lp-btn.pri:hover{box-shadow:0 16px 44px -10px color-mix(in srgb,var(--ln-acc) 80%,transparent)}
 .lp-btn.sm{padding:9px 17px;font-size:13px;border-radius:10px}
 
 /* ---------- hero ---------- */
@@ -158,11 +160,11 @@ img{max-width:100%}
   background:linear-gradient(transparent,var(--ln-bg))}
 .lp-hero-in{position:relative;z-index:3;padding-top:80px;width:100%}
 .lp-eyebrow.hero{border:1px solid var(--ln-line2);border-radius:99px;padding:7px 16px;
-  background:rgba(255,255,255,.04);backdrop-filter:blur(6px)}
+  background:var(--ln-surface);backdrop-filter:blur(6px)}
 .lp-eyebrow.hero::before{width:7px;height:7px;border-radius:50%;background:var(--ln-grad);
   animation:lp-pulse 2.2s infinite}
-@keyframes lp-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(124,92,255,.5)}
-  50%{opacity:.6;box-shadow:0 0 0 6px rgba(124,92,255,0)}}
+@keyframes lp-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 color-mix(in srgb,var(--ln-acc) 50%,transparent)}
+  50%{opacity:.6;box-shadow:0 0 0 6px color-mix(in srgb,var(--ln-acc) 0%,transparent)}}
 .lp-title{font-family:var(--ln-disp);font-size:clamp(42px,7.2vw,96px);font-weight:600;
   letter-spacing:-.035em;line-height:1.0;margin:26px 0 22px;max-width:12ch}
 .lp-title .w{display:inline-block;white-space:pre}
@@ -188,9 +190,9 @@ img{max-width:100%}
   font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:9px;
   box-shadow:0 20px 50px -20px rgba(0,0,0,.6)}
 .lp-float i{width:8px;height:8px;border-radius:50%;flex:none}
-.lp-float.f1{top:24%;right:12%}.lp-float.f1 i{background:#4dd8ff}
-.lp-float.f2{top:62%;right:5%}.lp-float.f2 i{background:#7c5cff}
-.lp-float.f3{bottom:20%;right:9%}.lp-float.f3 i{background:#ff5c8a}
+.lp-float.f1{top:24%;right:12%}.lp-float.f1 i{background:var(--ln-acc2)}
+.lp-float.f2{top:62%;right:5%}.lp-float.f2 i{background:var(--ln-acc)}
+.lp-float.f3{bottom:20%;right:9%}.lp-float.f3 i{background:var(--ln-acc3)}
 
 /* ---------- ticker ---------- */
 .lp-ticker{border-top:1px solid var(--ln-line);border-bottom:1px solid var(--ln-line);
@@ -213,12 +215,12 @@ img{max-width:100%}
 .lp-feat.wide{grid-column:span 3}
 .lp-feat::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s;
   background:radial-gradient(420px circle at var(--mx,50%) var(--my,0%),
-    rgba(124,92,255,.14),transparent 60%);pointer-events:none}
-.lp-feat:hover{border-color:rgba(124,92,255,.45)}
+    color-mix(in srgb,var(--ln-acc) 14%,transparent),transparent 60%);pointer-events:none}
+.lp-feat:hover{border-color:color-mix(in srgb,var(--ln-acc) 45%,transparent)}
 .lp-feat:hover::before{opacity:1}
 .lp-feat .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
-  background:rgba(124,92,255,.14);color:var(--ln-acc2);margin-bottom:20px;
-  border:1px solid rgba(124,92,255,.25)}
+  background:color-mix(in srgb,var(--ln-acc) 14%,transparent);color:var(--ln-acc2);margin-bottom:20px;
+  border:1px solid color-mix(in srgb,var(--ln-acc) 25%,transparent)}
 .lp-feat h3{font-family:var(--ln-disp);font-size:19px;font-weight:600;margin-bottom:9px;
   letter-spacing:-.01em}
 .lp-feat p{font-size:14px;line-height:1.65;color:var(--ln-text2)}
@@ -229,12 +231,12 @@ img{max-width:100%}
 .lp-show-head{display:grid;grid-template-columns:1.2fr .8fr;gap:40px;align-items:end}
 .lp-show{position:relative;margin-top:60px}
 .lp-show-panel{position:relative;border:1px solid var(--ln-line2);border-radius:24px;
-  background:linear-gradient(160deg,#0b0f1c,#070a12);padding:clamp(18px,3vw,40px);
-  overflow:hidden;box-shadow:0 60px 120px -50px rgba(0,0,0,.8),0 0 0 1px rgba(124,92,255,.06);
+  background:linear-gradient(160deg,var(--ln-bg2),var(--ln-bg));padding:clamp(18px,3vw,40px);
+  overflow:hidden;box-shadow:0 60px 120px -50px rgba(0,0,0,.8),0 0 0 1px color-mix(in srgb,var(--ln-acc) 6%,transparent);
   transform-style:preserve-3d}
 .lp-show-panel::before{content:'';position:absolute;top:-40%;left:-10%;width:60%;height:80%;
-  background:radial-gradient(circle,rgba(124,92,255,.18),transparent 65%);pointer-events:none}
-.lp-mock{border:1px solid var(--ln-line);border-radius:16px;background:#090c15;overflow:hidden}
+  background:radial-gradient(circle,color-mix(in srgb,var(--ln-acc) 18%,transparent),transparent 65%);pointer-events:none}
+.lp-mock{border:1px solid var(--ln-line);border-radius:16px;background:var(--ln-bg2);overflow:hidden}
 .lp-mock-bar{display:flex;align-items:center;gap:7px;padding:12px 16px;
   border-bottom:1px solid var(--ln-line)}
 .lp-mock-bar i{width:9px;height:9px;border-radius:50%;background:var(--ln-line2)}
@@ -249,13 +251,13 @@ img{max-width:100%}
 .lp-mock-side i{height:30px;border-radius:8px;background:var(--ln-surface);font-style:normal;
   display:flex;align-items:center;padding:0 10px;font-size:11px;color:var(--ln-text2);
   cursor:pointer;transition:background .2s,color .2s,border-color .2s;border:1px solid transparent}
-.lp-mock-side i:hover{background:rgba(124,92,255,.1);color:var(--ln-text)}
+.lp-mock-side i:hover{background:color-mix(in srgb,var(--ln-acc) 10%,transparent);color:var(--ln-text)}
 .lp-mock-side i:focus-visible{outline:2px solid var(--ln-acc2);outline-offset:-2px}
-.lp-mock-side i.on{background:rgba(124,92,255,.16);color:var(--ln-text);
-  border:1px solid rgba(124,92,255,.3)}
+.lp-mock-side i.on{background:color-mix(in srgb,var(--ln-acc) 16%,transparent);color:var(--ln-text);
+  border:1px solid color-mix(in srgb,var(--ln-acc) 30%,transparent)}
 .lp-mock-chat{padding:20px;display:flex;flex-direction:column;gap:14px}
-.lp-mq{align-self:flex-end;max-width:70%;background:rgba(124,92,255,.16);
-  border:1px solid rgba(124,92,255,.3);border-radius:14px 14px 4px 14px;
+.lp-mq{align-self:flex-end;max-width:70%;background:color-mix(in srgb,var(--ln-acc) 16%,transparent);
+  border:1px solid color-mix(in srgb,var(--ln-acc) 30%,transparent);border-radius:14px 14px 4px 14px;
   padding:10px 14px;font-size:12.5px;color:var(--ln-text)}
 .lp-mr{align-self:flex-start;max-width:85%;border:1px solid var(--ln-line);
   border-radius:14px 14px 14px 4px;padding:14px;background:var(--ln-surface);font-size:12.5px}
@@ -281,7 +283,7 @@ img{max-width:100%}
 .lp-mr .bars{display:flex;align-items:flex-end;gap:8px;height:66px;margin-top:14px;
   padding:0 2px 17px;border-bottom:1px dashed var(--ln-line)}
 .lp-mr .bar{flex:1;height:var(--h);border-radius:4px 4px 0 0;position:relative;
-  background:linear-gradient(180deg,var(--ln-acc2),rgba(124,92,255,.22));
+  background:linear-gradient(180deg,var(--ln-acc2),color-mix(in srgb,var(--ln-acc) 22%,transparent));
   transform-origin:bottom;transform:scaleY(0);transition:transform .55s var(--d,0s) cubic-bezier(.22,1,.36,1)}
 .lp-mr.on .bar{transform:scaleY(1)}
 .lp-mr .bar i{position:absolute;bottom:-15px;left:50%;transform:translateX(-50%);
@@ -314,9 +316,9 @@ img{max-width:100%}
   background:linear-gradient(90deg,transparent,var(--ln-line2) 20%,var(--ln-line2) 80%,transparent)}
 .lp-step{position:relative;text-align:left;padding:0 8px}
 .lp-step .dot{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;
-  background:#0b0f1c;border:1px solid rgba(124,92,255,.4);font-family:var(--ln-mono);
+  background:var(--ln-bg2);border:1px solid color-mix(in srgb,var(--ln-acc) 40%,transparent);font-family:var(--ln-mono);
   font-size:13px;font-weight:600;color:var(--ln-acc2);margin-bottom:22px;position:relative;
-  z-index:1;box-shadow:0 0 30px rgba(124,92,255,.15)}
+  z-index:1;box-shadow:0 0 30px color-mix(in srgb,var(--ln-acc) 15%,transparent)}
 .lp-step h4{font-family:var(--ln-disp);font-size:17px;font-weight:600;margin-bottom:8px}
 .lp-step p{font-size:13.5px;color:var(--ln-text2);line-height:1.65}
 
@@ -339,7 +341,7 @@ img{max-width:100%}
 .lp-qbtn{width:44px;height:44px;border-radius:12px;border:1px solid var(--ln-line2);
   background:var(--ln-surface);color:var(--ln-text);font-size:17px;cursor:pointer;
   transition:.2s;display:grid;place-items:center}
-.lp-qbtn:hover{border-color:var(--ln-acc);background:rgba(124,92,255,.12)}
+.lp-qbtn:hover{border-color:var(--ln-acc);background:color-mix(in srgb,var(--ln-acc) 12%,transparent)}
 
 /* ---------- faq ---------- */
 .lp-faq{max-width:760px;margin:48px auto 0}
@@ -361,7 +363,7 @@ img{max-width:100%}
 .lp-final{position:relative;text-align:center;overflow:hidden}
 .lp-final .orb{position:absolute;left:50%;top:50%;width:560px;height:560px;
   transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;
-  background:radial-gradient(circle,rgba(124,92,255,.22),rgba(77,216,255,.07) 45%,transparent 70%);
+  background:radial-gradient(circle,color-mix(in srgb,var(--ln-acc) 22%,transparent),color-mix(in srgb,var(--ln-acc2) 7%,transparent) 45%,transparent 70%);
   filter:blur(10px)}
 .lp-final-in{position:relative;z-index:2}
 .lp-final h2{font-family:var(--ln-disp);font-size:clamp(34px,5.6vw,68px);font-weight:600;
@@ -429,7 +431,7 @@ img{max-width:100%}
 }
 .lp-nogl-orb{display:none;position:absolute;top:12%;right:6%;width:min(46vw,560px);
   aspect-ratio:1;border-radius:50%;pointer-events:none;
-  background:radial-gradient(circle at 35% 35%,rgba(124,92,255,.5),rgba(77,216,255,.16) 45%,transparent 70%);
+  background:radial-gradient(circle at 35% 35%,color-mix(in srgb,var(--ln-acc) 50%,transparent),color-mix(in srgb,var(--ln-acc2) 16%,transparent) 45%,transparent 70%);
   filter:blur(30px)}
 .no-gl .lp-nogl-orb{display:block}
 </style>
@@ -442,7 +444,7 @@ img{max-width:100%}
 <!-- ============ 01 NAV ============ -->
 <nav class="lp-nav" id="lpNav" aria-label="Main">
   <div class="lp-nav-in">
-    <a class="lp-brand" href="/"><span class="lp-mark">N</span>Nova</a>
+    <a class="lp-brand" href="/"><img class="lp-mark" src="/static/img/logo-mark.png" alt="">Nova</a>
     <div class="lp-links">
       <a href="#features">Features</a>
       <a href="#showcase">Showcase</a>
@@ -460,6 +462,7 @@ img{max-width:100%}
       <a class="lp-btn sm pri lp-cta-full" href="/chat" data-auth="in" style="display:none">Open workspace →</a>
       <a class="lp-btn sm pri lp-cta-mini" href="/chat" data-auth="in" style="display:none">Workspace</a>
       <button class="lp-btn sm lp-logout js-logout" data-auth="in" style="display:none" aria-label="Sign out">Sign out</button>
+      <button class="lp-theme" data-theme-btn aria-label="Customize appearance"></button>
       <button class="lp-burger" id="lpBurger" aria-label="Open menu" aria-expanded="false"><i></i></button>
     </div>
   </div>
@@ -778,7 +781,7 @@ img{max-width:100%}
   <div class="lp-wrap">
     <div class="lp-foot-grid">
       <div>
-        <a class="lp-brand" href="/"><span class="lp-mark">N</span>Nova</a>
+        <a class="lp-brand" href="/"><img class="lp-mark" src="/static/img/logo-mark.png" alt="">Nova</a>
         <p>One gateway, every model. Structured answers, deep research, and roleplay
           in a single workspace.</p>
       </div>
@@ -823,6 +826,7 @@ img{max-width:100%}
 <script src="/static/js/motion.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="/static/js/theme.js"></script>
 <script src="/static/js/landing.js"></script>
 </body>
 </html>

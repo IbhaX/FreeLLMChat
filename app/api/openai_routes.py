@@ -325,10 +325,12 @@ def _remember(gateway, conv_id: str | None, user_text: str, reply: str,
     if not conv_id:
         return
 
+    tenant = f"u{owner_id}" if owner_id is not None else astra_memory.ANON_TENANT
+
     async def _bg() -> None:
         await asyncio.to_thread(
-            astra_memory.store_short, str(conv_id), "assistant", reply)
-        await astra_memory.extract_and_store(gateway, user_text, reply)
+            astra_memory.store_short, tenant, str(conv_id), "assistant", reply)
+        await astra_memory.extract_and_store(gateway, tenant, user_text, reply)
 
     asyncio.create_task(_bg())
 
@@ -430,12 +432,14 @@ async def chat_completions(
         # ~4-6s before generation even started).
         asyncio.ensure_future(
             asyncio.to_thread(astra_memory.ensure_collections))
+        tenant = astra_memory.tenant_key(_user)
         if last_user and conv_id:
             asyncio.ensure_future(asyncio.to_thread(
-                astra_memory.store_short, str(conv_id), "user", last_user))
+                astra_memory.store_short, tenant, str(conv_id), "user",
+                last_user))
         # Memory retrieval overlaps the routing probe + prompt building.
         mem_task = asyncio.ensure_future(
-            get_memory_text(last_user, conv_id and str(conv_id)))
+            get_memory_text(last_user, conv_id and str(conv_id), user=_user))
     except Exception:
         mem_task = None
 

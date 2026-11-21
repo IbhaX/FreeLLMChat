@@ -216,17 +216,27 @@ def _tool_names(agent_cfg: AgentConfig) -> list[str]:
     return tools
 
 
-async def get_memory_text(query: str = "", conversation_id: str | None = None) -> str:
-    """Fetch persistent + vector memories for system-prompt injection."""
+async def get_memory_text(query: str = "", conversation_id: str | None = None,
+                          user: "Any | None" = None) -> str:
+    """Fetch persistent + vector memories for system-prompt injection.
+
+    Tenant-scoped: an authenticated user sees only their own persistent
+    memories and their own vector memories; the anonymous tenant (auth-off
+    single-tenant mode) sees only unowned rows. Never the union."""
     from sqlalchemy import select
 
     from app.db import get_session_factory
     from app.models import Memory
     from app.services import astra_memory
+    tenant = astra_memory.tenant_key(user)
     parts: list[str] = []
     try:
         async with get_session_factory()() as s:
             stmt = select(Memory).order_by(Memory.id.desc()).limit(100)
+            if user is not None:
+                stmt = stmt.where(Memory.owner_id == user.id)
+            else:
+                stmt = stmt.where(Memory.owner_id.is_(None))
             rows = (await s.execute(stmt)).scalars().all()
         ranked = sorted(
             rows,
@@ -243,7 +253,7 @@ async def get_memory_text(query: str = "", conversation_id: str | None = None) -
         # astrapy calls are synchronous HTTP — run off the event loop so a
         # slow Astra round-trip cannot stall concurrent requests.
         astra = await asyncio.to_thread(
-            astra_memory.recall_text, query, conversation_id)
+            astra_memory.recall_text, query, tenant, conversation_id)
         if astra:
             parts.append(astra)
     except Exception:
@@ -355,18 +365,20 @@ async def run_agent(
     *, custom_instructions: str = "", conversation_id: str | None = None,
     emit: Callable[[dict[str, Any]], None] | None = None,
     model_override: str | None = None,
+    user: "Any | None" = None,
 ) -> str:
     """Run an agent natively through pydantic-ai.
 
     Tool rounds, output-validation retries and provider failover all
     happen inside the pydantic-ai run — no bespoke orchestration loops.
+    user is the verified caller — memory recall is scoped to it.
     """
     from app.agents.factory import build_agent
 
     history = _bounded_history(history)
     execution = _cfg(agent_cfg).get("execution", {})
     timeout_s = max(1.0, min(float(execution.get("timeout") or 120), 600.0))
-    memory = await get_memory_text(str(message), conversation_id)
+    memory = await get_memory_text(str(message), conversation_id, user=user)
     custom = custom_instructions + ("\n\n" + memory if memory else "")
     deps = _agent_deps(gateway, agent_cfg, conversation_id=conversation_id,
                        emit=emit, model_override=model_override)
@@ -441,6 +453,7 @@ async def stream_agent(
     *, custom_instructions: str = "", conversation_id: str | None = None,
     emit: Callable[[dict[str, Any]], None] | None = None,
     model_override: str | None = None,
+    user: "Any | None" = None,
 ) -> AsyncIterator[bytes]:
     """Stream an agent reply via pydantic-ai's native streaming.
 
@@ -458,14 +471,14 @@ async def stream_agent(
             text = await run_agent(gateway, agent_cfg, message, history,
                                    custom_instructions=custom_instructions,
                                    conversation_id=conversation_id, emit=emit,
-                                   model_override=model_override)
+                                   model_override=model_override, user=user)
             chunk = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
             yield f"data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n".encode()
         except Exception as e:
             err = {"error": {"message": f"agent error: {e}", "type": "agent_error"}}
             yield f"data: {json.dumps(err)}\n\ndata: [DONE]\n\n".encode()
         return
-    memory = await get_memory_text(str(message), conversation_id)
+    memory = await get_memory_text(str(message), conversation_id, user=user)
     deps = _agent_deps(gateway, agent_cfg, conversation_id=conversation_id,
                        emit=emit, model_override=model_override)
     agent = build_agent(

@@ -33,8 +33,9 @@ MAX_LONG_DOCS = 80
 SIM_TOP_K = 3
 SIM_THRESHOLD = 0.55
 # In-process cache — a page refresh shouldn't re-scan Astra every time.
+# Keyed by tenant: one user's cached graph must never serve another user.
 _CACHE_TTL = 60.0
-_cache: dict[str, Any] = {"ts": 0.0, "graph": None}
+_cache: dict[str, dict[str, Any]] = {}
 
 _PROJ = {
     "text": 1, "role": 1, "source": 1, "conversation_id": 1,
@@ -59,18 +60,25 @@ def _label(text: str) -> str:
     return text[:48] + ("…" if len(text) > 48 else "") or "(empty)"
 
 
-def _fetch_docs(col_name: str, limit: int) -> list[dict[str, Any]]:
+def _fetch_docs(col_name: str, tenant: str, limit: int) -> list[dict[str, Any]]:
+    """Fetch ONLY the requesting tenant's documents — the user_id filter
+    is applied inside Astra, never post-hoc. Returns [] when the tenant is
+    empty or on any failure (fail closed, never fail open)."""
+    if not tenant:
+        return []
     col = astra_memory._collection(col_name)  # noqa: SLF001 — same package
     if col is None:
         return []
+    flt = {"user_id": tenant}
     try:
-        return list(col.find(filter=None, limit=limit, projection=_PROJ))
+        return list(col.find(filter=flt, limit=limit, projection=_PROJ))
     except Exception:
         # Some collections lack $vector projection support on old plans —
-        # retry without the vector so nodes still appear (edge-less).
+        # retry without the vector so nodes still appear (edge-less). The
+        # tenant filter is applied identically — never relaxed on fallback.
         try:
             proj = {k: v for k, v in _PROJ.items() if k != "$vector"}
-            return list(col.find(filter=None, limit=limit, projection=proj))
+            return list(col.find(filter=flt, limit=limit, projection=proj))
         except Exception:
             return []
 
@@ -125,16 +133,24 @@ def _conversation_edges(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return edges
 
 
-def build_graph() -> dict[str, Any]:
-    """Fetch both collections and assemble nodes + edges + stats."""
+def build_graph(tenant: str) -> dict[str, Any]:
+    """Fetch this tenant's collections and assemble nodes + edges + stats.
+
+    Empty tenant → empty graph (fail closed). Similarity edges are computed
+    only within the tenant's own documents, so no cross-tenant relationship
+    can ever be constructed."""
     if not astra_memory.enabled():
         return {"enabled": False, "nodes": [], "edges": [],
                 "stats": {}, "fetched_at": time.time()}
+    if not (tenant or "").strip():
+        return {"enabled": True, "nodes": [], "edges": [],
+                "stats": {"memories": 0, "relationships": 0},
+                "fetched_at": time.time()}
 
     nodes: list[dict[str, Any]] = []
     for col_name, limit in ((astra_memory.SHORT, MAX_SHORT_DOCS),
                             (astra_memory.LONG, MAX_LONG_DOCS)):
-        for doc in _fetch_docs(col_name, limit):
+        for doc in _fetch_docs(col_name, tenant, limit):
             vec = doc.get("$vector")
             nodes.append({
                 "id": str(doc.get("_id") or ""),
@@ -205,12 +221,16 @@ def build_graph() -> dict[str, Any]:
             "stats": stats, "fetched_at": time.time()}
 
 
-def graph_cached() -> dict[str, Any]:
-    """TTL-cached graph — the build is a remote Astra scan + matmul."""
+def graph_cached(tenant: str) -> dict[str, Any]:
+    """TTL-cached graph per tenant — the build is a remote Astra scan +
+    matmul. Each tenant gets an independent cache slot; serving a cached
+    graph to another tenant is impossible by construction."""
+    if not (tenant or "").strip():
+        return build_graph(tenant)
     now = time.time()
-    if _cache["graph"] is not None and now - _cache["ts"] < _CACHE_TTL:
-        return _cache["graph"]
-    graph = build_graph()
-    _cache["graph"] = graph
-    _cache["ts"] = now
+    slot = _cache.get(tenant)
+    if slot is not None and now - slot["ts"] < _CACHE_TTL:
+        return slot["graph"]
+    graph = build_graph(tenant)
+    _cache[tenant] = {"ts": now, "graph": graph}
     return graph

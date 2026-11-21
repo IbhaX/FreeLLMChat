@@ -17,7 +17,7 @@ def _doc(i, text, role=None, conv=None, vec=None, ts=1.0):
 
 
 def _patch_docs(monkeypatch, short, long):
-    def fake(col, limit):
+    def fake(col, tenant, limit):
         return short if col == mg.astra_memory.SHORT else long
     monkeypatch.setattr(mg, "_fetch_docs", fake)
     monkeypatch.setattr(mg.astra_memory, "enabled", lambda: True)
@@ -25,7 +25,7 @@ def _patch_docs(monkeypatch, short, long):
 
 def test_disabled_returns_empty(monkeypatch):
     monkeypatch.setattr(mg.astra_memory, "enabled", lambda: False)
-    g = mg.build_graph()
+    g = mg.build_graph("u1")
     assert g["enabled"] is False and g["nodes"] == [] and g["edges"] == []
 
 
@@ -36,7 +36,7 @@ def test_conversation_edges_chain_by_ts(monkeypatch):
         _doc("c", "third", role="user", conv="c1", ts=3.0),
         _doc("d", "other conv", role="user", conv="c2", ts=4.0),
     ], [])
-    g = mg.build_graph()
+    g = mg.build_graph("u1")
     conv = {(e["a"], e["b"]) for e in g["edges"] if e["kind"] == "conversation"}
     assert conv == {("ida", "idb"), ("idb", "idc")}
     assert all(e["weight"] == 1.0 for e in g["edges"]
@@ -53,7 +53,7 @@ def test_similarity_edges_labelled_and_thresholded(monkeypatch):
         _doc("c", "close fact", conv=None, vec=near),
         _doc("d", "unrelated", conv=None, vec=far),
     ], [])
-    g = mg.build_graph()
+    g = mg.build_graph("u1")
     sim = [e for e in g["edges"] if e["kind"] == "similarity"]
     pairs = {frozenset((e["a"], e["b"])) for e in sim}
     assert frozenset(("ida", "idb")) in pairs          # identical → 1.0
@@ -71,7 +71,7 @@ def test_nodes_carry_real_fields_and_degree(monkeypatch):
         _doc("a", "remember this", role="user", conv="c9", ts=5.0),
         _doc("b", "reply", role="assistant", conv="c9", ts=6.0),
     ], [_doc("z", "durable fact", ts=7.0)])
-    g = mg.build_graph()
+    g = mg.build_graph("u1")
     by_id = {n["id"]: n for n in g["nodes"]}
     assert by_id["ida"]["category"] == "personal"
     assert by_id["idb"]["category"] == "assistant"
