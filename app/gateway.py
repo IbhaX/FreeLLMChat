@@ -481,7 +481,6 @@ class Gateway:
         return bool(cls._MODEL_REJECT.search(msg))
 
     _AUTO_MODEL_ALTERNATES = 3
-    _AUTO_MAX_ATTEMPTS = 24
 
     async def _plan_attempts(
         self,
@@ -573,19 +572,16 @@ class Gateway:
 
     def _attempt_budget(
         self, requested: str, plan: list[tuple[Provider, list[str]]]
-    ) -> int:
+    ) -> int | None:
         """Upstream-call budget for one request.
 
-        Explicit model picks keep the configured cap. ``auto*`` scales the
-        budget to the plan so every servable provider gets ~2 upstream
-        calls before giving up.
+        Explicit model picks keep the configured cap. Auto is bounded by its
+        finite provider/model/key candidate set instead of an arbitrary
+        attempt ceiling, so later configured free providers are not skipped.
         """
         if not requested.startswith("auto"):
             return self.settings.max_retries_per_request
-        return min(
-            max(2 * len(plan), self.settings.max_retries_per_request),
-            self._AUTO_MAX_ATTEMPTS,
-        )
+        return None
 
     async def _sticky_first(
         self, session: AsyncSession, requested: str,
@@ -655,7 +651,7 @@ class Gateway:
         the activity list does not show a bare 'Trying' line."""
         if attempts != prov_attempts:
             return
-        if attempts >= (budget or self.settings.max_retries_per_request):
+        if budget is not None and attempts >= budget:
             emit({"event": "skip",
                   "text": f"{provider.name} — retry budget reached, skipping"})
             return
@@ -670,7 +666,7 @@ class Gateway:
     async def _chat_sweep(
         self, session, request_id, t0, payload,
         plan: list[tuple[Provider, list[str]]], emit,
-        tried: set[tuple[int, str]], attempts: int, budget: int,
+        tried: set[tuple[int, str]], attempts: int, budget: int | None,
         attempt_timeout: float | None = None,
     ):
         """One sequential pass over the plan. Returns
@@ -685,7 +681,7 @@ class Gateway:
         last_err: ProviderError | None = None
         attempt_timeout = attempt_timeout or self.settings.attempt_timeout_s
         for provider, models in plan:
-            if attempts >= budget:
+            if budget is not None and attempts >= budget:
                 break
             if not self.breaker.allow(provider.name):
                 continue
@@ -695,7 +691,7 @@ class Gateway:
             prov_attempts = attempts
             provider_done = False
             for model in models:
-                if provider_done or attempts >= budget:
+                if provider_done or (budget is not None and attempts >= budget):
                     break
                 emit({"event": "try", "provider": provider.name, "model": model,
                       "text": f"Trying {provider.name} · {model}"})
@@ -703,7 +699,7 @@ class Gateway:
                 body["model"] = model
                 body["stream"] = False
                 body.setdefault("max_tokens", 4096)
-                while attempts < budget:
+                while budget is None or attempts < budget:
                     # Keys already probed for THIS model are skipped; a key
                     # stays eligible for the provider's other models (a model
                     # fault does not implicate the key).
@@ -821,14 +817,14 @@ class Gateway:
         # upstream failure. Model faults move to the provider's next model
         # without cooling the key.
         for provider, models in plan:
-            if attempts >= budget:
+            if budget is not None and attempts >= budget:
                 break
             if not self.breaker.allow(provider.name):
                 continue
             prov_attempts = attempts
             provider_done = False
             for model in models:
-                if provider_done or attempts >= budget:
+                if provider_done or (budget is not None and attempts >= budget):
                     break
                 emit({"event": "try", "provider": provider.name, "model": model,
                       "text": f"Trying {provider.name} · {model}"})
@@ -841,7 +837,7 @@ class Gateway:
                     (provider.limits or {}).get("request_timeout_s")
                     or self.settings.first_chunk_timeout_s
                 )
-                while attempts < budget:
+                while budget is None or attempts < budget:
                     excl = {kid for kid, mdl in tried if mdl == model}
                     key = await self.rotator.pick(
                         session, provider, exclude_ids=excl)

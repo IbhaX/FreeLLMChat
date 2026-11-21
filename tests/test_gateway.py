@@ -181,6 +181,72 @@ async def test_auto_failover_to_next_provider(session, monkeypatch):
     assert key.id == k2.id
 
 
+async def test_auto_stream_timeout_fails_over_to_next_provider(session, monkeypatch):
+    """A silent first stream must not prevent a later provider from answering."""
+    import asyncio
+
+    import app.gateway as gateway_module
+    import app.routing.fallback as fb
+
+    p1 = await _provider(session, "p1", "https://p1.example/v1", ["m1"])
+    p2 = await _provider(session, "p2", "https://p2.example/v1", ["m1"])
+    p1.limits = {"request_timeout_s": 0.01}
+    p2.limits = {"request_timeout_s": 1}
+    await make_key(session, p1, "sk-aaa-1111", label="a")
+    k2 = await make_key(session, p2, "sk-bbb-2222", label="b")
+    monkeypatch.setattr(fb, "load_fallback_chains",
+                        lambda: {"auto": ["p1", "p2"]})
+    calls = {"p1": 0, "p2": 0}
+
+    class StubAdapter:
+        def __init__(self, name):
+            self.name = name
+
+        async def _silent_stream(self):
+            await asyncio.sleep(1)
+            yield b"data: [DONE]\n\n"
+
+        async def _answer_stream(self):
+            yield b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'
+            yield b"data: [DONE]\n\n"
+
+        def chat_stream(self, client, api_key, payload):
+            calls[self.name] += 1
+            return (self._silent_stream() if self.name == "p1"
+                    else self._answer_stream())
+
+    monkeypatch.setattr(
+        gateway_module, "build_adapter",
+        lambda provider: StubAdapter(provider.name),
+    )
+
+    gw = Gateway()
+    try:
+        stream, provider, key, model = await gw.chat_stream(
+            session, {"model": "auto",
+                      "messages": [{"role": "user", "content": "hi"}],
+                      "stream": True}
+        )
+        body = b"".join([chunk async for chunk in stream])
+    finally:
+        await gw.close()
+
+    assert calls == {"p1": 1, "p2": 1}
+    assert provider.name == "p2"
+    assert key.id == k2.id
+    assert model == "m1"
+    assert b'"content":"ok"' in body
+
+
+async def test_auto_has_no_global_attempt_cutoff():
+    gw = Gateway()
+    try:
+        plan = [(None, ["m1", "m2", "m3"]) for _ in range(13)]
+        assert gw._attempt_budget("auto", plan) is None
+    finally:
+        await gw.close()
+
+
 async def test_undecryptable_key_skipped_without_cooldown(session):
     from app.gateway import KeyUndecryptable
     p = await _provider(session, "pbad", "https://pbad.example/v1", ["m1"])
