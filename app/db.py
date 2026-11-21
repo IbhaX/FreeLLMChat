@@ -107,6 +107,7 @@ async def init_db() -> None:
                 "paused_ids": "JSON",
                 "director_notes": "TEXT DEFAULT ''",
                 "tools_enabled": "BOOLEAN DEFAULT 0",
+                "world": "JSON",
             }
             for col, ddl in rp_adds.items():
                 if col not in rp_cols:

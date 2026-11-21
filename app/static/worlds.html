@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Worlds - Nova</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<link rel="stylesheet" href="/static/css/worlds.css">
+</head>
+<body class="wl">
+
+<header class="wl-top">
+  <button class="wl-ibtn" data-app-back="/" title="Back" aria-label="Back"></button>
+  <button class="wl-ibtn" id="appNavBtn" title="Apps — all pages" aria-label="Apps"></button>
+  <div class="wl-brand">WORLDS</div>
+  <span class="wl-topspace"></span>
+  <button class="wl-ibtn" id="btnStudio" title="Create a world" aria-label="Create a world">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    <span>New world</span></button>
+  <button class="wl-ibtn" data-theme-btn title="Toggle theme" aria-label="Toggle theme"></button>
+</header>
+
+<!-- HERO -->
+<section class="wl-hero">
+  <div class="wl-atmo" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="wl-hero-in">
+    <div class="wl-kicker">NOVA ROLEPLAY</div>
+    <h1 class="wl-h1">Enter another<br>reality.</h1>
+    <p class="wl-sub">Explore worlds. Meet minds. Create stories that evolve with you.</p>
+    <div class="wl-cta">
+      <button class="wl-btn primary" id="ctaContinue" style="display:none">
+        <span class="lbl">Continue</span><span class="sub" id="ctaContinueName"></span></button>
+      <a class="wl-btn" href="#discover">Discover worlds</a>
+      <button class="wl-btn" id="ctaCreate">Create a world</button>
+      <button class="wl-btn ghost" id="ctaRandom">Random experience</button>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURED -->
+<section class="wl-sec" id="featured">
+  <div class="wl-sech"><h2>Featured worlds</h2>
+    <p>Hand-built realities — enter one and the story begins where you are.</p></div>
+  <div class="wl-grid" id="featuredGrid"></div>
+</section>
+
+<!-- YOUR UNIVERSE -->
+<section class="wl-sec" id="universe" style="display:none">
+  <div class="wl-sech"><h2>Your universe</h2>
+    <p>Worlds you live in — ongoing stories, drafts and recent visits.</p></div>
+  <div class="wl-rooms" id="roomList"></div>
+</section>
+
+<!-- DISCOVER -->
+<section class="wl-sec" id="discover">
+  <div class="wl-sech"><h2>Discover</h2>
+    <p>Browse by the kind of reality you want to step into.</p></div>
+  <div class="wl-genres" id="genreChips"></div>
+  <div class="wl-grid sm" id="discoverGrid"></div>
+</section>
+
+<!-- CREATION STUDIO -->
+<div class="wl-veil" id="studioVeil" role="dialog" aria-modal="true" aria-label="World creation studio">
+  <div class="wl-sheet">
+    <div class="wl-sheet-h">
+      <div><h3>World Studio</h3>
+        <p class="wl-mut">Describe a reality — Nova drafts the setting, the rules and its people. Edit anything before you step in.</p></div>
+      <button class="wl-x" data-close aria-label="Close">×</button>
+    </div>
+    <div class="wl-studio">
+      <div class="wl-field full">
+        <label for="stConcept">World concept</label>
+        <textarea id="stConcept" rows="3" placeholder="A lighthouse city where the light keeps ships away, not safe…"></textarea>
+      </div>
+      <div class="wl-field">
+        <label for="stGenre">Genre</label>
+        <select id="stGenre">
+          <option value="">— open —</option>
+          <option>fantasy</option><option>science fiction</option>
+          <option>mystery</option><option>historical</option>
+          <option>psychological</option><option>romance</option>
+          <option>drama</option><option>adventure</option>
+          <option>horror</option><option>philosophical</option>
+        </select>
+      </div>
+      <div class="wl-field">
+        <label for="stMood">Atmosphere</label>
+        <select id="stMood">
+          <option value="">— natural —</option>
+          <option>cozy</option><option>tense</option><option>mysterious</option>
+          <option>melancholic</option><option>heroic</option><option>eerie</option>
+        </select>
+      </div>
+      <div class="wl-field">
+        <label for="stCast">Cast size <span class="wl-mut" id="stCastVal">3</span></label>
+        <input type="range" id="stCast" min="1" max="5" value="3">
+      </div>
+      <div class="wl-studio-acts">
+        <button class="wl-btn primary" id="stGenerate">✦ Generate blueprint</button>
+        <button class="wl-btn" id="stBlank">Create blank world</button>
+      </div>
+      <div class="wl-preview" id="bpPreview" style="display:none">
+        <div class="wl-bp-head">
+          <div class="wl-bp-emo" id="bpEmoji">🌍</div>
+          <div><h4 id="bpTitle"></h4><p class="wl-mut" id="bpPremise"></p></div>
+        </div>
+        <div class="wl-bp-meta" id="bpMeta"></div>
+        <div class="wl-bp-scen" id="bpScenario"></div>
+        <div class="wl-bp-chars" id="bpChars"></div>
+        <button class="wl-btn primary" id="bpEnter">Enter this world →</button>
+      </div>
+      <div class="wl-mut" id="stStatus"></div>
+    </div>
+  </div>
+</div>
+
+<div class="st-toast" id="toast"></div>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/app-nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
+<script src="/static/js/worlds.js"></script>
+</body>
+</html>

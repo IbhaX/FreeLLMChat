@@ -35,8 +35,9 @@
       chars=await v1Api('/v1/characters');
       const d=await v1Api('/v1/roleplay/rooms');
       rooms=d.rooms||[];
+      const qRoom=parseInt(new URLSearchParams(location.search).get('room')||'0');
       const last=parseInt(localStorage.getItem('rp_last')||'0');
-      const r=rooms.find(x=>x.id===last)||rooms[0];
+      const r=rooms.find(x=>x.id===qRoom)||rooms.find(x=>x.id===last)||rooms[0];
       if(r)await openRoom(r.id);else{renderEmpty();renderCast();}
       // resume an in-flight turn
       if(r){const live=await v1Api(`/v1/roleplay/rooms/${r.id}/live`).catch(()=>({}));
@@ -60,6 +61,16 @@
       renderCastCards();$('#castVeil').classList.add('open');
       if(window.NovaMotion)NovaMotion.veil($('#castVeil'),true);};
     $('#btnDirector').onclick=()=>$('#director').classList.toggle('open');
+    $('#btnWorld').onclick=()=>{if(!room)return toast2('Open a scene first');
+      renderWorldPanel();$('#worldVeil').classList.add('open');
+      if(window.NovaMotion)NovaMotion.veil($('#worldVeil'),true);};
+    $('#btnTimeline').onclick=()=>{if(!room)return toast2('Open a scene first');
+      renderTimeline();$('#tlVeil').classList.add('open');
+      if(window.NovaMotion)NovaMotion.veil($('#tlVeil'),true);};
+    $('#btnRel').onclick=()=>{if(!room)return toast2('Open a scene first');
+      renderConstellation();$('#relVeil').classList.add('open');
+      if(window.NovaMotion)NovaMotion.veil($('#relVeil'),true);};
+    $('#relAdd').onclick=addRelation;
     $('#btnNewScene').onclick=newScene;
     $('#btnQuickNewScene').onclick=newScene;
     $('#sceneModelBtn').onclick=e=>{
@@ -223,6 +234,7 @@
     const ql=$('#queueLine');
     let sb=document.getElementById('btnStop');
     if(on){
+      $('#choices').hidden=true;
       if(!sb){
         sb=document.createElement('button');sb.type='button';sb.id='btnStop';
         sb.className='st-run st-run-stop';
@@ -389,6 +401,7 @@
       case 'turn_done':{
         if(room)room.messages=ev.messages;
         $('#queueLine').textContent='';renderCast();
+        loadChoices();
         break;}
       case 'tool':{
         const q=(ev.args&&(ev.args.query||ev.args.url))||'';
@@ -613,7 +626,9 @@
       const paused=(room.paused_ids||[]).includes(id);
       const el=document.createElement('div');
       el.className='st-chip'+(paused?' paused':'');
+      el.title='Open dossier';
       el.innerHTML=`<span class="dot"></span>${esc(c.emoji||'')} ${esc(c.name)}`;
+      el.onclick=()=>openDossier(id);
       host.appendChild(el);
     });
   }
@@ -792,7 +807,8 @@
       room=await v1Api(`/v1/roleplay/rooms/${id}`);
       localStorage.setItem('rp_last',String(id));
       $('#sceneTitle').textContent=room.name;
-      renderTranscript();renderCast();renderDirector();
+      renderTranscript();renderCast();renderDirector();renderWorldStrip();
+      if((room.messages||[]).length)loadChoices();
     }catch(e){toast2(e.message);}
   }
 
@@ -802,6 +818,8 @@
     $('#transcript').innerHTML='';
     $('#stageEmpty').style.display='';
     $('#btnBegin').style.display='none';
+    $('#worldStrip').hidden=true;
+    $('#choices').hidden=true;
     $('#emptyText').textContent='Pick a scene — or raise the curtain on a new one.';
     renderCast();$('#turnOrder').innerHTML='';
   }
@@ -912,6 +930,265 @@
       $('#charVeil').classList.remove('open');toast2('Saved');
       chars=await v1Api('/v1/characters');renderCastCards();renderCast();
     }catch(e){toast2(e.message);}
+  }
+
+  // ------------------------------------------------ worlds layer
+  const worldOf=()=>(room&&room.world)||{};
+
+  function renderWorldStrip(){
+    const w=worldOf(),strip=$('#worldStrip');
+    const bits=[];
+    if(w.location)bits.push(`<span class="w-loc">📍 ${esc(w.location)}</span>`);
+    if(w.world_time)bits.push(`<span>🕰 ${esc(w.world_time)}</span>`);
+    const beats=(room.messages||[]).length;
+    if(beats)bits.push(`<span>◦ ${beats} beats</span>`);
+    if(!bits.length&&!w.title){strip.hidden=true;return;}
+    strip.innerHTML=bits.join('<span class="w-sep">·</span>')+
+      `<span class="w-mode">${esc(w.mode||'free')}</span>`;
+    strip.hidden=false;
+  }
+
+  /* contextual 'what do you do' choices */
+  let choicesReq=0;
+  async function loadChoices(){
+    const bar=$('#choices');
+    if(!room||streaming){bar.hidden=true;return;}
+    const mine=++choicesReq;
+    bar.hidden=true;bar.innerHTML='';
+    try{
+      const r=await v1Api(`/v1/roleplay/rooms/${room.id}/choices`,
+        {method:'POST',body:'{}'});
+      if(mine!==choicesReq||streaming||!room)return;
+      const list=(r.choices||[]).slice(0,5);
+      if(!list.length)return;
+      const hint=document.createElement('span');
+      hint.className='st-choices-hint';hint.textContent='What do you do?';
+      bar.appendChild(hint);
+      list.forEach(c=>{
+        const b=document.createElement('button');
+        b.className='st-choice';b.textContent=c;
+        b.onclick=()=>{bar.hidden=true;bar.innerHTML='';beat('talk',c);};
+        bar.appendChild(b);});
+      const diy=document.createElement('button');
+      diy.className='st-choice do';diy.textContent='do something else…';
+      diy.onclick=()=>{bar.hidden=true;$('#input').focus();};
+      bar.appendChild(diy);
+      bar.hidden=false;
+      if(window.gsap&&!matchMedia('(prefers-reduced-motion: reduce)').matches)
+        gsap.from(bar.querySelectorAll('.st-choice'),
+          {opacity:0,y:6,duration:.3,stagger:.05,ease:'power2.out'});
+    }catch(_){bar.hidden=true;}
+  }
+
+  /* world state panel — shows only real room state */
+  async function patchWorld(keys){
+    try{
+      const r=await v1Api(`/v1/roleplay/rooms/${room.id}`,{method:'PATCH',
+        body:JSON.stringify({world:keys})});
+      room.world=r.world;renderWorldStrip();
+    }catch(e){toast2(e.message);}
+  }
+
+  function renderWorldPanel(){
+    const w=worldOf(),host=$('#worldPanel');
+    $('#wTitle').textContent=w.title||room.name;
+    $('#wPremise').textContent=w.premise||room.scenario||
+      'A stage you set — give it a place, a time, and rules.';
+    const cast=(room.character_ids||[]).map(charById).filter(Boolean);
+    const MODE_OPTS=['story','free','simulation','character','ensemble','director']
+      .map(m=>`<option ${w.mode===m?'selected':''}>${m}</option>`).join('');
+    host.innerHTML=`
+      <div class="wp-grid">
+        <div class="wp-row"><label>Location</label>
+          <input id="wpLoc" value="${esc(w.location||'')}" placeholder="where are we?"></div>
+        <div class="wp-row"><label>World time</label>
+          <input id="wpTime" value="${esc(w.world_time||'')}" placeholder="when is it?"></div>
+        <div class="wp-row"><label>Mode</label>
+          <select id="wpMode">${MODE_OPTS}</select></div>
+        ${(w.rules||[]).length?`<div class="wp-h">World rules</div>
+          <ul class="wp-rules">${w.rules.map(r=>`<li>${esc(r)}</li>`).join('')}</ul>`:''}
+        <div class="wp-h">Present (${cast.length})</div>
+        <div class="wp-cast">${cast.map(c=>
+          `<span class="wp-char${(room.paused_ids||[]).includes(c.id)?' paused':''}"
+            data-cid="${c.id}"><span class="av" ${c.avatar_url?
+            `style="background-image:url(${esc(c.avatar_url)})"`:''}>${
+            c.avatar_url?'':esc(c.emoji||'🎭')}</span>${esc(c.name)}</span>`).join('')||
+          '<span class="wp-sum">Nobody on stage yet.</span>'}</div>
+        <div class="wp-h">Recorded events (${(w.events||[]).length})</div>
+        <div class="wp-events">${(w.events||[]).slice().reverse().map(e=>
+          `<div class="wp-ev"><span class="k">${esc(e.kind||'note')}</span>
+           <span>${esc(e.text)}</span></div>`).join('')||
+          '<span class="wp-sum">Nothing recorded yet — log the moments that matter.</span>'}</div>
+        <div class="wp-ev-form">
+          <input id="wpEvText" placeholder="Log an event — what just changed?">
+          <button id="wpEvAdd">＋ Log</button></div>
+        <div class="wp-h">Story so far</div>
+        <div class="wp-sum">${esc(room.summary||
+          'No recap yet — it builds as the scene runs.')}</div>
+      </div>`;
+    host.querySelectorAll('.wp-char').forEach(el=>
+      el.onclick=()=>openDossier(parseInt(el.dataset.cid)));
+    const patch=()=>patchWorld({location:$('#wpLoc').value.trim(),
+      world_time:$('#wpTime').value.trim(),mode:$('#wpMode').value});
+    ['wpLoc','wpTime','wpMode'].forEach(id=>
+      document.getElementById(id).addEventListener('change',patch));
+    $('#wpEvAdd').onclick=async()=>{
+      const t=$('#wpEvText').value.trim();if(!t)return;
+      try{
+        const r=await v1Api(`/v1/roleplay/rooms/${room.id}/world/events`,
+          {method:'POST',body:JSON.stringify({text:t,kind:'event'})});
+        room.world=r.world;renderWorldPanel();renderWorldStrip();
+      }catch(e){toast2(e.message);}};
+  }
+
+  /* character dossier — everything the persona actually holds */
+  function openDossier(cid){
+    const c=charById(cid);if(!c)return;
+    const w=worldOf();
+    const rels=(w.relationships||[]).filter(r=>r.from===cid||r.to===cid);
+    const relName=id=>id==='user'?'you':(charById(id)||{}).name||'someone';
+    const lines=(room?(room.messages||[]):[]).filter(m=>
+      m.speaker===c.name&&m.kind!=='ooc').slice(-3);
+    const sec=(h,body,q)=>body?
+      `<div class="dos-sec"><h5>${h}</h5><p class="${q?'q':''}">${esc(body)}</p></div>`:'';
+    $('#dossierBody').innerHTML=`
+      <div class="dos">
+        <div class="dos-head">
+          <div class="dos-face" ${c.avatar_url?
+            `style="background-image:url(${esc(c.avatar_url)})"`:''}>${
+            c.avatar_url?'':esc(c.emoji||'🎭')}</div>
+          <div><h3 class="dos-name">${esc(c.name)}</h3>
+            <div class="dos-tag">${esc(c.tagline||'')}</div>
+            <div class="dos-cat">${esc(c.category||'character')}${
+              (room.paused_ids||[]).includes(c.id)?' · paused':''}</div></div>
+        </div>
+        ${sec('Who they are',c.description)}
+        ${sec('Personality',c.personality)}
+        ${sec('Background',c.background)}
+        ${sec('Goals & motivations',c.motivations)}
+        ${sec('What they know',c.knowledge_domain)}
+        ${sec('How they speak',c.speaking_style||c.style)}
+        ${sec('Boundaries',c.boundaries)}
+        ${sec('In their own voice',c.example_dialogue||c.greeting,true)}
+        ${rels.length?`<div class="dos-sec"><h5>Bonds</h5>
+          <div class="dos-rels">${rels.map(r=>`<span class="dos-rel">${
+            esc(relName(r.from))} — <b>${esc(r.kind)}</b> — ${esc(relName(r.to))}${
+            r.label?` · ${esc(r.label)}`:''}</span>`).join('')}</div></div>`:''}
+        ${lines.length?`<div class="dos-sec"><h5>Lately, in their own words</h5>
+          <div class="dos-lines">${lines.map(m=>
+            `<div class="dos-line">${esc((m.text||'').slice(0,160))}</div>`).join('')}</div></div>`:''}
+        <div class="dos-sec"><div class="dos-acts">
+          <button class="st-btn" id="dosWhisper">🤫 Whisper to them</button>
+          <button class="st-btn ghost" id="dosEdit">✎ Edit character</button>
+        </div></div>
+      </div>`;
+    $('#dosWhisper').onclick=()=>{
+      $('#dossierVeil').classList.remove('open');
+      setMode('whisper');$('#whisperTo').value=cid;$('#input').focus();};
+    $('#dosEdit').onclick=()=>{
+      $('#dossierVeil').classList.remove('open');openEditor(c);};
+    $('#dossierVeil').classList.add('open');
+    if(window.NovaMotion)NovaMotion.veil($('#dossierVeil'),true);
+  }
+
+  /* relationship constellation — edges are director-curated state */
+  const REL_STYLE={trust:{c:'#4dd8ff',d:''},friendship:{c:'#4dd8ff',d:''},
+    loyalty:{c:'#4dd8ff',d:''},family:{c:'#7ce8b5',d:''},
+    romance:{c:'#ff7eb0',d:''},debt:{c:'#ffd166',d:'6 3'},
+    rivalry:{c:'#ff6b6b',d:'7 4'},conflict:{c:'#ff6b6b',d:'7 4'},
+    suspicion:{c:'#8b92a8',d:'2 4'}};
+
+  function renderConstellation(){
+    const w=worldOf(),host=$('#constellation');
+    const cast=(room.character_ids||[]).map(charById).filter(Boolean);
+    const rels=(w.relationships||[]);
+    const nodeIds=cast.map(c=>c.id);
+    if(rels.some(r=>r.from==='user'||r.to==='user'))nodeIds.push('user');
+    /* rel selects */
+    const opts='<option value="user">You</option>'+
+      cast.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    $('#relFrom').innerHTML=opts;$('#relTo').innerHTML=opts;
+    if($('#relTo').options.length>1)$('#relTo').selectedIndex=1;
+    if(!nodeIds.length){host.innerHTML='<div class="rel-empty">'+
+      'No one on stage — add characters to see their bonds.</div>';return;}
+    const W=440,H=340,cx=W/2,cy=H/2,R=Math.min(W,H)/2-52;
+    const pos={};
+    nodeIds.forEach((id,i)=>{
+      const a=-Math.PI/2+i*2*Math.PI/nodeIds.length;
+      pos[id]={x:cx+R*Math.cos(a),y:cy+R*Math.sin(a)};});
+    const edges=rels.filter(r=>pos[r.from]&&pos[r.to]).slice(-24);
+    const edgeSvg=edges.map((r,i)=>{
+      const a=pos[r.from],b=pos[r.to],st=REL_STYLE[r.kind]||REL_STYLE.trust;
+      const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+      const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1;
+      const ox=-dy/len*14,oy=dx/len*14;
+      const qx=mx+ox,qy=my+oy;
+      return `<path d="M${a.x} ${a.y} Q${qx} ${qy} ${b.x} ${b.y}" fill="none"
+        stroke="${st.c}" stroke-width="2" stroke-dasharray="${st.d}" opacity=".75"/>
+        ${r.label?`<text class="rel-edge-label" x="${qx}" y="${qy-4}"
+          text-anchor="middle">${esc(r.label.slice(0,26))}</text>`:''}`;}).join('');
+    const nodeSvg=nodeIds.map(id=>{
+      const p=pos[id],isYou=id==='user';
+      const c=isYou?{name:'You',emoji:'🧑'}:charById(id);
+      return `<g class="rel-node" data-cid="${id}" transform="translate(${p.x},${p.y})">
+        <circle r="24" fill="${isYou?'#24304a':'#1b2133'}"
+          stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>
+        <text y="5" text-anchor="middle" font-size="17">${esc(c.emoji||'🎭')}</text>
+        <text y="40" text-anchor="middle" font-size="11.5"
+          font-weight="600">${esc(c.name.slice(0,14))}</text></g>`;}).join('');
+    host.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"
+      role="img" aria-label="Relationship map">${edgeSvg}${nodeSvg}</svg>`+
+      `<div class="rel-key">${Object.entries(REL_STYLE).slice(0,6).map(([k,v])=>
+        `<span><i style="border-color:${v.c}"></i>${k}</span>`).join('')}</div>`;
+    host.querySelectorAll('.rel-node').forEach(g=>g.onclick=()=>{
+      const id=g.dataset.cid;
+      if(id==='user')return;
+      $('#relVeil').classList.remove('open');openDossier(parseInt(id));});
+  }
+
+  async function addRelation(){
+    if(!room)return;
+    const w=worldOf();
+    const rel={from:isNaN(parseInt($('#relFrom').value))?'user':parseInt($('#relFrom').value),
+      to:isNaN(parseInt($('#relTo').value))?'user':parseInt($('#relTo').value),
+      kind:$('#relKind').value,label:$('#relLabel').value.trim().slice(0,80)};
+    if(rel.from===rel.to)return toast2('A bond needs two different people');
+    const list=[...(w.relationships||[])];
+    const dup=list.findIndex(r=>r.from===rel.from&&r.to===rel.to);
+    if(dup>=0)list[dup]=rel;else list.push(rel);
+    await patchWorld({relationships:list.slice(-40)});
+    $('#relLabel').value='';renderConstellation();
+  }
+
+  /* narrative timeline — transcript + recorded events, honestly ordered */
+  function renderTimeline(){
+    const w=worldOf(),host=$('#timeline');
+    const msgs=room.messages||[];
+    const seen=new Set();
+    const items=[];
+    (w.events||[]).slice(0,2).forEach(e=>
+      items.push({cls:'mark',dot:'⚑',who:'recorded',text:e.text}));
+    msgs.forEach(m=>{
+      const kind=m.kind||'dialogue';
+      if(kind==='narration')items.push({cls:'narr',dot:'📜',
+        who:'narration',text:(m.text||'').slice(0,220)});
+      else if(kind==='ooc')items.push({cls:'mark',dot:'((',who:"director's note",
+        text:(m.text||'').slice(0,160)});
+      else if(m.role==='user')items.push({cls:'user',dot:'🧑',
+        who:kind==='whisper'?'you · whispered':'you',
+        text:(m.text||'').slice(0,220)});
+      else{
+        if(m.speaker&&!seen.has(m.speaker)){seen.add(m.speaker);
+          items.push({cls:'mark',dot:'✦',who:'entrance',
+            text:`${m.speaker} enters the story`});}
+        items.push({cls:'narr',dot:m.emoji||'🎭',who:m.speaker||'',
+          text:(m.text||'').slice(0,220)});}
+    });
+    host.innerHTML=items.length?items.map(i=>
+      `<div class="tl-item ${i.cls}"><div class="tl-dot">${i.dot}</div>
+       <div class="tl-body"><span class="who">${esc(i.who)}</span>
+       <span class="t">${esc(i.text)}</span></div></div>`).join('')
+      :'<div class="tl-empty">The story hasn\'t started — write the first beat.</div>';
   }
 
   AppNav.attach(document.getElementById('appNavBtn'),'roleplay');

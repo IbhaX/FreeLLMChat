@@ -50,7 +50,7 @@
      Hidden on desktop where the admin sidebar exists (body.has-shell);
      always visible on immersive pages and on mobile. */
   const PATH_MAP={'/dashboard':'dashboard','/chat':'chat','/research':'research',
-    '/roleplay':'roleplay','/agents':'agents','/skills':'skills',
+    '/roleplay':'roleplay','/roleplay/scene':'roleplay','/agents':'agents','/skills':'skills',
     '/library':'library','/keys':'keys','/settings':'settings',
     '/profile':'profile','/memory':'memory'};
   function initTopnav(){

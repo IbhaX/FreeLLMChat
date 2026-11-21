@@ -15,11 +15,14 @@
 
   <!-- top bar -->
   <header class="st-top">
-    <button class="st-ibtn" data-app-back="/" title="Back"></button>
+    <button class="st-ibtn" data-app-back="/roleplay" title="Back to worlds"></button>
     <button class="st-ibtn" id="appNavBtn" title="Apps — all pages"></button>
     <div class="st-title" id="sceneTitle" title="Click to rename">The Stage</div>
     <div class="st-castchips" id="castChips"></div>
     <div class="st-topbtns">
+      <button class="st-ibtn st-room-action" id="btnWorld" title="World state" aria-label="World state">🌍 World</button>
+      <button class="st-ibtn st-room-action" id="btnTimeline" title="Narrative timeline" aria-label="Narrative timeline">🕰 Story</button>
+      <button class="st-ibtn st-room-action" id="btnRel" title="Relationship constellation" aria-label="Relationship constellation">✦ Bonds</button>
       <button class="st-ibtn st-room-action" id="btnScenes" title="Scenes" aria-label="Room history"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v13H4zM4 11h16M4 7l3-4m3 4 3-4m3 4 3-4"/></svg>Rooms</button>
       <button class="st-ibtn st-room-action" id="btnQuickNewScene" type="button">+ New room</button>
       <button class="st-ibtn" id="btnCast" title="Cast & characters" aria-label="Cast & characters"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-4M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm8-8a4 4 0 0 1 0 8"/></svg></button>
@@ -28,6 +31,8 @@
       <button class="st-ibtn" data-theme-btn title="Toggle theme"></button>
     </div>
   </header>
+
+  <div class="st-world" id="worldStrip" hidden></div>
 
   <div class="st-body">
 
@@ -105,6 +110,7 @@
 
   <!-- composer -->
   <footer class="st-composer" id="composer">
+    <div class="st-choices" id="choices" hidden></div>
     <div class="st-modes">
       <button class="st-mode on" data-mode="talk">💬 Talk</button>
       <button class="st-mode" data-mode="narrate">🖋 Narrate</button>
@@ -173,6 +179,63 @@
     <div style="margin-top:16px;display:flex;gap:10px">
       <button class="st-btn" id="charSave">Save character</button>
       <button class="st-btn ghost" data-close>Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- world state panel -->
+<div class="st-veil" id="worldVeil">
+  <div class="st-sheet" style="width:min(600px,94vw)">
+    <h3 id="wTitle">World State</h3>
+    <div class="sub" id="wPremise"></div>
+    <div id="worldPanel"></div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="st-btn ghost" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- character dossier -->
+<div class="st-veil" id="dossierVeil">
+  <div class="st-sheet" style="width:min(640px,94vw)">
+    <div id="dossierBody"></div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="st-btn ghost" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- relationship constellation -->
+<div class="st-veil" id="relVeil">
+  <div class="st-sheet" style="width:min(660px,94vw)">
+    <h3>Bonds</h3>
+    <div class="sub">Relationships the story has actually established — recorded, not guessed. Click a character to open their dossier.</div>
+    <div id="constellation"></div>
+    <div class="st-form" style="margin-top:14px">
+      <div><label>From</label><select id="relFrom"></select></div>
+      <div><label>To</label><select id="relTo"></select></div>
+      <div><label>Bond</label><select id="relKind">
+        <option>trust</option><option>friendship</option><option>rivalry</option>
+        <option>romance</option><option>conflict</option><option>loyalty</option>
+        <option>suspicion</option><option>family</option><option>debt</option>
+      </select></div>
+      <div><label>Note</label><input id="relLabel" placeholder="owes her a favor…"></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button class="st-btn" id="relAdd">Add bond</button>
+      <button class="st-btn ghost" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- narrative timeline -->
+<div class="st-veil" id="tlVeil">
+  <div class="st-sheet" style="width:min(560px,94vw)">
+    <h3>The Story So Far</h3>
+    <div class="sub">Every beat, in order — scroll through what happened.</div>
+    <div class="st-timeline" id="timeline"></div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="st-btn ghost" data-close>Close</button>
     </div>
   </div>
 </div>

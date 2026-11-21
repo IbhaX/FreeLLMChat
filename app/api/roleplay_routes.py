@@ -15,6 +15,7 @@ from app.db import get_session
 from app.models import RoleplayRoom, User
 from app.services import chat_jobs
 from app.services import roleplay as rp
+from app.services import worlds as wd
 
 router = APIRouter(prefix="/v1/roleplay", tags=["roleplay"],
                    dependencies=[Depends(require_user)])
@@ -26,6 +27,7 @@ class RoomIn(BaseModel):
     character_ids: list[int] = Field(default_factory=list, max_length=6)
     model: str = "auto"
     tools_enabled: bool = False
+    world: dict[str, Any] | None = None
 
 
 class MessageIn(BaseModel):
@@ -58,6 +60,7 @@ class RoomPatch(BaseModel):
     character_ids: list[int] | None = None
     model: str | None = None
     tools_enabled: bool | None = None
+    world: dict[str, Any] | None = None
 
 
 def _room_out(r: RoleplayRoom) -> dict[str, Any]:
@@ -67,6 +70,7 @@ def _room_out(r: RoleplayRoom) -> dict[str, Any]:
             "paused_ids": r.paused_ids or [],
             "director_notes": r.director_notes or "",
             "tools_enabled": bool(r.tools_enabled),
+            "world": wd.normalize_world(r),
             "messages": r.messages, "updated_at": r.updated_at.isoformat()}
 
 
@@ -92,7 +96,8 @@ async def create_room(body: RoomIn,
     room = RoleplayRoom(name=body.name.strip(), scenario=body.scenario,
                         character_ids=body.character_ids, model=body.model,
                         tools_enabled=body.tools_enabled,
-                        owner_id=user.id if user else None, messages=[])
+                        owner_id=user.id if user else None, messages=[],
+                        world=body.world or wd.default_world(body.name.strip()))
     session.add(room)
     await session.commit()
     return _room_out(room)
@@ -252,6 +257,14 @@ async def patch_room(rid: int, body: RoomPatch,
     if not room:
         raise HTTPException(404, "room not found")
     data = body.model_dump(exclude_unset=True)
+    world_patch = data.pop("world", None)
+    if world_patch is not None:
+        merged = wd.normalize_world(room)
+        for k, v in world_patch.items():
+            if k in ("events", "relationships", "rules") and not isinstance(v, list):
+                continue
+            merged[k] = v
+        room.world = merged
     for k, v in data.items():
         setattr(room, k, v)
     session.add(room)
@@ -271,3 +284,94 @@ async def summarize(rid: int, request: Request,
     return StreamingResponse(
         job.stream(), media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ---------- Worlds: catalogue, entry, choices, blueprint ----------
+
+
+class BlueprintIn(BaseModel):
+    concept: str = Field(default="", max_length=1200)
+    genre: str = Field(default="", max_length=60)
+    mood: str = Field(default="", max_length=60)
+    cast_size: int = Field(default=3, ge=1, le=5)
+
+
+class WorldEventIn(BaseModel):
+    text: str = Field(min_length=1, max_length=300)
+    kind: str = Field(default="note", max_length=24)
+
+
+class WorldEnterIn(BaseModel):
+    blueprint: dict[str, Any] | None = None   # studio preview → custom world
+
+
+@router.get("/worlds")
+async def list_worlds():
+    """Featured world catalogue for the Worlds landing page."""
+    return {"worlds": wd.catalog()}
+
+
+@router.post("/worlds/blueprint")
+async def world_blueprint(body: BlueprintIn, request: Request):
+    """AI-assisted world creation — returns a previewable blueprint."""
+    bp = await wd.generate_blueprint(
+        _gateway(request), body.concept, body.genre, body.mood,
+        cast_size=body.cast_size)
+    return {"blueprint": bp}
+
+
+@router.post("/worlds/{wid}/enter", status_code=201)
+async def enter_world(wid: str, body: WorldEnterIn,
+                      session: AsyncSession = Depends(get_session),
+                      user: User | None = Depends(optional_user)):
+    """Enter a catalogue world — or materialize a studio blueprint."""
+    uid = user.id if user else None
+    if wid == "custom":
+        bp = body.blueprint or {}
+        seeds = (bp.get("characters") or [])[:6]
+        char_ids = await wd._ensure_characters(session, seeds, uid)
+        world = wd.default_world(str(bp.get("title") or "New World")[:90])
+        for k in ("premise", "location", "world_time", "rules", "title"):
+            if bp.get(k):
+                world[k] = bp[k]
+        wd.log_event(world,
+                     f"You arrive — {world['location'] or world['title']}",
+                     kind="arrival")
+        room = RoleplayRoom(
+            name=world["title"], scenario=str(bp.get("scenario") or ""),
+            character_ids=char_ids, model="auto", owner_id=uid,
+            messages=[], world=world)
+        session.add(room)
+    else:
+        room = await wd.enter_world(session, wid, uid)
+        if room is None:
+            raise HTTPException(404, "unknown world")
+    await session.commit()
+    return _room_out(room)
+
+
+@router.post("/rooms/{rid}/choices")
+async def room_choices(rid: int, request: Request,
+                       session: AsyncSession = Depends(get_session)):
+    """Contextual 'what do you do' options for the current beat."""
+    room = await session.get(RoleplayRoom, rid)
+    if not room:
+        raise HTTPException(404, "room not found")
+    cast = await rp.room_characters(session, room)
+    choices = await wd.suggest_choices(_gateway(request), room, cast)
+    return {"choices": choices}
+
+
+@router.post("/rooms/{rid}/world/events")
+async def world_log_event(rid: int, body: WorldEventIn,
+                          session: AsyncSession = Depends(get_session)):
+    """Director logs a story event into the world's curated event feed."""
+    room = await session.get(RoleplayRoom, rid)
+    if not room:
+        raise HTTPException(404, "room not found")
+    world = wd.normalize_world(room)
+    wd.log_event(world, body.text, kind=body.kind[:24])
+    room.world = world
+    session.add(room)
+    await session.commit()
+    return {"ok": True, "world": world}

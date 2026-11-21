@@ -232,6 +232,11 @@ async def research_page() -> Response:
 
 @app.get("/roleplay", include_in_schema=False)
 async def roleplay_page() -> Response:
+    return render_page(static_dir=static_dir, name="worlds.html")
+
+
+@app.get("/roleplay/scene", include_in_schema=False)
+async def roleplay_scene_page() -> Response:
     return render_page(static_dir=static_dir, name="roleplay.html")
 
 
