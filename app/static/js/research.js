@@ -143,7 +143,7 @@
         ${meta.run_id?`<div class="rx-no">№<b>${esc(String(meta.run_id))}</b></div>`:''}
       </div>
       ${rows?`<div class="rx-body">${rows}</div>`:''}
-      <div class="rx-foot"><span>${esc(assurance)}</span><span>Nova Research Center</span></div>
+      <div class="rx-foot"><span>${esc(assurance)}</span><span>IbhaX Research Center</span></div>
     </div>`;
   }
 
@@ -152,7 +152,7 @@
     if(meta!==undefined)currentMeta=meta;
     $('#rxpad').innerHTML=renderRx(currentMeta);
     const host=$('#report');host.innerHTML='';
-    const Nova=window.NovaRender||{};
+    const IbhaX=window.NovaRender||{};
     if(Nova.ResponseRenderer&&Nova.ResponseRenderer.renderMessage){
       try{
         Nova.ResponseRenderer.renderMessage({role:'assistant',text:text},host,{showActions:false});

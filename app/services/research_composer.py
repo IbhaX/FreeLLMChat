@@ -62,7 +62,7 @@ Visual/data (only when the text actually contains the data — NEVER invent numb
 - summary {title, points[]} — section-closing summary
 """
 
-COMPOSE_SYSTEM = """You are Nova's textbook document composer. Given a report OUTLINE you produce the book's skeleton — metadata, chapter plan, glossary, quiz, flashcards. Chapters come pre-split; you name and color them.
+COMPOSE_SYSTEM = """You are IbhaX's textbook document composer. Given a report OUTLINE you produce the book's skeleton — metadata, chapter plan, glossary, quiz, flashcards. Chapters come pre-split; you name and color them.
 
 ## Output (SkeletonDoc)
 - title, subtitle, topic, level ("introductory"|"intermediate"|"advanced"), reading_minutes (estimate)
@@ -74,7 +74,7 @@ COMPOSE_SYSTEM = """You are Nova's textbook document composer. Given a report OU
 Rules: never invent content not implied by the outline; chapter count must equal the outline section count.
 """
 
-SECTION_SYSTEM = """You are Nova's textbook section composer. Convert ONE report section into textbook blocks (JSON: {"intro": "1-2 sentence chapter introduction", "blocks": [...]}).
+SECTION_SYSTEM = """You are IbhaX's textbook section composer. Convert ONE report section into textbook blocks (JSON: {"intro": "1-2 sentence chapter introduction", "blocks": [...]}).
 
 """ + _BLOCK_CATALOG + _COMPOSE_RULES + """
 Additionally: start with a "chapter_intro" block {"type":"paragraph","data":{"text": "…"}} only if the section lacks an opening paragraph. Keep every fact.

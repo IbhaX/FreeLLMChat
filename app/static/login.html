@@ -2,15 +2,15 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<title>Sign in - Nova</title>
+<title>Sign in - IbhaX</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/theme.css">
 <script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
 <style>
-  body{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg-1)}
-  .login-card{width:400px;max-width:100%;padding:32px}
+  body{min-height:100vh;min-height:100dvh;display:flex;padding:24px;background:var(--bg-1)}
+  .login-card{width:400px;max-width:100%;padding:32px;margin:auto}
   .login-card .avatar{width:44px;height:44px;border-radius:13px;
     background:linear-gradient(135deg,var(--accent),var(--accent-2));
     display:grid;place-items:center;color:var(--on-accent);font-weight:700;
@@ -26,13 +26,19 @@
   .login-card .reg-only{display:none}
   .login-card.reg .reg-only{display:block}
   .login-card.reg .login-only{display:none}
+  @media(max-width:480px){
+    body{padding:16px}
+    .login-card{padding:24px 20px}
+    /* inputs under 16px make iOS Safari zoom on focus */
+    .login-card .ui-input{font-size:16px}
+  }
 </style>
 </head>
 <body>
 <div class="ui-card login-card" id="card">
-  <img class="avatar" src="/static/img/logo-mark.png" alt="Nova" style="object-fit:cover">
+  <img class="avatar" src="/static/img/logo-mark.png" alt="IbhaX" style="object-fit:cover">
   <h1 id="title">Welcome back</h1>
-  <p class="sub" id="subtitle">Sign in to continue to Nova.</p>
+  <p class="sub" id="subtitle">Sign in to continue to IbhaX.</p>
   <form id="loginForm" autocomplete="off">
     <label class="label"><span class="t-xs tx-3" id="u_name_lbl">Username or email</span>
       <input id="u_name" class="ui-input" required minlength="3" autocomplete="username"></label>
@@ -81,7 +87,7 @@
       ?(refRequired
         ?'Registration is invite-only — enter your referral code.'
         :'The first account becomes the administrator of this install.')
-      :'Sign in to continue to Nova.';
+      :'Sign in to continue to IbhaX.';
     btn.textContent=reg?'Create account':'Sign in';
     err.textContent='';
     document.getElementById('u_pass').autocomplete=reg?'new-password':'current-password';
@@ -122,8 +128,12 @@
             location.href=next();
           }catch(x){err.textContent=x.message||'Google sign-in failed';}
         }});
-      google.accounts.id.renderButton(document.getElementById('g_btn'),
-        {theme:'filled_black',size:'large',width:340,shape:'pill'});
+      const gHost=document.getElementById('g_btn'),
+            gPad=parseFloat(getComputedStyle(card).paddingLeft)*2,
+            gAvail=gHost.clientWidth||(card.clientWidth-gPad)||340;
+      google.accounts.id.renderButton(gHost,
+        {theme:'filled_black',size:'large',
+         width:Math.max(200,Math.min(340,Math.floor(gAvail))),shape:'pill'});
       document.getElementById('gWrap').style.display='';
     };
     document.head.appendChild(s);

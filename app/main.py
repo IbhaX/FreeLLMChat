@@ -1,4 +1,4 @@
-"""Nova Gateway application entrypoint."""
+"""IbhaX Gateway application entrypoint."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
 
         await load_custom_skills(session)
     app.state.gateway = Gateway()
-    # Nova v2: durable research runner + evidence vector index.
+    # IbhaX v2: durable research runner + evidence vector index.
     from app.services import evidence_store as _ev
     from app.services import research_v2 as _rv2
     from app.services.jobqueue import JobRunner
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Nova Gateway",
+    title="IbhaX Gateway",
     version="0.1.0",
     description="Unified OpenAI-compatible gateway over free-tier LLM providers.",
     lifespan=lifespan,

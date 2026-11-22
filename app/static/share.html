@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shared conversation - Nova</title>
+<title>Shared conversation - IbhaX</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/theme.css">
@@ -17,7 +17,7 @@
 <!-- KaTeX for math rendering (lazy auto-detect by MarkdownRenderer) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<!-- Nova Render Engine (same set as the chat page) -->
+<!-- IbhaX Render Engine (same set as the chat page) -->
 <script src="/static/js/render/ns.js"></script>
 <script src="/static/js/render/ComponentRegistry.js"></script>
 <script src="/static/js/render/ResponseClassifier.js"></script>
@@ -125,7 +125,7 @@
   </div>
 </header>
 <main class="chat-inner" id="msgs"><div class="sh-empty">Loading…</div></main>
-<div class="sh-foot">Shared via <a href="/chat">Nova Chat</a> · Nova Gateway</div>
+<div class="sh-foot">Shared via <a href="/chat">IbhaX Chat</a> · IbhaX Gateway</div>
 <script>
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const md=t=>{try{return window.NovaRender?.MarkdownRenderer?.render(t)||esc(t)}catch(e){return esc(t)}};
@@ -141,7 +141,7 @@ const fillBubble=(m,b)=>{
 const id=location.pathname.split('/').pop();
 fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
   document.getElementById('title').textContent=d.title||'Shared conversation';
-  document.title=(d.title||'Shared conversation')+' — Nova';
+  document.title=(d.title||'Shared conversation')+' — IbhaX';
   document.getElementById('sub').textContent=(d.created_at?new Date(d.created_at).toLocaleString()+' · ':'')+(d.messages||[]).length+' messages';
   const host=document.getElementById('msgs');
   const msgs=d.messages||[];
@@ -149,7 +149,7 @@ fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(
   host.innerHTML='';
   msgs.forEach(m=>{
     const isUser=m.role==='user';
-    const name=m.role==='user'?'You':(m.agentName||m.name||'Nova');
+    const name=m.role==='user'?'You':(m.agentName||m.name||'IbhaX');
     const av=isUser?'A':((m.agentName)?'🤖':'N');
     const row=document.createElement('div');
     row.className='msg-row '+(isUser?'row-user':'row-ai');

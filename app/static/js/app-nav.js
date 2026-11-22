@@ -58,7 +58,7 @@
     const active=PATH_MAP[location.pathname]||null;
     const nav=document.createElement('nav');
     nav.className='app-topnav';
-    nav.innerHTML='<a class="tb-brand" href="/"><img class="tb-logo" src="/static/img/logo-mark.png" alt="">Nova</a>'
+    nav.innerHTML='<a class="tb-brand" href="/"><img class="tb-logo" src="/static/img/logo-mark.png" alt="">IbhaX</a>'
       +NAV.filter(n=>n.href).map(n=>
         `<a class="tn-link${n.id===active?' sel':''}" href="${n.href}"${n.admin?' data-admin="1"':''}>${n.ico}${n.label}</a>`).join('')
       +'<button class="tn-burger ui-btn ui-btn-ghost ui-btn-icon" title="Apps — all pages"></button>';

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Textbook — Nova Research</title>
+<title>Textbook — IbhaX Research</title>
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
 <body class="tb">
 <div class="tb-top" id="tbTop">
   <a class="tb-btn" href="/research" title="Back to research">← Research</a>
-  <span class="tb-logo">Nova</span>
+  <span class="tb-logo">IbhaX</span>
   <span class="tb-title" id="tbTitle">Textbook</span>
   <button class="tb-btn primary" id="tbPdf" title="Export PDF">↓ PDF</button>
   <div class="tb-progress" id="tbProg"></div>
@@ -81,7 +81,7 @@
       return r.json();
     })
     .then(function (doc) {
-      document.title = (doc.title || 'Textbook') + ' — Nova Research';
+      document.title = (doc.title || 'Textbook') + ' — IbhaX Research';
       document.getElementById('tbTitle').textContent = doc.title || 'Textbook';
       var res = window.NovaTextbook.render(doc, book, {});
       if (!printMode) window.NovaTextbook.chrome(doc, res);
