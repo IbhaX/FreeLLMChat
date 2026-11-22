@@ -357,6 +357,80 @@ async def chat_completions(
          if m.get("role") == "user" and isinstance(m.get("content"), str)),
         "",
     )
+    # Stamp request context EARLY: mention-executed tools (@tool:db_query)
+    # resolve per-user connector credentials from this contextvar, so it
+    # must exist before the mention block runs them.
+    from app.api.deps import optional_user as _optional_user
+    from app.services import artifacts as _artifacts
+
+    _early_user = await _optional_user(request)
+    _artifacts.set_context(
+        source="chat", owner_id=_early_user.id if _early_user else None,
+        conversation_id=payload.get("conversation_id"))
+    # @mentions in the last user message: @agent adopts that agent's persona
+    # and model, @skill grafts the skill's instruction block, and
+    # @tool <text> runs immediately with its result injected as context.
+    # These prepend to messages BEFORE the structured contract is merged —
+    # the contract stays first.
+    sel_ctx: dict[str, Any] = {"agent": [], "skills": [], "tools": [],
+                               "auto": False}
+    mention_tool_runs: list[tuple[str, str, str]] = []
+    if isinstance(payload.get("messages"), list) and "@" in last_user:
+        try:
+            from app.services import mentions as _mentions
+
+            mres = await _mentions.resolve(session, last_user)
+            prepend: list[dict[str, str]] = []
+            if mres.agents:
+                a = mres.agents[0]
+                if a.model and str(payload.get("model") or "auto") in ("", "auto"):
+                    payload["model"] = a.model
+                if a.temperature is not None:
+                    payload.setdefault("temperature", a.temperature)
+                if a.max_tokens is not None:
+                    payload.setdefault("max_tokens", a.max_tokens)
+                if a.system_prompt:
+                    prepend.append({"role": "system", "content":
+                        f"## AGENT PERSONA: {a.name}\n{a.system_prompt}"})
+                sel_ctx["agent"].append(a.name)
+            if mres.skills:
+                from app.services import skills as _skills_mod
+
+                prepend.append({"role": "system", "content":
+                    _skills_mod.attach_instructions("", mres.skills)})
+                sel_ctx["skills"] += mres.skills
+            for tname, arg in mres.tools:
+                out = await _mentions.run_tool_for(tname, arg)
+                prepend.append({"role": "system", "content":
+                    f"## TOOL RESULT — @{tname}\n{out}\n"
+                    "Use this tool output to answer the user's request."})
+                sel_ctx["tools"].append(tname)
+                mention_tool_runs.append((tname, arg, out))
+            if prepend:
+                payload["messages"] = prepend + payload["messages"]
+        except Exception:
+            pass  # mention failures never block the message itself
+    # No explicit @mention — auto-load skills/tools that clearly match the
+    # query (the model still chooses whether to invoke the suggested tools).
+    if isinstance(payload.get("messages"), list) \
+            and not sel_ctx["agent"] and not sel_ctx["skills"] \
+            and not sel_ctx["tools"]:
+        try:
+            from app.services import mentions as _mentions
+            from app.services import skills as _skills_mod
+
+            auto = _mentions.auto_select(last_user)
+            if auto["skills"]:
+                payload["messages"] = [{
+                    "role": "system",
+                    "content": _skills_mod.attach_instructions(
+                        "", auto["skills"]),
+                }] + payload["messages"]
+                sel_ctx["skills"] += auto["skills"]
+            sel_ctx["tools"] += auto["tools"]
+            sel_ctx["auto"] = True
+        except Exception:
+            pass
     # Small talk ("hi", "thanks") can never produce components — skip the
     # ~3k-token catalog entirely and use a compact conversational prompt.
     from app.services.intent import is_small_talk
@@ -546,6 +620,28 @@ async def chat_completions(
             session = get_session_factory()()
 
         events: asyncio.Queue[dict] = asyncio.Queue()
+        # Announce the resolved/auto-selected agent, skills and tools in the
+        # activity panel before the run starts.
+        if sel_ctx["agent"] or sel_ctx["skills"] or sel_ctx["tools"]:
+            bits = []
+            if sel_ctx["agent"]:
+                bits.append("@" + sel_ctx["agent"][0])
+            if sel_ctx["skills"]:
+                bits.append("skills: " + ", ".join(sel_ctx["skills"]))
+            if sel_ctx["tools"]:
+                bits.append("tools: " + ", ".join(sel_ctx["tools"]))
+            events.put_nowait({
+                "event": "route", "kind": "decide", "status": "done",
+                "level": "normal", "actor": "auto-select",
+                "title": ("Auto-selected — " if sel_ctx["auto"] else "Using ")
+                         + " · ".join(bits)})
+        # Mention-executed tools ran before the queue existed — log them as
+        # real tool steps so the run's tool counter and timeline stay honest.
+        for _tn, _arg, _out in mention_tool_runs:
+            events.put_nowait({
+                "event": "tool", "tool": _tn, "args": _arg[:120],
+                "ok": not _out.lower().startswith("error"),
+                "result": _out[:200]})
         # `builtin_tools` (extra field): run the server-side tool-call loop
         # over the gateway's built-in tools instead of plain streaming.
         builtin = payload.pop("builtin_tools", None)

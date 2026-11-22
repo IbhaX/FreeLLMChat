@@ -16,7 +16,7 @@
   <!-- top bar -->
   <header class="st-top">
     <button class="st-ibtn" data-app-back="/roleplay" title="Back to worlds"></button>
-    <button class="st-ibtn" id="appNavBtn" title="Apps — all pages"></button>
+    <button class="st-ibtn" id="appNavBtn" title="Apps - all pages"></button>
     <div class="st-title" id="sceneTitle" title="Click to rename">The Stage</div>
     <div class="st-castchips" id="castChips"></div>
     <div class="st-topbtns">
@@ -27,7 +27,7 @@
       <button class="st-ibtn st-room-action" id="btnQuickNewScene" type="button">+ New room</button>
       <button class="st-ibtn" id="btnCast" title="Cast & characters" aria-label="Cast & characters"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-4M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm8-8a4 4 0 0 1 0 8"/></svg></button>
       <button class="st-ibtn" id="btnDirector" title="Director panel" aria-label="Director panel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg></button>
-      <button class="st-ibtn" id="btnSurprise" title="Surprise me — narrator beat" aria-label="Surprise me — narrator beat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/></svg></button>
+      <button class="st-ibtn" id="btnSurprise" title="Surprise me - narrator beat" aria-label="Surprise me - narrator beat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/></svg></button>
       <button class="st-ibtn" data-theme-btn title="Toggle theme"></button>
     </div>
   </header>
@@ -48,7 +48,7 @@
         <div class="st-empty" id="stageEmpty">
           <div>
             <div class="big">🎭</div>
-            <div id="emptyText">Pick a scene — or raise the curtain on a new one.</div>
+            <div id="emptyText">Pick a scene - or raise the curtain on a new one.</div>
             <button class="st-begin" id="btnBegin" style="display:none">Begin the scene</button>
           </div>
         </div>
@@ -64,7 +64,7 @@
       <div>
         <h4>Mood</h4>
         <select id="dMood">
-          <option value="">— natural —</option>
+          <option value="">- natural -</option>
           <option value="cozy">cozy & warm</option>
           <option value="tense">tense</option>
           <option value="mystic">mysterious</option>
@@ -81,7 +81,7 @@
         <h4><label for="sceneModel">Model</label></h4>
         <div class="model-picker">
           <button class="ui-btn st-model-trigger" id="sceneModelBtn" type="button" aria-haspopup="listbox" aria-expanded="false" disabled>
-            <span id="sceneModelLabel">Auto — pricing varies</span>
+            <span id="sceneModelLabel">Auto - pricing varies</span>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="model-menu ui-menu" id="sceneModelMenu"></div>
@@ -91,7 +91,7 @@
       <div>
         <h4>Tools</h4>
         <label class="st-check"><input type="checkbox" id="dTools">
-          Web search — characters may look up real-world facts</label>
+          Web search - characters may look up real-world facts</label>
         <div class="mini">Searches appear live in the stage status line.</div>
       </div>
       <div>
@@ -101,7 +101,7 @@
       </div>
       <div>
         <h4>Story so far</h4>
-        <div class="st-summary" id="dSummary">No recap yet — it builds as the scene runs.</div>
+        <div class="st-summary" id="dSummary">No recap yet - it builds as the scene runs.</div>
         <button class="st-dbtn" id="dSummarize" style="margin-top:8px">Summarize now</button>
       </div>
       <button class="st-dbtn danger" id="dClear">Restart scene (clear transcript)</button>
@@ -133,7 +133,7 @@
 <div class="st-veil" id="scenesVeil">
   <div class="st-sheet" style="width:min(520px,94vw)">
     <h3>Rooms</h3>
-    <div class="sub">Your stages — pick one, or start a new act.</div>
+    <div class="sub">Your stages - pick one, or start a new act.</div>
     <div class="st-scene-list" id="sceneList"></div>
     <div style="margin-top:16px;display:flex;gap:10px">
       <button class="st-btn" id="btnNewScene">＋ New room</button>
@@ -209,7 +209,7 @@
 <div class="st-veil" id="relVeil">
   <div class="st-sheet" style="width:min(660px,94vw)">
     <h3>Bonds</h3>
-    <div class="sub">Relationships the story has actually established — recorded, not guessed. Click a character to open their dossier.</div>
+    <div class="sub">Relationships the story has actually established - recorded, not guessed. Click a character to open their dossier.</div>
     <div id="constellation"></div>
     <div class="st-form" style="margin-top:14px">
       <div><label>From</label><select id="relFrom"></select></div>
@@ -232,7 +232,7 @@
 <div class="st-veil" id="tlVeil">
   <div class="st-sheet" style="width:min(560px,94vw)">
     <h3>The Story So Far</h3>
-    <div class="sub">Every beat, in order — scroll through what happened.</div>
+    <div class="sub">Every beat, in order - scroll through what happened.</div>
     <div class="st-timeline" id="timeline"></div>
     <div style="margin-top:16px;display:flex;gap:10px">
       <button class="st-btn ghost" data-close>Close</button>

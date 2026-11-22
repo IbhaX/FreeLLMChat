@@ -379,10 +379,20 @@ class Gateway:
             # beats erroring out or burning a weak backstop — emit a wait
             # event so the UI can show the hold, then re-plan once.
             wait_s = await self._soonest_cooldown(session, candidates)
-            if wait_s is not None and wait_s <= self._COOLDOWN_WAIT_S:
+            remaining = t0 + self.settings.response_deadline_s - time.monotonic()
+            if (wait_s is not None
+                    and wait_s <= min(self._COOLDOWN_WAIT_S, remaining - 5)):
                 emit({"event": "wait",
                       "text": f"All keys cooling — retrying in ~{wait_s}s"})
                 await asyncio.sleep(wait_s + 1)
+                plan = await self._plan_attempts(session, requested, candidates)
+            if not plan and wait_s is not None and remaining > 2:
+                # Dead end: every candidate key is cooling for minutes. A
+                # bounded retry beats an error — release cooldowns once and
+                # re-plan; the response deadline still caps the cost.
+                await self._release_cooldowns(session)
+                emit({"event": "retry",
+                      "text": "All keys on cooldown — releasing early, retrying"})
                 plan = await self._plan_attempts(session, requested, candidates)
         if not plan:
             raise GatewayExhausted(await self._no_route_reason(session), 503)
@@ -618,6 +628,11 @@ class Gateway:
         emit({"event": "retry",
               "text": "All providers busy — retrying in 4s"})
         await asyncio.sleep(4)
+        await self._release_cooldowns(session)
+
+    async def _release_cooldowns(self, session: AsyncSession) -> None:
+        """Clear key cooldowns/failure counts and reopen breakers — last
+        resort when every routable key is cooling."""
         self.breaker.reset_all()
         keys = (await session.execute(
             select(ApiKey).where(
@@ -666,14 +681,20 @@ class Gateway:
         """
         last_err: ProviderError | None = None
         attempt_timeout = attempt_timeout or self.settings.attempt_timeout_s
+        deadline = t0 + self.settings.response_deadline_s
         for provider, models in plan:
             if budget is not None and attempts >= budget:
                 break
+            remaining = deadline - time.monotonic()
+            if remaining <= 1.0:
+                emit({"event": "skip",
+                      "text": "Response deadline reached — stopping attempts"})
+                break
             if not self.breaker.allow(provider.name):
                 continue
-            prov_timeout = float(
+            prov_timeout = min(float(
                 (provider.limits or {}).get("request_timeout_s") or attempt_timeout
-            )
+            ), remaining)
             prov_attempts = attempts
             provider_done = False
             for model in models:
@@ -686,6 +707,9 @@ class Gateway:
                 body["stream"] = False
                 body.setdefault("max_tokens", 4096)
                 while budget is None or attempts < budget:
+                    key_remaining = deadline - time.monotonic()
+                    if key_remaining <= 1.0:
+                        break
                     # Keys already probed for THIS model are skipped; a key
                     # stays eligible for the provider's other models (a model
                     # fault does not implicate the key).
@@ -704,9 +728,17 @@ class Gateway:
                         try:
                             result = await asyncio.wait_for(
                                 adapter.chat_completion(self.client, raw, body),
-                                timeout=prov_timeout,
+                                timeout=min(prov_timeout, key_remaining),
                             )
                         except asyncio.TimeoutError:
+                            if key_remaining < prov_timeout:
+                                # Cut short by the global response deadline,
+                                # not provider slowness — don't cool the key.
+                                emit({"event": "skip",
+                                      "text": "Response deadline reached — "
+                                              "stopping attempts"})
+                                provider_done = True
+                                break
                             raise ProviderError(
                                 f"no response in {prov_timeout:.0f}s",
                                 retryable=True,
@@ -774,6 +806,7 @@ class Gateway:
         emit = on_event or (lambda ev: None)
         request_id = self._request_id()
         requested = payload["model"]
+        t0 = time.monotonic()
         candidates = await self._attempts(session, requested)
         if not candidates:
             raise GatewayExhausted(
@@ -783,10 +816,20 @@ class Gateway:
         plan = await self._plan_attempts(session, requested, candidates)
         if not plan:
             wait_s = await self._soonest_cooldown(session, candidates)
-            if wait_s is not None and wait_s <= self._COOLDOWN_WAIT_S:
+            remaining = t0 + self.settings.response_deadline_s - time.monotonic()
+            if (wait_s is not None
+                    and wait_s <= min(self._COOLDOWN_WAIT_S, remaining - 5)):
                 emit({"event": "wait",
                       "text": f"All keys cooling — retrying in ~{wait_s}s"})
                 await asyncio.sleep(wait_s + 1)
+                plan = await self._plan_attempts(session, requested, candidates)
+            if not plan and wait_s is not None and remaining > 2:
+                # Dead end: every candidate key is cooling for minutes. A
+                # bounded retry beats an error — release cooldowns once and
+                # re-plan; the response deadline still caps the cost.
+                await self._release_cooldowns(session)
+                emit({"event": "retry",
+                      "text": "All keys on cooldown — releasing early, retrying"})
                 plan = await self._plan_attempts(session, requested, candidates)
         if not plan:
             raise GatewayExhausted(await self._no_route_reason(session), 503)
@@ -798,12 +841,17 @@ class Gateway:
         tried: set[tuple[int, str]] = set()
         attempts = 0
         budget = self._attempt_budget(requested, plan)
+        deadline = t0 + self.settings.response_deadline_s
         # One ordered pass over the plan. A provider is probed once per
         # key per model; the next provider is reached only after a real
         # upstream failure. Model faults move to the provider's next model
         # without cooling the key.
         for provider, models in plan:
             if budget is not None and attempts >= budget:
+                break
+            if deadline - time.monotonic() <= 1.0:
+                emit({"event": "skip",
+                      "text": "Response deadline reached — stopping attempts"})
                 break
             if not self.breaker.allow(provider.name):
                 continue
@@ -824,6 +872,9 @@ class Gateway:
                     or self.settings.first_chunk_timeout_s
                 )
                 while budget is None or attempts < budget:
+                    first_remaining = deadline - time.monotonic()
+                    if first_remaining <= 1.0:
+                        break
                     excl = {kid for kid, mdl in tried if mdl == model}
                     key = await self.rotator.pick(
                         session, provider, exclude_ids=excl)
@@ -844,9 +895,17 @@ class Gateway:
                     try:
                         first = await asyncio.wait_for(
                             anext(stream),  # wait for first SSE chunk
-                            timeout=first_to,
+                            timeout=min(first_to, first_remaining),
                         )
                     except (asyncio.TimeoutError, TimeoutError):
+                        if first_remaining < first_to:
+                            # Deadline-clamped wait — the provider never got
+                            # its full window; don't cool the key for it.
+                            emit({"event": "skip",
+                                  "text": "Response deadline reached — "
+                                          "stopping attempts"})
+                            provider_done = True
+                            break
                         last_err = ProviderError(
                             f"no response in {first_to:.0f}s",
                             retryable=True,

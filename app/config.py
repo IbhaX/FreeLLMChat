@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     # Google Identity Services client id; enables "Sign in with Google".
     # Env var: GOOGLE_CLIENT_ID.
     google_client_id: Optional[str] = None
+    # Env vars: GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET /
+    # GITHUB_OAUTH_REDIRECT. When set, profile GitHub linking uses real
+    # OAuth; otherwise it falls back to verified-username connect.
+    github_client_id: Optional[str] = None
+    github_client_secret: Optional[str] = None
+    github_oauth_redirect: Optional[str] = None
 
     # Fernet master key; auto-generated on first run if unset.
     encryption_key: Optional[str] = None
@@ -52,6 +58,10 @@ class Settings(BaseSettings):
     first_chunk_timeout_s: float = 20.0
     # Bail to the next key/provider if a non-streaming attempt takes too long.
     attempt_timeout_s: float = 30.0
+    # Hard wall-clock cap on time-to-first-response: when this budget is
+    # spent, no new provider/key attempt is started and in-flight waits are
+    # clamped, so a busy upstream cannot park a request indefinitely.
+    response_deadline_s: float = 30.0
 
     model_cache_ttl_s: int = 3600
     circuit_breaker_failures: int = 5

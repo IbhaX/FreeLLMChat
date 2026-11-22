@@ -54,7 +54,7 @@
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sh-sub{font-size:10.5px;color:var(--text-3)}
   .chat-inner{max-width:780px;margin:0 auto;padding:16px 12px 40px}
-  /* ---------- Messages — identical to chat.html ---------- */
+  /* ---------- Messages - identical to chat.html ---------- */
   .msg-row{display:flex;gap:10px;margin-bottom:20px}
   .msg-av{width:28px;height:28px;border-radius:9px;flex:none;display:grid;
     place-items:center;font-size:11px;font-weight:700;color:#fff;margin-top:2px;
@@ -118,7 +118,7 @@
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
       <button class="ui-btn ui-btn-ghost ui-btn-icon" data-app-back="/chat" title="Back"></button>
-      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="appNavBtn" title="Apps — all pages"></button>
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="appNavBtn" title="Apps - all pages"></button>
       <button class="ui-btn ui-btn-ghost ui-btn-icon" data-theme-btn title="Toggle theme"></button>
       <a class="ui-btn ui-btn-primary" href="/chat">Open chat →</a>
     </div>
@@ -141,7 +141,7 @@ const fillBubble=(m,b)=>{
 const id=location.pathname.split('/').pop();
 fetch('/v1/share/'+encodeURIComponent(id)).then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
   document.getElementById('title').textContent=d.title||'Shared conversation';
-  document.title=(d.title||'Shared conversation')+' — IbhaX';
+  document.title=(d.title||'Shared conversation')+' - IbhaX';
   document.getElementById('sub').textContent=(d.created_at?new Date(d.created_at).toLocaleString()+' · ':'')+(d.messages||[]).length+' messages';
   const host=document.getElementById('msgs');
   const msgs=d.messages||[];

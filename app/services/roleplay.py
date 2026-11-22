@@ -1035,6 +1035,32 @@ async def turn_stream(
         # End the read transaction before any provider/network call — the
         # short writes below open their own transactions.
         await session.commit()
+        # @mentions on the player's beat: @skill grafts its instruction
+        # block onto each responder's persona; @tool <text> runs now and
+        # feeds the result into the turn's context; @agent is chat-only.
+        skill_block = ""
+        tool_ctx = ""
+        if "@" in user_text:
+            try:
+                from app.services import mentions as _mentions
+                from app.services import skills as _skills_mod
+
+                mres = await _mentions.resolve(session, user_text)
+                for a in mres.agents:
+                    yield _sse({"event": "note",
+                                "text": f"@{a.name} is an agent — "
+                                        "agent mentions work in Chat"})
+                if mres.skills:
+                    skill_block = _skills_mod.attach_instructions(
+                        "", mres.skills)
+                for tname, arg in mres.tools:
+                    yield _sse({"event": "note",
+                                "text": f"🔧 @{tname} running…"})
+                    out = await _mentions.run_tool_for(tname, arg)
+                    tool_ctx += (f"\n\n((the player ran @{tname} — result:\n"
+                                 f"{out}\nuse it to inform your reply))")
+            except Exception:
+                pass  # mention failures never block the beat
         # one responder takes the stage; others react only when the player
         # explicitly addresses the whole group
         responder = await _pick_responder(gateway, session, room, live,
@@ -1072,11 +1098,20 @@ async def turn_stream(
                 yield _sse({"event": "char_delta", "id": mid, "text": text})
             else:
                 history = transcript_messages(room, for_char=c.id)
+                if tool_ctx and not reacting:
+                    # Fold tool output into the player's latest beat so the
+                    # responder answers with the result in context.
+                    for m in reversed(history):
+                        if m.get("role") == "user":
+                            m["content"] = str(m.get("content") or "") + tool_ctx
+                            break
                 system = persona_prompt(
                     c, room.scenario, others, mood=room.mood or "",
                     director_notes=room.director_notes or "",
                     summary=room.summary or "",
                     tools=bool(room.tools_enabled) and not reacting)
+                if skill_block:
+                    system += "\n\n" + skill_block
                 dossier_query = (
                     _research_query(user_text, (room.messages or [])[:-1], c.id)
                     if (not reacting and research and room.tools_enabled
@@ -1496,9 +1531,31 @@ async def room_turn(gateway: Any, session: Any, room: RoleplayRoom,
     room.messages = list(room.messages or []) + [
         {"id": _mid(), "role": "user", "kind": "talk",
          "speaker": "You", "text": user_text, "variants": []}]
+    # @mentions: skills graft onto persona, tools fold results into context.
+    skill_block = ""
+    tool_ctx = ""
+    if "@" in user_text:
+        try:
+            from app.services import mentions as _mentions
+            from app.services import skills as _skills_mod
+
+            mres = await _mentions.resolve(session, user_text)
+            if mres.skills:
+                skill_block = _skills_mod.attach_instructions("", mres.skills)
+            for tname, arg in mres.tools:
+                out = await _mentions.run_tool_for(tname, arg)
+                tool_ctx += (f"\n\n((the player ran @{tname} — result:\n"
+                             f"{out}\nuse it to inform your reply))")
+        except Exception:
+            pass
     replies: list[dict[str, Any]] = []
     for c in chars:
         history = transcript_messages(room, for_char=c.id)
+        if tool_ctx:
+            for m in reversed(history):
+                if m.get("role") == "user":
+                    m["content"] = str(m.get("content") or "") + tool_ctx
+                    break
         others = await room_characters(session, room)
         try:
             text = await _reply(
@@ -1507,7 +1564,8 @@ async def room_turn(gateway: Any, session: Any, room: RoleplayRoom,
                                mood=room.mood or "",
                                director_notes=room.director_notes or "",
                                summary=room.summary or "",
-                               tools=bool(room.tools_enabled)),
+                               tools=bool(room.tools_enabled))
+                + (("\n\n" + skill_block) if skill_block else ""),
                 history, tools=bool(room.tools_enabled))
         except Exception:
             text = ""

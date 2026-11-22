@@ -149,6 +149,55 @@ SKILLS: tuple[SkillDef, ...] = (
 
 _BY_NAME: dict[str, SkillDef] = {s.name: s for s in SKILLS}
 _DYNAMIC: dict[str, SkillDef] = {}
+# Packaged third-party skills (anthropics/skills bundle) — resolved after
+# user-defined dynamics, before built-ins.
+_PACKAGED: dict[str, SkillDef] = {}
+
+
+def load_packaged_skills() -> int:
+    """Register the bundled anthropics/skills catalog into ``_PACKAGED``.
+
+    Idempotent. ``requires_tools`` entries are validated against the tool
+    registry — unknown names are dropped rather than dangling."""
+    import json
+    from pathlib import Path
+
+    from app.services.tools import TOOLS
+
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    bundle = data_dir / "anthropic_skills.json"
+    _PACKAGED.clear()
+    for s in json.loads(bundle.read_text(encoding="utf-8")):
+        tools = tuple(t for t in s.get("requires_tools", ()) if t in TOOLS)
+        instructions = str(s.get("instructions") or "")
+        res = s.get("resources")
+        res_dir = data_dir / res if res else None
+        if res_dir and res_dir.is_dir():
+            # The SKILL.md assumes Claude-Code file access — remap it to
+            # this app's python_exec surface so scripts actually run.
+            instructions += (
+                "\n\n## SKILL RESOURCES (this app)\n"
+                f"This skill's bundled files — helper scripts, templates, "
+                f"and reference docs — are on disk at:\n  {res_dir}\n"
+                "- To run a bundled script, call the `python_exec` tool "
+                "with code such as:\n"
+                "  `import subprocess, sys; subprocess.run("
+                f"[sys.executable, r\"{res_dir}\\scripts\\<script>.py\", "
+                "<args>])`\n"
+                "  (paths passed to the script may be absolute; outputs "
+                "written to the cwd are published as /media links)\n"
+                "- To consult a reference doc or template, read it with "
+                "`python_exec`: `print(open(r'<path>', encoding='utf-8')"
+                ".read())`.\n")
+        _PACKAGED[s["name"]] = SkillDef(
+            name=s["name"],
+            version=str(s.get("version") or "1.0"),
+            description=str(s.get("description") or ""),
+            instructions=instructions,
+            requires_tools=tools,
+            domains=tuple(s.get("domains") or ("*",)),
+        )
+    return len(_PACKAGED)
 
 
 def register_dynamic(name: str, version: str, description: str,
@@ -178,12 +227,14 @@ async def load_custom_skills(session: Any) -> int:
 
 
 def _lookup(name: str) -> SkillDef | None:
-    # user overrides shadow built-ins with the same name
-    return _DYNAMIC.get(name) or _BY_NAME.get(name)
+    # user overrides shadow packaged, packaged shadows built-ins
+    return _DYNAMIC.get(name) or _PACKAGED.get(name) or _BY_NAME.get(name)
 
 
 def all_skills() -> list[SkillDef]:
-    return [s for s in SKILLS if s.name not in _DYNAMIC] \
+    shadowed = set(_DYNAMIC) | set(_PACKAGED)
+    return [s for s in SKILLS if s.name not in shadowed] \
+        + [s for s in _PACKAGED.values() if s.name not in _DYNAMIC] \
         + list(_DYNAMIC.values())
 
 

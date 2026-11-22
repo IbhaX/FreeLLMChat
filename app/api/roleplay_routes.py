@@ -153,6 +153,10 @@ async def send_message(rid: int, body: MessageIn, request: Request,
             session, subject_for(user), "chat", user.plan)
         if not ok:
             raise HTTPException(429, reason)
+    from app.services import artifacts as _artifacts
+
+    _artifacts.set_context(
+        source="roleplay", owner_id=user.id if user else None)
     replies = await rp.room_turn(_gateway(request), session, room,
                                  body.text, speaker_filter=body.speaker)
     if user is not None:
@@ -189,6 +193,10 @@ async def run_turn(rid: int, body: TurnIn, request: Request,
             raise HTTPException(429, reason)
         await usage.record(session, subject_for(user), "chat",
                            model=room.model or "")
+    from app.services import artifacts as _artifacts
+
+    _artifacts.set_context(
+        source="roleplay", owner_id=user.id if user else None)
     kind = body.kind if body.kind in ("talk", "narrate", "ooc", "whisper") else "talk"
     if not body.text.strip():
         raise HTTPException(400, "text required")

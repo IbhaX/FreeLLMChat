@@ -626,7 +626,7 @@ providers:
     base_url: https://oai.aihorde.net/v1
     auth_style: none
     default_models: []
-    limits: {request_timeout_s: 180}
+    limits: {request_timeout_s: 60}
     requires_card: false
     commercial_ok: false
     rotation_strategy: round_robin

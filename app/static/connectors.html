@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Connectors - IbhaX</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<link rel="stylesheet" href="/static/css/ui.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  .cx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  .cx-card{display:flex;flex-direction:column;gap:10px}
+  .cx-head{display:flex;align-items:center;gap:10px}
+  .cx-ico{font-size:24px;width:42px;height:42px;display:grid;place-items:center;
+    background:var(--surface-2);border-radius:12px}
+  .cx-name{font-size:14px;font-weight:600}
+  .cx-desc{font-size:12px;color:var(--text-3);line-height:1.45;min-height:34px}
+  .cx-status{display:inline-flex;align-items:center;gap:6px;font-size:11px;
+    font-weight:600;color:var(--text-3)}
+  .cx-status .dot{width:7px;height:7px;border-radius:50%;background:var(--border-2)}
+  .cx-status.on{color:var(--ok,#22c55e)}
+  .cx-status.on .dot{background:var(--ok,#22c55e)}
+  .cx-foot{display:flex;gap:8px;margin-top:auto;align-items:center}
+  .cx-foot .cx-status{margin-right:auto}
+  .cx-fields{display:grid;gap:10px;margin-top:12px}
+  .cx-fields label{font-size:11px;font-weight:600;color:var(--text-2);display:grid;gap:4px}
+  .cx-hint{font-size:11px;color:var(--text-3);line-height:1.5;
+    background:var(--surface-2);border-radius:8px;padding:8px 10px}
+  .cx-saved{font-size:11px;color:var(--text-3);font-family:var(--font-mono,monospace)}
+</style>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page" style="max-width:1100px">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" data-app-back="/" title="Back"></button>
+      <div>
+        <h1>Connectors</h1>
+        <div class="sub">Connect your own accounts — credentials are encrypted and
+          private to your account; connector tools use them when you chat</div>
+      </div>
+    </div>
+    <div class="cx-grid" id="grid"></div>
+    <div class="af-empty" id="err" hidden style="text-align:center;color:var(--text-3);padding:50px"></div>
+  </div>
+</main>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app-nav.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/connectors.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
+</body>
+</html>

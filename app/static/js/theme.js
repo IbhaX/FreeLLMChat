@@ -16,6 +16,11 @@
     {id:'bmw',label:'BMW',scheme:'light',swatch:{bg:'#ffffff',surface:'#fafafa',accent:'#1c69d4'}},
     {id:'meta',label:'Meta',scheme:'light',swatch:{bg:'#ffffff',surface:'#f0f2f5',accent:'#0064e0'}},
     {id:'elevenlabs',label:'ElevenLabs',scheme:'light',swatch:{bg:'#f5f5f5',surface:'#ffffff',accent:'#292524'}},
+    {id:'dji',label:'DJI',scheme:'light',swatch:{bg:'#ffffff',surface:'#f5f5f5',accent:'#0070d5'}},
+    {id:'expo',label:'Expo',scheme:'light',swatch:{bg:'#ffffff',surface:'#f0f0f3',accent:'#000000'}},
+    {id:'figma',label:'Figma',scheme:'light',swatch:{bg:'#ffffff',surface:'#c7b9ff',accent:'#000000'}},
+    {id:'slack',label:'Slack',scheme:'light',swatch:{bg:'#ffffff',surface:'#f4ede4',accent:'#4a154b'}},
+    {id:'notion',label:'Notion',scheme:'light',swatch:{bg:'#ffffff',surface:'#f1f1ef',accent:'#7c3aed'}},
     {id:'light',label:'Light',scheme:'light',swatch:{bg:'#f4f5f8',surface:'#ffffff',accent:'#4f46e5'}}
   ].map(t=>Object.freeze({...t,swatch:Object.freeze(t.swatch)})));
   const THEMES=Object.freeze(registry.map(theme=>theme.id));

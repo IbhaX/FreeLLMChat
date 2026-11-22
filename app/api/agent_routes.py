@@ -174,9 +174,21 @@ async def agent_chat(
             raise HTTPException(429, reason)
         await usage.record(session, subject_for(_user), "chat",
                            model=body.model or a.model or "")
+        # Commit now: the flush holds SQLite's single write lock and this
+        # session outlives the request; the run's own sessions below would
+        # otherwise hit "database is locked".
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
     _owner = _user.id if _user else None
     from app.db import get_session_factory
     from app.services import agent_log
+    from app.services import artifacts as _artifacts
+
+    _artifacts.set_context(
+        source=f"agent:{a.name}", owner_id=_owner,
+        conversation_id=body.conversation_id)
     from app.services.settings_store import get_custom_instructions
     custom = await get_custom_instructions(session)
     factory = get_session_factory()
@@ -186,6 +198,21 @@ async def agent_chat(
         await ls.commit()
     _t0 = time.monotonic()
     evq: asyncio.Queue = asyncio.Queue()
+    # Announce the delegated agent + its capabilities in the activity panel.
+    try:
+        from app.services import agents as _agents
+
+        _tools = _agents._tool_names(a)
+        _skills = _agents._skill_names(a)
+        evq.put_nowait({
+            "event": "route", "kind": "decide", "status": "done",
+            "level": "normal", "actor": a.name,
+            "title": f"Delegating to @{a.name} — model "
+                     f"{body.model or a.model or 'auto'} · "
+                     f"tools: {'all' if _tools == ['*'] else ', '.join(_tools) or 'none'} · "
+                     f"skills: {', '.join(_skills) or 'none'}"})
+    except Exception:
+        pass
 
     def _delta_text(raw: bytes) -> str:
         """Pull delta.content text out of an SSE chunk for capture."""

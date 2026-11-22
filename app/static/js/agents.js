@@ -46,6 +46,10 @@
     return ids.map(id=>({value:id,label:id==='auto'?'auto — router picks':id}));
   }
 
+  /* Display-only: names stay snake_case identifiers everywhere else. */
+  const titleName=n=>String(n||'').replace(/[_-]+/g,' ')
+    .replace(/\b\w/g,c=>c.toUpperCase());
+
   function card(e,row){
     const el=document.createElement('div');
     el.className='ui-card ui-card-pad';
@@ -55,7 +59,7 @@
         ${row&&(row.config||{}).builtin?'<span class="ag-skill">built-in</span>':''}
         ${customized?'<span class="ag-skill" style="color:var(--warn)">customized</span>':''}
         ${row&&!row.enabled?'<span class="ag-skill" style="color:var(--error)">disabled</span>':''}</div>
-      <div style="font-weight:700">${esc(e.name)}</div>
+      <div style="font-weight:700" title="${esc(e.name)}">${esc(titleName(e.name))}</div>
       <div class="tx-2" style="font-size:var(--t-sm);margin:6px 0 10px;min-height:40px">${esc(row?row.description:(e.description||e.summary||''))}</div>
       <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">${(e.skills||[]).slice(0,4).map(s=>`<span class="ag-skill">${esc(s)}</span>`).join('')}
         ${row?`<span class="ag-skill" title="model">${esc(row.model||'auto')}</span>`:''}</div>
@@ -213,5 +217,14 @@
     }catch(e){box.innerHTML='<div class="tx-3">'+esc(e.message)+'</div>';}
   }
 
-  loadRuns();
+  /* Run history is lazy — loaded on first expand, hidden behind a toggle. */
+  let _runsLoaded=false;
+  $('#runsToggle').onclick=()=>{
+    const w=$('#runsWrap'),open=w.hidden;
+    w.hidden=!open;
+    const t=$('#runsToggle');
+    t.setAttribute('aria-expanded',String(open));
+    t.textContent=(open?'▾ ':'▸ ')+'Run history';
+    if(open&&!_runsLoaded){_runsLoaded=true;loadRuns();}
+  };
 })();

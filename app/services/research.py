@@ -2076,6 +2076,7 @@ async def run_research(
     # spent its time and calls.
     _stage_started: dict[str, float] = {}
     raw_emit = on_event or (lambda ev: None)
+    _seen_notes: set[str] = set()
 
     def emit(ev: dict[str, Any]) -> None:
         if ev.get("event") == "stage":
@@ -2086,6 +2087,14 @@ async def run_research(
             m["events"] += 1
             if key in _stage_started:
                 m["seconds"] = round(time.monotonic() - _stage_started[key], 1)
+        # Failover notes carry a stable key — a run makes many model calls
+        # and each pinned-model bypass would otherwise repeat the same
+        # line dozens of times in the activity feed.
+        if ev.get("kind") == "failover":
+            nkey = str(ev.get("key") or ev.get("text") or "")
+            if nkey in _seen_notes:
+                return
+            _seen_notes.add(nkey)
         raw_emit(ev)
 
     def checkpoint(stage: str) -> None:

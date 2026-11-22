@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from app.api.admin_routes import router as admin_router
+from app.api.artifact_routes import router as artifact_router
+from app.api.connector_routes import router as connector_router
 from app.api.admin_routes import user_router as admin_user_router
 from app.api.agent_routes import admin_router as agent_admin_router
 from app.api.agent_routes import admin_read_router as agent_admin_read_router
@@ -75,8 +77,29 @@ async def lifespan(app: FastAPI):
             _log.getLogger("nova").info(
                 "Seeded/refreshed %d built-in expert agents", seeded
             )
-        from app.services.skills import load_custom_skills
+        from app.services.agency_agents import seed_agency_agents
 
+        try:
+            n_agency = await seed_agency_agents(session)
+            if n_agency:
+                _log.getLogger("nova").info(
+                    "Seeded/refreshed %d agency-agents catalog entries",
+                    n_agency,
+                )
+        except Exception:
+            _log.getLogger("nova").exception("agency-agents seed failed")
+        from app.services.skills import load_custom_skills, \
+            load_packaged_skills
+
+        try:
+            n_packaged = load_packaged_skills()
+            if n_packaged:
+                _log.getLogger("nova").info(
+                    "Loaded %d packaged skills (anthropics/skills)",
+                    n_packaged,
+                )
+        except Exception:
+            _log.getLogger("nova").exception("packaged skill load failed")
         await load_custom_skills(session)
     app.state.gateway = Gateway()
     # IbhaX v2: durable research runner + evidence vector index.
@@ -143,6 +166,8 @@ app.include_router(roleplay_router)
 app.include_router(knowledge_router)
 app.include_router(skill_router)
 app.include_router(share_public_router)
+app.include_router(artifact_router)
+app.include_router(connector_router)
 
 
 # Inbound rate limiting — per client key/IP, generous defaults.
@@ -260,6 +285,16 @@ async def library_page() -> Response:
 @app.get("/memory", include_in_schema=False)
 async def memory_page() -> Response:
     return render_page(static_dir=static_dir, name="memory.html")
+
+
+@app.get("/artifacts", include_in_schema=False)
+async def artifacts_page() -> Response:
+    return render_page(static_dir=static_dir, name="artifacts.html")
+
+
+@app.get("/connectors", include_in_schema=False)
+async def connectors_page() -> Response:
+    return render_page(static_dir=static_dir, name="connectors.html")
 
 
 @app.get("/pay", include_in_schema=False)

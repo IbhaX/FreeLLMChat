@@ -425,10 +425,33 @@ function renderAll(){renderSidebar($('#convSearch').value.toLowerCase());renderC
 
 // --- Send / stream -----------------------------------------------------------
 async function send(){
-  const q=$('#input').value.trim();
+  let q=$('#input').value.trim();
   if(!q||state.streaming)return;
   const c=state.current;
   if(c.msgs.length===0)c.name=q.slice(0,34)+(q.length>34?'…':'');
+  // @agent mention → delegate this turn end-to-end: the named agent runs
+  // the task with its own model, tools and skills via /v1/agents/:id/chat.
+  // A pinned agent (state.agent) already delegates every turn.
+  let _delegate=null;
+  if(!state.agent&&q.includes('@')){
+    await loadMentions();
+    for(const _mt of q.matchAll(/@(?:(agent|skill|tool)s?:)?([A-Za-z][\w-]*)/g)){
+      const _k=(_mt[1]||'').replace(/s$/,'');
+      if((_k===''||_k==='agent')&&_agentMap.has(_mt[2])){
+        _delegate=_agentMap.get(_mt[2]);
+        q=q.replace(_mt[0],'').trim()||'help with this';
+        break;
+      }
+    }
+  }
+  // Auto-route: no mention, no pinned agent → delegate to the specialist
+  // whose name/description best matches the query, when one clearly wins.
+  if(!_delegate&&!q.includes('@')&&!state.agent
+     &&!state.groupMode&&!state.researchMode&&q.split(/\s+/).length>=3){
+    await loadMentions();
+    _delegate=_autoRoute(q);
+    if(_delegate)toast(`Routing to @${_delegate.name}`);
+  }
   const chips=[...$('#chipRow').children];
   const atts=chips.map(x=>x.dataset.name);
   const imgs=chips.map(x=>x._file).filter(f=>f&&f.type.startsWith('image/'));
@@ -459,7 +482,8 @@ async function send(){
   renderAll();
   if(state.researchMode&&!state.groupMode){streamResearchReply(c);return;}
   if(state.groupMode&&state.group&&state.group.agents.length){streamGroupReply(c);return;}
-  streamAPIReply(c);
+  if(_delegate)toast(`Delegating to @${_delegate.name}…`);
+  streamAPIReply(c,false,_delegate);
 }
 function handleSlash(q){
   const c=state.current;
@@ -555,13 +579,14 @@ function resumeLive(c){
   if(state.groupMode&&state.group&&state.group.agents.length){streamGroupReply(c,true);return;}
   streamAPIReply(c,true);
 }
-async function streamAPIReply(c,live){
+async function streamAPIReply(c,live,agentOverride){
+  const _ag=agentOverride||state.agent;
   state.streaming=true;setSend(true);
   const inner=$('#chatInner');
   const scroller=$('#chatScroll');
   const trow=document.createElement('div');
   trow.className='msg-row row-ai';
-  trow.innerHTML=`<div class="msg-av ai">${state.agent?'🤖':'N'}</div><div class="msg-col"><div class="typing"><i></i><i></i><i></i></div><details class="act-steps" open><summary><span class="act-ico">⚡</span><span class="act-lbl">Agent activity</span></summary><div class="act-list"></div></details></div>`;
+  trow.innerHTML=`<div class="msg-av ai">${_ag?'🤖':'N'}</div><div class="msg-col"><div class="typing"><i></i><i></i><i></i></div><details class="act-steps" open><summary><span class="act-ico">⚡</span><span class="act-lbl">Agent activity</span></summary><div class="act-list"></div></details></div>`;
   inner.appendChild(trow);scrollBottom();
   const actList=trow.querySelector('.act-list'),actLbl=trow.querySelector('.act-lbl'),t0=Date.now();
   const actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create(actList,{onModel:()=>{const mb=$('#modelSel');if(mb)mb.click();},onTick:s=>{if(s&&s.running)actLbl.textContent=`${s.running} · ${s.total} step${s.total!==1?'s':''}…`;}}):null;
@@ -620,7 +645,7 @@ async function streamAPIReply(c,live){
   const fail=(note)=>{
     trow.remove();
     const text=`_${note}_`;
-    const msg={role:'assistant',text,html:md(text),t:Date.now(),model:state.model.name,agentName:state.agent?.name,failed:true};
+    const msg={role:'assistant',text,html:md(text),t:Date.now(),model:state.model.name,agentName:_ag?.name,failed:true};
     c.msgs.push(msg);
     renderAll();
     state.streaming=false;state.abort=null;setSend(false);
@@ -636,9 +661,9 @@ async function streamAPIReply(c,live){
       }
       return {role:m.role,content:m.text};
     });
-  const isAgent=!!state.agent;
+  const isAgent=!!_ag;
   if(state.rpChar&&!isAgent)messages.unshift({role:'system',content:rpPersona(state.rpChar)});
-  const url=isAgent?API_BASE+'/v1/agents/'+state.agent.id+'/chat':API_BASE+'/v1/chat/completions';
+  const url=isAgent?API_BASE+'/v1/agents/'+_ag.id+'/chat':API_BASE+'/v1/chat/completions';
   const lastContent=messages[messages.length-1].content;
   const payload=isAgent
     ?{message:lastContent,history:messages.slice(0,-1),stream:true,
@@ -658,7 +683,7 @@ async function streamAPIReply(c,live){
       throw new Error(`HTTP ${resp.status} ${errText.slice(0,200)}`);
     }
     clearInterval(actTimer);
-    const msg={role:'assistant',text:'',html:'',t:Date.now(),model:state.model.name,agentName:state.agent?.name||(state.rpChar?state.rpChar.name:null)};
+    const msg={role:'assistant',text:'',html:'',t:Date.now(),model:state.model.name,agentName:_ag?.name||(state.rpChar?state.rpChar.name:null)};
     c.msgs.push(msg);
     // Row is created lazily on the first token so the typing placeholder
     // is the ONLY avatar row while we wait for the provider.
@@ -1458,10 +1483,81 @@ $('#agentDelBtn').onclick=async()=>{
   }else toast('Delete failed','err');
 };
 
+// --- @mentions: agents, skills and tools ------------------------------------
+let _mentionDefs=null,_mentionPromise=null,_agentMap=new Map();
+function loadMentions(){
+  if(_mentionDefs)return Promise.resolve(_mentionDefs);
+  if(_mentionPromise)return _mentionPromise;
+  _mentionPromise=Promise.all([
+    fetch(API_BASE+'/v1/agents',{headers:apiHeaders()}).then(r=>r.ok?r.json():[]).catch(()=>[]),
+    v1Api('/v1/skills').then(d=>d.skills||d||[]).catch(()=>[]),
+    adminFetch('/admin/tools').then(r=>r.ok?r.json():[]).catch(()=>[]),
+  ]).then(([agents,skills,tools])=>{
+    const agentList=Array.isArray(agents)?agents:(agents.data||agents.agents||[]);
+    _agentMap=new Map(agentList.filter(a=>a.enabled!==false).map(a=>[a.name,a]));
+    _mentionDefs=[
+      ...agentList.filter(a=>a.enabled!==false)
+        .map(a=>({name:a.name,kind:'agent',desc:a.description||'delegate this turn'})),
+      ...(skills||[]).map(s=>({name:s.name,kind:'skill',desc:s.description||'skill'})),
+      ...(tools||[]).map(t=>({name:t.name,kind:'tool',desc:t.description||'tool — runs inline'})),
+    ];
+    return _mentionDefs;
+  });
+  return _mentionPromise;
+}
+const _STOP=new Set('the a an and or of to in for on with is are was were be been do does did can could should would will shall may might must i you we they he she it this that these those my your our their me us him her them what which who how when where why not no yes so but if then than too very just about into over after before between under again more some any all each'.split(' '));
+function _autoRoute(q){
+  const words=(q.toLowerCase().match(/[a-z][a-z0-9]{2,}/g)||[])
+    .filter(w=>!_STOP.has(w));
+  if(words.length<2)return null;
+  let best=null,bestScore=0,second=0;
+  for(const a of _agentMap.values()){
+    const name=(a.name||'').toLowerCase();
+    const hay=(name+' '+(a.description||'')+' '
+      +((a.config||{}).category||'')).toLowerCase();
+    let s=0,nameHit=false;
+    for(const w of words){
+      if(name.includes(w)){s+=3;nameHit=true;}
+      else if(hay.includes(w))s+=1;
+    }
+    if(!nameHit)continue;                 // require a name-token match
+    if(s>bestScore){second=bestScore;bestScore=s;best=a;}
+    else if(s>second)second=s;
+  }
+  return (best&&bestScore>=5&&bestScore>=second*1.4)?best:null;
+}
+async function renderMentions(){
+  const upto=ta.value.slice(0,ta.selectionStart??ta.value.length);
+  if(upto.startsWith('/'))return;   // slash command context wins
+  const m=/@(?:(agent|skill|tool)s?:)?([\w-]*)$/.exec(upto);
+  if(!m)return;                     // not inside an @token — leave menu alone
+  const menu=$('#slashMenu');
+  const defs=await loadMentions().catch(()=>[]);
+  let kind=(m[1]||'').replace(/s$/,'');            // '' = any kind
+  let q=m[2].toLowerCase();
+  // Bare kind keyword counts too: @tool/@tools/@agent… lists that group.
+  if(!kind&&/^(agents?|skills?|tools?)$/.test(q)){kind=q.replace(/s$/,'');q='';}
+  const opts=defs.filter(d=>(!kind||d.kind===kind)
+    &&d.name.toLowerCase().includes(q)).slice(0,10);
+  if(!opts.length){menu.classList.remove('open');return;}
+  menu.innerHTML=opts.map(o=>
+    `<div class="mention-opt" data-n="${esc(o.name)}">`
+    +`<span class="m-name">@${esc(o.name)}</span>`
+    +`<span class="m-kind ${o.kind}">${o.kind}</span>`
+    +`<span class="m-desc" title="${esc(o.desc||'')}">${esc(o.desc||'')}</span></div>`
+  ).join('');
+  menu.classList.add('open');
+  menu.querySelectorAll('.mention-opt').forEach(el=>el.onclick=()=>{
+    const rest=ta.value.slice(ta.selectionStart??ta.value.length);
+    ta.value=upto.slice(0,upto.length-m[0].length)+'@'+el.dataset.n+' '+rest;
+    menu.classList.remove('open');ta.focus();autogrow();
+  });
+}
+
 // --- Input events ------------------------------------------------------------
 const ta=$('#input');
 function autogrow(){ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,180)+'px';}
-ta.addEventListener('input',()=>{autogrow();renderSlash(ta.value);});
+ta.addEventListener('input',()=>{autogrow();renderSlash(ta.value);renderMentions();});
 ta.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}
   if(e.key==='Escape')$('#slashMenu').classList.remove('open');

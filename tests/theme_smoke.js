@@ -35,8 +35,8 @@ function setup(initial = 'dark', blocked = false, pageDefault = initial) {
   return {theme: context.UITheme, listeners, events, writes, styleProps};
 }
 const app = setup();
-assert.equal(app.theme.registry.length, 8);
-assert.equal(new Set(app.theme.THEMES).size, 8);
+assert.equal(app.theme.registry.length, 13);
+assert.equal(new Set(app.theme.THEMES).size, 13);
 assert.ok(Object.isFrozen(app.theme.registry));
 app.theme.set('stage');
 assert.equal(app.theme.get(), 'stage');

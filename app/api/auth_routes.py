@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import hmac
+import secrets
+import time
 from typing import Any
+from urllib.parse import urlencode
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.api.deps import optional_user, subject_for
@@ -47,6 +52,7 @@ def _public_user(u: User) -> dict[str, Any]:
             "bio": getattr(u, "bio", "") or "",
             "avatar_url": getattr(u, "avatar_url", "") or "",
             "github_username": getattr(u, "github_username", "") or "",
+            "github_connected": bool(getattr(u, "github_connected", False)),
             "pronouns": getattr(u, "pronouns", "") or "",
             "company": getattr(u, "company", "") or "",
             "location": getattr(u, "location", "") or "",
@@ -247,6 +253,10 @@ async def update_profile(
             raise HTTPException(status_code=400,
                                 detail="invalid GitHub username")
         user.github_username = gh[:39]
+        # A typed username is only a claim — it is never "connected".
+        # Connection requires POST /github/connect (verified lookup) or
+        # the OAuth callback.
+        user.github_connected = False
     if body.pronouns is not None:
         user.pronouns = body.pronouns.strip()
     if body.company is not None:
@@ -264,6 +274,143 @@ async def update_profile(
         merged = await session.merge(user)
         await session.commit()
         return {"user": _public_user(merged)}
+
+
+class GithubConnectBody(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+
+
+_OAUTH_STATES: dict[str, tuple[float, int]] = {}
+_OAUTH_STATE_TTL = 600.0
+_OAUTH_STATES_MAX = 500
+
+
+def _normalize_github_login(raw: str) -> str:
+    login = raw.strip().lstrip("@")
+    if "github.com" in login:
+        login = login.rsplit("github.com/", 1)[-1].strip("/")
+    if not login or len(login) > 39:
+        return ""
+    if not all(c.isalnum() or c == "-" for c in login):
+        return ""
+    return login
+
+
+@router.post("/github/connect")
+async def github_connect(
+        body: GithubConnectBody,
+        user: User | None = Depends(optional_user)) -> dict[str, Any]:
+    """Verified GitHub link — the account is only marked connected after
+    the username resolves to a real public GitHub profile."""
+    if not user:
+        raise _auth_required()
+    login = _normalize_github_login(body.username)
+    if not login:
+        raise HTTPException(status_code=400, detail="invalid GitHub username")
+    from app.services.github import lookup_github
+
+    gh = await lookup_github(login)
+    if gh is None:
+        raise HTTPException(status_code=404,
+                            detail="GitHub user not found or unreachable")
+    user.github_username = gh["login"]
+    user.github_connected = True
+    factory = get_session_factory()
+    async with factory() as session:
+        merged = await session.merge(user)
+        await session.commit()
+        return {"user": _public_user(merged), "github": gh}
+
+
+@router.post("/github/disconnect")
+async def github_disconnect(
+        user: User | None = Depends(optional_user)) -> dict[str, Any]:
+    """Remove the GitHub link and connection flag."""
+    if not user:
+        raise _auth_required()
+    user.github_username = ""
+    user.github_connected = False
+    factory = get_session_factory()
+    async with factory() as session:
+        merged = await session.merge(user)
+        await session.commit()
+        return {"user": _public_user(merged)}
+
+
+@router.get("/github/oauth/start")
+async def github_oauth_start(
+        request: Request,
+        user: User | None = Depends(optional_user)) -> dict[str, Any]:
+    """Authorize URL for real GitHub OAuth. Returns 501 when
+    GITHUB_CLIENT_ID is not configured so clients can fall back to the
+    verified-username connect flow."""
+    if not user:
+        raise _auth_required()
+    cfg = get_settings()
+    if not cfg.github_client_id:
+        raise HTTPException(status_code=501,
+                            detail="GitHub OAuth is not configured")
+    state = secrets.token_urlsafe(16)
+    now = time.time()
+    for key, (ts, _) in list(_OAUTH_STATES.items()):
+        if now - ts > _OAUTH_STATE_TTL:
+            del _OAUTH_STATES[key]
+    if len(_OAUTH_STATES) >= _OAUTH_STATES_MAX:
+        raise HTTPException(status_code=429, detail="too many pending logins")
+    _OAUTH_STATES[state] = (now, user.id)
+    redirect = cfg.github_oauth_redirect or str(
+        request.url_for("github_oauth_callback"))
+    url = ("https://github.com/login/oauth/authorize?"
+           + urlencode({"client_id": cfg.github_client_id,
+                        "redirect_uri": redirect,
+                        "scope": "read:user",
+                        "state": state}))
+    return {"url": url}
+
+
+@router.get("/github/oauth/callback")
+async def github_oauth_callback(
+        code: str = "", state: str = "") -> RedirectResponse:
+    """Complete the OAuth dance: exchange the code, read the GitHub
+    identity, mark the account connected, and return to the profile."""
+    entry = _OAUTH_STATES.pop(state, None)
+    if not code or entry is None:
+        raise HTTPException(400, "invalid or expired OAuth state")
+    ts, user_id = entry
+    if time.time() - ts > _OAUTH_STATE_TTL:
+        raise HTTPException(400, "invalid or expired OAuth state")
+    cfg = get_settings()
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            tr = await client.post(
+                "https://github.com/login/oauth/access_token",
+                headers={"Accept": "application/json"},
+                data={"client_id": cfg.github_client_id,
+                      "client_secret": cfg.github_client_secret or "",
+                      "code": code})
+            token = (tr.json().get("access_token")
+                     if tr.status_code == 200 else None)
+            if not token:
+                raise HTTPException(400, "GitHub token exchange failed")
+            ur = await client.get(
+                "https://api.github.com/user",
+                headers={"Authorization": f"Bearer {token}",
+                         "Accept": "application/vnd.github+json"})
+            if ur.status_code != 200:
+                raise HTTPException(400, "GitHub identity lookup failed")
+            login = str(ur.json().get("login") or "")
+    except httpx.HTTPError:
+        raise HTTPException(502, "GitHub is unreachable")
+    if not login:
+        raise HTTPException(400, "GitHub identity lookup failed")
+    factory = get_session_factory()
+    async with factory() as session:
+        u = await session.get(User, user_id)
+        if u is not None:
+            u.github_username = login
+            u.github_connected = True
+            await session.commit()
+    return RedirectResponse("/profile", status_code=303)
 
 
 @router.get("/github")
@@ -296,4 +443,14 @@ async def plans() -> dict[str, Any]:
 async def my_usage(user: User | None = Depends(optional_user)) -> dict[str, Any]:
     factory = get_session_factory()
     async with factory() as session:
-        return await usage_svc.summary(session, subject_for(user))
+        data = await usage_svc.summary(session, subject_for(user))
+    if user:
+        tokens = sum(int(k.get("tokens_in") or 0) + int(k.get("tokens_out") or 0)
+                     for k in data["by_kind"].values())
+        limit = plan_limits(user.plan).get("credits_per_month", 0)
+        used = -(-tokens // 100)  # 100 billed tokens = 1 credit
+        data["credits"] = {"used": used, "limit": limit,
+                           "remaining": max(0, limit - used) if limit else None,
+                           "tokens": tokens}
+        data["plan"] = user.plan
+    return data

@@ -134,15 +134,23 @@ def failover_note(emit: Callable[[dict[str, Any]], None] | None,
     if emit is None:
         return
     from app.providers.base import is_billing_failure
-    reason = " — provider out of credit" if is_billing_failure(error) else ""
+    billing = is_billing_failure(error)
     if resolved and resolved != requested:
-        tail = f" — served by {resolved}"
+        # Neutral routing language — failover is normal operation, not an
+        # outage. Only credit exhaustion is named (it's user-actionable).
+        text = (f"{requested} is out of credit — switched to {resolved}"
+                if billing else
+                f"{requested} is busy — switched to {resolved}")
     elif resolved:
-        tail = " — retry succeeded"
+        text = f"{requested} recovered — continuing"
     else:
-        tail = ""
-    emit({"event": "note",
-          "text": f"{requested} unavailable{reason}{tail}"})
+        reason = " — provider out of credit" if billing else ""
+        text = f"{requested} is unavailable{reason}"
+    # ``key`` lets orchestrators dedupe: a run makes many model calls and
+    # the same failover note must not spam the activity feed.
+    emit({"event": "note", "kind": "failover",
+          "key": f"{requested}->{resolved or 'failed'}",
+          "text": text})
 
 
 def _via_label(res: tuple[Any, Any, Any, Any]) -> str:

@@ -2,6 +2,9 @@
 (function(){
   const $=s=>document.querySelector(s);
   let editId=null,customSkills=[],availTools=[];
+  /* Display-only: names stay snake_case identifiers everywhere else. */
+  const titleName=n=>String(n||'').replace(/[_-]+/g,' ')
+    .replace(/\b\w/g,c=>c.toUpperCase());
   AdminShell.mount('skills');
   window.addEventListener('admin-ready',init);
   if(ADMIN_TOKEN)init();
@@ -38,7 +41,7 @@
       (d.skills||d||[]).forEach(s=>{
         if(s.custom)return;
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td><b>${esc(s.name)}</b></td><td>${esc(s.version||'')}</td>
+        tr.innerHTML=`<td><b title="${esc(s.name)}">${esc(titleName(s.name))}</b></td><td>${esc(s.version||'')}</td>
           <td class="tx-2">${esc(s.description||'')}</td>
           <td class="tx-3" style="font-size:var(--t-xs)">${(s.requires_tools||s.tools||[]).join(', ')}</td>
           <td style="text-align:right"><button class="ui-btn ui-btn-primary ui-btn-sm" data-c>edit</button></td>`;
@@ -58,7 +61,7 @@
       (c.skills||[]).forEach(s=>{
         const isOverride=builtins.has(s.name);
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td><b>${esc(s.name)}</b>${isOverride?' <span class="pill" style="font-size:9px">overrides built-in</span>':''}</td><td>${s.version}</td>
+        tr.innerHTML=`<td><b title="${esc(s.name)}">${esc(titleName(s.name))}</b>${isOverride?' <span class="pill" style="font-size:9px">overrides built-in</span>':''}</td><td>${s.version}</td>
           <td class="tx-2">${esc(s.description)}</td>
           <td class="tx-3" style="font-size:var(--t-xs)">${(s.tools||[]).join(', ')}</td>
           <td><button class="ui-btn ui-btn-ghost ui-btn-sm" data-t>${s.enabled?'on':'off'}</button></td>
@@ -86,7 +89,7 @@
 
   function openModal(s){
     editId=s?s.id:null;
-    $('#mtitle').textContent=s?('Edit '+s.name):'New skill';
+    $('#mtitle').textContent=s?('Edit '+titleName(s.name)):'New skill';
     $('#sk_name').value=s?s.name:'';
     $('#sk_desc').value=s?s.description:'';
     $('#sk_ins').value=s?s.instructions:'';

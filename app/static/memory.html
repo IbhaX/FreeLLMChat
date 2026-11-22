@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/css/theme.css">
 <script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
 <style>
-  /* Memory Explorer — neural graph workspace. Page-scoped styles;
+  /* Memory Explorer - neural graph workspace. Page-scoped styles;
      shared chrome stays in ui.css. */
   .mem-page{max-width:1380px}
   .mem-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
@@ -61,7 +61,7 @@
     <div class="ui-pagehead">
       <button class="ui-btn ui-btn-ghost ui-btn-icon" data-app-back="/" title="Back"></button>
       <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
-      <div style="flex:1"><h1>Memory Explorer</h1><div class="sub">Neural map of Astra DB memory — stored links and vector similarity</div></div>
+      <div style="flex:1"><h1>Memory Explorer</h1><div class="sub">Neural map of Astra DB memory - stored links and vector similarity</div></div>
       <span class="pill mut" id="memStatus" style="font-size:10px">connecting…</span>
     </div>
 
@@ -69,7 +69,7 @@
       <div class="mem-stat"><div class="num" id="stMem">0</div><div class="lbl">Memories</div></div>
       <div class="mem-stat"><div class="num" id="stRel">0</div><div class="lbl">Connections</div></div>
       <div class="mem-stat"><div class="num" id="stCat">0</div><div class="lbl">Categories</div></div>
-      <div class="mem-stat"><div class="num" id="stSim">—</div><div class="lbl">Avg. similarity</div></div>
+      <div class="mem-stat"><div class="num" id="stSim">-</div><div class="lbl">Avg. similarity</div></div>
     </div>
 
     <div class="mem-toolbar">

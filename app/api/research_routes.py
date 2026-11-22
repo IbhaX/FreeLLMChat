@@ -116,6 +116,15 @@ async def research(
             raise HTTPException(429, reason)
         await usage.record(session, subject_for(_user), "research",
                            model=body.model or "")
+        # Release the write lock before run_research's long network work.
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+    from app.services import artifacts as _artifacts
+
+    _artifacts.set_context(
+        source="research", owner_id=_user.id if _user else None)
     events: list[dict] = []
 
     def emit(ev: dict) -> None:
@@ -177,6 +186,18 @@ async def research_stream(
             raise HTTPException(429, reason)
         await usage.record(session, subject_for(_u0), "research",
                            model=body.model or "")
+        # Commit now: the flush holds SQLite's single write lock, and this
+        # request's session stays open for the whole stream. The ledger
+        # session below (and every other writer) would deadlock on
+        # "database is locked" past busy_timeout.
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+    from app.services import artifacts as _artifacts
+
+    _artifacts.set_context(
+        source="research", owner_id=_u0.id if _u0 else None)
     queue: asyncio.Queue[dict] = asyncio.Queue()
     state_box: dict[str, Any] = {}
     # Durable agent ledger for this research run.

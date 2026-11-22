@@ -798,7 +798,7 @@ def test_tc_fo_01_pinned_exhaustion_falls_back_to_auto() -> None:
         gw, None, {"model": "openrouter/x", "messages": []}, notes.append))
     assert gw.calls == ["openrouter/x", "auto"]
     assert resp["choices"][0]["message"]["content"] == "ok"
-    assert any("unavailable" in str(n.get("text") or "") for n in notes)
+    assert any("switched to" in str(n.get("text") or "") for n in notes)
 
 
 def test_tc_fo_02_auto_request_never_retries() -> None:

@@ -153,19 +153,26 @@ def bearer_token(authorization: str | None) -> str:
 # ---------------------------------------------------------------- plans
 
 PLAN_LIMITS: dict[str, dict[str, int]] = {
+    # credits_per_month: 100 billed tokens = 1 credit
     "free": {"requests_per_day": 100, "research_per_day": 5,
-             "documents": 20, "rooms": 5, "collections": 3},
+             "documents": 20, "rooms": 5, "collections": 3,
+             "credits_per_month": 1000},
     "basic": {"requests_per_day": 300, "research_per_day": 15,
-              "documents": 50, "rooms": 15, "collections": 8},
+              "documents": 50, "rooms": 15, "collections": 8,
+              "credits_per_month": 5000},
     "plus": {"requests_per_day": 600, "research_per_day": 30,
-             "documents": 100, "rooms": 30, "collections": 15},
+             "documents": 100, "rooms": 30, "collections": 15,
+             "credits_per_month": 15000},
     "pro": {"requests_per_day": 1000, "research_per_day": 50,
-            "documents": 200, "rooms": 50, "collections": 25},
+            "documents": 200, "rooms": 50, "collections": 25,
+            "credits_per_month": 40000},
     "ultra": {"requests_per_day": 5000, "research_per_day": 200,
-              "documents": 1000, "rooms": 200, "collections": 100},
+              "documents": 1000, "rooms": 200, "collections": 100,
+              "credits_per_month": 150000},
     # legacy aliases kept for accounts provisioned before tiers existed
     "team": {"requests_per_day": 5000, "research_per_day": 200,
-             "documents": 1000, "rooms": 200, "collections": 100},
+             "documents": 1000, "rooms": 200, "collections": 100,
+             "credits_per_month": 150000},
 }
 
 

@@ -7,6 +7,147 @@ const fmt={
 };
 const ICONS={req:'⇄',err:'⚠',tin:'↓',tout:'↑',prov:'⬡',key:'⚿',cd:'⏸'};
 
+/* Last fetched payloads — stat-card detail modals read from here. */
+let _data={stats:null,providers:[],keys:[],reqs:[]};
+
+const _fmtN=n=>n==null?'—':Number(n).toLocaleString();
+const _fmtTok=n=>n==null?'—':n>=1e6?(n/1e6).toFixed(1)+'M'
+  :n>=1e3?(n/1e3).toFixed(1)+'k':String(n);
+function _kv(pairs){
+  return `<div class="rq-grid">${pairs.map(([k,v])=>
+    `<div class="rq-item"><span class="rq-k">${k}</span><span class="rq-v">${esc(String(v??'—'))}</span></div>`
+  ).join('')}</div>`;
+}
+function _tbl(heads,rows){
+  if(!rows.length)return '<div class="tx-3 t-sm">No data</div>';
+  return `<div class="ui-table-scroll"><table class="ui-table"><thead><tr>${
+    heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+}
+function _sec(t){return `<div class="sm-sec">${t}</div>`;}
+function _keyStatus(k){
+  return !k.enabled?['bad','disabled']
+    :k.decryptable===false?['bad','undecryptable']
+    :(k.cooldown_until&&new Date(k.cooldown_until)>new Date())?['warn','cooldown']
+    :['ok','healthy'];
+}
+function _keyRow(k){
+  const s=_keyStatus(k);
+  return `<tr><td>${esc(k.provider)}</td><td>${esc(k.label)}</td>
+    <td class="mono">…${esc(k.key_hint)}</td>
+    <td>${k.quota_group?`<span class="pill info">${esc(k.quota_group)}</span>`:'—'}</td>
+    <td>${_fmtN(k.daily_request_count)}</td><td>${_fmtTok(k.daily_token_count)}</td>
+    <td class="tx-3">${k.cooldown_until?new Date(k.cooldown_until).toLocaleString():'—'}</td>
+    <td><span class="pill ${s[0]}">${s[1]}</span></td></tr>`;
+}
+const _KEY_HEADS=['Provider','Label','Hint','Quota grp','Req/day','Tok/day','Cooldown until','Status'];
+const _PROV_ROW=p=>`<tr><td><b>${esc(p.name)}</b><br><span class="tx-3 t-xs">${esc(p.display_name)}</span></td>
+  <td><span class="pill ${p.enabled?'ok':'bad'}">${p.enabled?'enabled':'disabled'}</span></td>
+  <td class="tx-2">${esc(p.rotation_strategy)}</td><td>${p.key_count}</td><td>${p.healthy_key_count}</td>
+  <td class="tx-3 t-xs">${fmt.limits(p.limits)}</td></tr>`;
+const _PROV_HEADS=['Provider','Status','Strategy','Keys','Healthy','Limits'];
+
+function statDetail(id){
+  const {stats:S,providers,keys,reqs}=_data;
+  if(!S)return;
+  let title='',body='';
+  const pp=S.per_provider||[];
+  const errCount=Math.round((S.error_rate_24h||0)*(S.requests_24h||0));
+  const provReqTbl=_tbl(['Provider','Requests 24h','Tokens 24h'],
+    pp.map(r=>`<tr><td><b>${esc(r.provider)}</b></td><td>${_fmtN(r.requests)}</td><td>${_fmtTok(r.tokens)}</td></tr>`));
+  const reqRows=rs=>rs.map(r=>`<tr>
+    <td class="tx-3">${r.ts?new Date(r.ts).toLocaleString():'—'}</td>
+    <td class="mono t-xs">${esc(r.model_requested)}</td>
+    <td>${esc(r.model_served||'—')}</td><td>${esc(r.provider||'—')}</td>
+    <td><span class="pill ${r.status==='ok'?'ok':'bad'}">${r.status}</span></td>
+    <td class="tx-2">${r.latency_ms?Math.round(r.latency_ms):'—'}</td>
+    <td class="tx-3 t-xs">${esc((r.error||'').slice(0,120))}</td></tr>`);
+  const REQ_HEADS=['Time','Model','Served','Provider','Status','ms','Error'];
+
+  if(id==='requests'){
+    title='Requests — last 24h';
+    const lats=reqs.filter(r=>r.latency_ms).map(r=>r.latency_ms);
+    body=_sec('Summary')+_kv([
+      ['Requests · 24h',_fmtN(S.requests_24h)],
+      ['Requests · all time',_fmtN(S.total_requests)],
+      ['Errors · 24h',_fmtN(errCount)],
+      ['Success rate',S.requests_24h?((1-S.error_rate_24h)*100).toFixed(1)+'%':'—'],
+      ['Avg latency (recent)',lats.length?Math.round(lats.reduce((a,b)=>a+b,0)/lats.length)+' ms':'—'],
+      ['Max latency (recent)',lats.length?Math.round(Math.max(...lats))+' ms':'—'],
+    ])+_sec('Per provider')+provReqTbl
+     +_sec(`Recent requests (${reqs.length} shown)`)
+     +_tbl(REQ_HEADS,reqRows(reqs));
+  }else if(id==='errors'){
+    title='Error rate — last 24h';
+    const errs=reqs.filter(r=>r.status!=='ok');
+    body=_sec('Summary')+_kv([
+      ['Error rate',(S.error_rate_24h*100).toFixed(1)+'%'],
+      ['Errors · 24h',_fmtN(errCount)],
+      ['Requests · 24h',_fmtN(S.requests_24h)],
+      ['Successful · 24h',_fmtN((S.requests_24h||0)-errCount)],
+      ['Errors in recent sample',`${errs.length} of ${reqs.length}`],
+    ])+_sec(`Recent errors (${errs.length} shown)`)
+     +_tbl(REQ_HEADS,reqRows(errs));
+  }else if(id==='tin'||id==='tout'){
+    const tin=S.tokens_in_24h||0,tout=S.tokens_out_24h||0;
+    title=id==='tin'?'Tokens in — last 24h':'Tokens out — last 24h';
+    body=_sec('Summary')+_kv([
+      ['Tokens in · 24h',_fmtN(tin)],
+      ['Tokens out · 24h',_fmtN(tout)],
+      ['Total tokens · 24h',_fmtN(tin+tout)],
+      ['Credits consumed',_fmtN(Math.ceil((tin+tout)/100))+' (100 tok = 1 cr)'],
+      ['Est. daily budget',S.est_tokens_total?'~'+_fmtN(S.est_tokens_total):'—'],
+    ])+_sec('Per provider')+provReqTbl
+     +_sec('Token budget')+_tbl(['Provider','Keys','Used 24h','Est. daily'],
+      (S.token_budget||[]).map(b=>`<tr><td><b>${esc(b.provider)}</b></td><td>${b.keys}</td>
+        <td>${_fmtTok(b.used_24h)}</td><td>${b.est_daily?'~'+_fmtTok(b.est_daily):'—'}</td></tr>`));
+  }else if(id==='providers'){
+    title=`Providers (${providers.length})`;
+    const en=providers.filter(p=>p.enabled),keyed=providers.filter(p=>p.key_count>0);
+    body=_sec('Summary')+_kv([
+      ['Providers',providers.length],
+      ['Enabled',en.length],['Disabled',providers.length-en.length],
+      ['With keys',keyed.length],['Without keys',providers.length-keyed.length],
+      ['Requests · 24h',_fmtN(S.requests_24h)],
+    ])+_sec('All providers')+_tbl(_PROV_HEADS,providers.map(_PROV_ROW))
+     +_sec('Per provider · 24h')+provReqTbl;
+  }else if(id==='keys'){
+    title=`API keys — ${S.keys_healthy}/${S.keys_total} healthy`;
+    const undec=keys.filter(k=>k.decryptable===false).length;
+    body=_sec('Summary')+_kv([
+      ['Total keys',S.keys_total],['Healthy',S.keys_healthy],
+      ['In cooldown',S.keys_in_cooldown],
+      ['Disabled',keys.filter(k=>!k.enabled).length],
+      ['Undecryptable',undec||'—'],
+      ['Quota groups',new Set(keys.map(k=>k.quota_group).filter(Boolean)).size],
+    ])+_sec(`All keys (${keys.length})`)
+     +_tbl(_KEY_HEADS,keys.map(_keyRow));
+  }else if(id==='cooldown'){
+    title=`Keys in cooldown (${S.keys_in_cooldown})`;
+    const now=new Date();
+    const cool=keys.filter(k=>k.cooldown_until&&new Date(k.cooldown_until)>now);
+    body=_sec('Summary')+_kv([
+      ['In cooldown',cool.length],
+      ['Total keys',S.keys_total],
+      ['Healthy now',S.keys_healthy],
+      ['Earliest recovery',cool.length
+        ?new Date(Math.min(...cool.map(k=>+new Date(k.cooldown_until)))).toLocaleString():'—'],
+    ])+_sec(`Cooling keys (${cool.length})`)
+     +_tbl(_KEY_HEADS,cool.map(_keyRow));
+  }else return;
+
+  const old=document.getElementById('statModal');if(old)old.remove();
+  const d=document.createElement('dialog');
+  d.id='statModal';d.className='nova-dialog stat-modal';
+  d.innerHTML=`<h2>${esc(title)}</h2><div class="stat-modal-body">${body}</div>
+    <div class="nova-dialog-actions"><button class="ui-btn ui-btn-primary" id="statModalClose">Close</button></div>`;
+  d.addEventListener('close',()=>d.remove(),{once:true});
+  d.addEventListener('click',e=>{if(e.target===d)d.close();});
+  document.body.appendChild(d);
+  d.querySelector('#statModalClose').onclick=()=>d.close();
+  d.showModal();
+  if(window.NovaMotion)NovaMotion.dialog(d);
+}
+
 let _plans=null;
 async function loadUsers(){
   if(!_plans){
@@ -80,19 +221,22 @@ async function refresh(){
   const [stats,providers,keys,reqs]=await Promise.all([
     adminApi('/admin/stats'),adminApi('/admin/providers'),
     adminApi('/admin/keys'),adminApi('/admin/requests?limit=30')]);
+  _data={stats,providers,keys,reqs};
   loadUsers().catch(()=>{});
 
   $('#health').textContent='● online';$('#health').className='pill ok';
 
   $('#stats').innerHTML=[
-    ['Requests 24h',stats.requests_24h,ICONS.req],
-    ['Error rate',(stats.error_rate_24h*100).toFixed(1)+'%',ICONS.err],
-    ['Tokens in',stats.tokens_in_24h,ICONS.tin],
-    ['Tokens out',stats.tokens_out_24h,ICONS.tout],
-    ['Providers',stats.providers,ICONS.prov],
-    ['Keys healthy',stats.keys_healthy+'/'+stats.keys_total,ICONS.key],
-    ['In cooldown',stats.keys_in_cooldown,ICONS.cd],
-  ].map(([l,v,i])=>`<div class="ui-card stat-card"><div class="ico">${i}</div><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+    ['Requests 24h',stats.requests_24h,ICONS.req,'requests'],
+    ['Error rate',(stats.error_rate_24h*100).toFixed(1)+'%',ICONS.err,'errors'],
+    ['Tokens in',stats.tokens_in_24h,ICONS.tin,'tin'],
+    ['Tokens out',stats.tokens_out_24h,ICONS.tout,'tout'],
+    ['Providers',stats.providers,ICONS.prov,'providers'],
+    ['Keys healthy',stats.keys_healthy+'/'+stats.keys_total,ICONS.key,'keys'],
+    ['In cooldown',stats.keys_in_cooldown,ICONS.cd,'cooldown'],
+  ].map(([l,v,i,id])=>`<button type="button" class="ui-card stat-card stat-card-btn"
+    onclick="statDetail('${id}')" title="Click for details"><div class="ico">${i}</div>
+    <div class="v">${v}</div><div class="l">${l}</div></button>`).join('');
   if(window.NovaMotion&&!refresh._statsPainted){refresh._statsPainted=1;
     NovaMotion.stagger(document.querySelectorAll('#stats .stat-card'),{y:14,dur:.35,stagger:.05});}
   if(window.NovaMotion)NovaMotion.liftAll('#stats .stat-card',null,{y:-3});

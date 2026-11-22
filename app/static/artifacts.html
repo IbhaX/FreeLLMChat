@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Artifactory - IbhaX</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  .af-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+  .af-card{cursor:pointer;overflow:hidden;display:flex;flex-direction:column;transition:transform .15s,border-color .15s}
+  .af-card:hover{transform:translateY(-2px);border-color:var(--accent-line)}
+  .af-thumb{height:120px;display:grid;place-items:center;font-size:38px;background:var(--surface-2);overflow:hidden}
+  .af-thumb img{width:100%;height:100%;object-fit:cover}
+  .af-body{padding:10px 12px}
+  .af-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .af-meta{display:flex;gap:6px;align-items:center;margin-top:5px;flex-wrap:wrap}
+  .af-pill{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);border:1px solid var(--border-2);border-radius:999px;padding:1px 7px}
+  .af-src{font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .af-empty{text-align:center;color:var(--text-3);padding:60px 20px}
+  .af-modal-body{max-height:70vh;overflow:auto}
+  .af-modal-body img{max-width:100%;border-radius:var(--r-md)}
+  .af-modal-body iframe{width:100%;height:60vh;border:1px solid var(--border-2);border-radius:var(--r-md);background:#fff}
+  .af-modal-body pre{background:var(--surface-2);border-radius:var(--r-md);padding:12px;font-size:12px;overflow:auto;max-height:60vh;white-space:pre-wrap;word-break:break-word}
+</style>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page" style="max-width:1150px">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" data-app-back="/" title="Back"></button>
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" id="menuBtn" style="display:none">☰</button>
+      <div><h1>Artifactory</h1><div class="sub">Everything your agents generate — documents, sheets, images, code</div></div>
+    </div>
+
+    <div class="ui-card ui-card-pad" style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap">
+      <input id="sq" class="ui-input" style="flex:1;min-width:220px" placeholder="Search artifacts…">
+      <select id="kindSel" class="ui-select" style="width:170px">
+        <option value="">All kinds</option>
+        <option value="document">Documents</option>
+        <option value="data">Data / sheets</option>
+        <option value="image">Images</option>
+        <option value="audio">Audio</option>
+        <option value="video">Video</option>
+        <option value="code">Code</option>
+        <option value="archive">Archives</option>
+        <option value="file">Other files</option>
+      </select>
+      <button class="ui-btn ui-btn-ghost" id="refreshBtn">Refresh</button>
+    </div>
+
+    <div class="af-grid" id="grid"></div>
+    <div class="af-empty" id="empty" hidden>
+      No artifacts yet. Ask an agent to build something — <code>@xlsx</code>,
+      <code>@pdf</code>, <code>@docx</code>, generated images and audio all land here.
+    </div>
+  </div>
+</main>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app-nav.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/artifacts.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/static/js/motion.js"></script>
+</body>
+</html>

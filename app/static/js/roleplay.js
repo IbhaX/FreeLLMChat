@@ -46,15 +46,65 @@
     }catch(e){toast2(e.message);renderEmpty();}
   }
 
+  // ---------------------------------------------- @mention autocomplete
+  let _mDefs=null,_mPromise=null;
+  function mMenu(){
+    let m=$('#mMenu');
+    if(!m){m=document.createElement('div');m.id='mMenu';
+      m.className='st-mentions';$('#composer').appendChild(m);}
+    return m;
+  }
+  function loadMentions(){
+    if(_mDefs)return Promise.resolve(_mDefs);
+    if(_mPromise)return _mPromise;
+    _mPromise=Promise.all([
+      v1Api('/v1/skills').then(d=>d.skills||d||[]).catch(()=>[]),
+      v1Api('/admin/tools').then(d=>d.tools||d||[]).catch(()=>[]),
+    ]).then(([skills,tools])=>{
+      _mDefs=[
+        ...(skills||[]).map(s=>({name:s.name,kind:'skill',desc:s.description||'skill'})),
+        ...(tools||[]).map(t=>({name:t.name,kind:'tool',desc:t.description||'tool — runs inline'})),
+      ];
+      return _mDefs;
+    });
+    return _mPromise;
+  }
+  async function renderMentions(inp){
+    const upto=inp.value.slice(0,inp.selectionStart??inp.value.length);
+    const m=/@(?:(agent|skill|tool)s?:)?([\w-]*)$/.exec(upto);
+    const menu=mMenu();
+    if(!m){menu.classList.remove('open');return;}
+    const defs=await loadMentions();
+    let kind=(m[1]||'').replace(/s$/,'');         // '' = any kind
+    let q=m[2].toLowerCase();
+    // Bare kind keyword counts too: @tool/@tools/@skill… lists that group.
+    if(!kind&&/^(agents?|skills?|tools?)$/.test(q)){kind=q.replace(/s$/,'');q='';}
+    const opts=defs.filter(d=>(!kind||d.kind===kind)
+      &&d.name.toLowerCase().includes(q)).slice(0,10);
+    if(!opts.length){menu.classList.remove('open');return;}
+    menu.innerHTML=opts.map(o=>
+      `<div class="sm" data-n="${esc(o.name)}"><code>@${esc(o.name)}</code>`
+      +`<span class="k">${o.kind}</span><span class="d">${esc(o.desc||'')}</span></div>`
+    ).join('');
+    menu.classList.add('open');
+    menu.querySelectorAll('.sm').forEach(el=>el.onclick=()=>{
+      const rest=inp.value.slice(inp.selectionStart??inp.value.length);
+      inp.value=upto.slice(0,upto.length-m[0].length)+'@'+el.dataset.n+' '+rest;
+      menu.classList.remove('open');inp.focus();
+    });
+  }
+
   function bind(){
     $$('.st-mode[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
     $('#beatOnly').onclick=()=>{beatOnly=!beatOnly;
       $('#beatOnly').classList.toggle('on',beatOnly);};
     $('#btnRun').onclick=send;
     $('#input').addEventListener('keydown',e=>{
-      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}
+      if(e.key==='Escape')mMenu().classList.remove('open');});
     $('#input').addEventListener('input',e=>{e.target.style.height='auto';
-      e.target.style.height=Math.min(e.target.scrollHeight,140)+'px';});
+      e.target.style.height=Math.min(e.target.scrollHeight,140)+'px';
+      renderMentions(e.target);});
     $('#btnScenes').onclick=()=>{renderScenes();$('#scenesVeil').classList.add('open');
       if(window.NovaMotion)NovaMotion.veil($('#scenesVeil'),true);};
     $('#btnCast').onclick=()=>{castPicks=[...(room?room.character_ids||[]:[])];
@@ -158,6 +208,7 @@
     const text=$('#input').value.trim();
     if(!text||!room||streaming)return;
     $('#input').value='';$('#input').style.height='auto';
+    mMenu().classList.remove('open');
     const wt=mode==='whisper'?parseInt($('#whisperTo').value)||null:null;
     beat(mode,text,wt);
   }

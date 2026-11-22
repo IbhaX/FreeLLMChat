@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Textbook — IbhaX Research</title>
+<title>Textbook - IbhaX Research</title>
 <script>
   // Apply the saved app theme before paint so the page chrome never flashes.
   document.documentElement.dataset.theme = localStorage.getItem('ui-theme') || 'dark';
@@ -96,7 +96,7 @@
   }
   if (!runId) { fail('Missing run id.'); return; }
 
-  // Only attach the user credential when present — the PDF exporter
+  // Only attach the user credential when present - the PDF exporter
   // forwards its own auth at the browser level.
   function hdrs() {
     var h = {};
@@ -104,7 +104,7 @@
     return h;
   }
 
-  // Skeleton book first — synchronous, before the stream attaches, so
+  // Skeleton book first - synchronous, before the stream attaches, so
   // chapter events always have a real slot to land in (no reordering).
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var TL = window.Nova && Nova.TextbookLive;
@@ -161,8 +161,8 @@
   if (!printMode) showSkeleton();
 
   // Real composition progress: each frame is one genuinely finished
-  // composer task (outline + N section calls) — the % is honest.
-  // Live activity feed inside the cover — every row is a real stream event.
+  // composer task (outline + N section calls) - the % is honest.
+  // Live activity feed inside the cover - every row is a real stream event.
   var lastAct = '';
   function actLine(text, cls) {
     var list = book.querySelector('.tbl-ca-list');
@@ -184,7 +184,7 @@
     if (bar) bar.style.width = pct + '%';
     if (num) num.textContent = pct + '%';
     if (st) st.textContent = 'Composing ' + (label || 'book') +
-      ' — chapter ' + done + ' of ' + total;
+      ' - chapter ' + done + ' of ' + total;
     if (label && label !== 'resumed')
       actLine('Composer finished “' + label + '”', 'is-done');
     var ch = book.querySelectorAll('.tbl-chip');
@@ -192,7 +192,7 @@
       if (i < done - 1 && c.textContent !== 'done') { c.textContent = 'done'; c.className = 'tbl-chip tbl-chip-done'; }
     });
   }
-  // A composer section finished — swap its skeleton for the real rich
+  // A composer section finished - swap its skeleton for the real rich
   // chapter (.tb-ch: banner, colored panel, callouts, charts) so the
   // reader sees an actual textbook page, not raw markdown.
   var PAL_CYCLE = ['navy', 'sky', 'mint', 'yellow', 'coral', 'lavender'];
@@ -211,7 +211,7 @@
       sec.dataset.index = index;
       sec.dataset.filled = '1';
     }
-    actLine('Chapter ' + (index + 1) + ' typeset — ' + (title || ''), 'is-done');
+    actLine('Chapter ' + (index + 1) + ' typeset - ' + (title || ''), 'is-done');
     if (slot) {
       if (sec) { slot.replaceWith(sec); }
     } else if (sec) {
@@ -266,7 +266,7 @@
       .then(function (r) {
         if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent(location.pathname); throw r; }
         if (r.status === 404 || !r.ok || !r.body) {
-          // Older server without the stream endpoint — plain fetch fallback.
+          // Older server without the stream endpoint - plain fetch fallback.
           return fetch((window.API_BASE || '') + '/v1/research/runs/' + runId + '/document',
                 { headers: hdrs() })
             .then(function (r2) { if (!r2.ok) throw new Error('document ' + r2.status); return r2.json(); });
@@ -277,12 +277,12 @@
         if (doc === '__superseded__' || ctl.signal.aborted) return;
         if (!doc) throw new Error('empty document');
         book.innerHTML = '';
-        document.title = (doc.title || 'Textbook') + ' — IbhaX Research';
+        document.title = (doc.title || 'Textbook') + ' - IbhaX Research';
         document.getElementById('tbTitle').textContent = doc.title || 'Textbook';
         var res = window.NovaTextbook.render(doc, book, {});
         if (!printMode) {
           window.NovaTextbook.chrome(doc, res);
-          // Progressive entrance — chapters reveal like they were just typeset.
+          // Progressive entrance - chapters reveal like they were just typeset.
           if (window.gsap && !reduced) {
             var chapters = book.querySelectorAll('.tb-ch');
             gsap.fromTo(chapters,

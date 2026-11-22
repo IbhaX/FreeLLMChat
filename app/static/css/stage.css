@@ -257,8 +257,32 @@ body {
 /* composer */
 .st-composer {
   border-top: 1px solid var(--stage-line); padding: 12px 16px;
-  background: var(--stage-bg2);
+  background: var(--stage-bg2); position: relative;
 }
+.st-mentions {
+  position: absolute; bottom: calc(100% + 4px); left: 16px; right: 16px;
+  max-height: 240px; overflow-y: auto; z-index: 30;
+  background: var(--surface-1); border: 1px solid var(--stage-line);
+  border-radius: 12px; box-shadow: var(--shadow-3, 0 12px 32px rgba(0,0,0,.3));
+  padding: 5px; display: none;
+}
+.st-mentions.open { display: block; }
+.st-mentions .sm {
+  display: grid; grid-template-columns: minmax(140px,max-content) 68px 1fr;
+  align-items: center; gap: 12px; padding: 8px 10px;
+  border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--stage-ink);
+}
+.st-mentions .sm:hover { background: var(--surface-2); }
+.st-mentions .sm code { color: var(--stage-violet); font-size: 12.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-mentions .sm .k {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--stage-dim); text-align: center;
+  border: 1px solid var(--stage-line); border-radius: 999px; padding: 1px 7px;
+}
+.st-mentions .sm .d { color: var(--stage-dim); font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-align: right; }
 .st-modes { display: flex; gap: 6px; margin-bottom: 9px; align-items: center; flex-wrap: wrap; }
 .st-mode {
   background: none; border: 1px solid var(--stage-line); border-radius: 999px;

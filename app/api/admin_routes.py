@@ -71,6 +71,16 @@ async def _provider(session: AsyncSession, name: str) -> Provider:
     return p
 
 
+def _utc(dt: datetime | None) -> datetime | None:
+    """DB timestamps are stored naive-UTC — attach the zone so serialized
+    ISO strings carry an offset. A bare ``2026-11-23 08:00:00`` is parsed
+    as *local* time by browsers, which mis-compares cooldowns and shifts
+    every displayed timestamp by the client's UTC offset."""
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _key_out(k: ApiKey) -> KeyOut:
     now = datetime.now(timezone.utc)
     cd = k.cooldown_until
@@ -86,9 +96,9 @@ def _key_out(k: ApiKey) -> KeyOut:
         enabled=k.enabled, priority=k.priority, weight=k.weight,
         daily_request_count=k.daily_request_count,
         daily_token_count=k.daily_token_count,
-        last_used_at=k.last_used_at, cooldown_until=k.cooldown_until,
+        last_used_at=_utc(k.last_used_at), cooldown_until=_utc(k.cooldown_until),
         consecutive_failures=k.consecutive_failures, last_error=k.last_error,
-        created_at=k.created_at, notes=k.notes,
+        created_at=_utc(k.created_at), notes=k.notes,
         healthy=k.enabled and not cooling and decryptable,
         decryptable=decryptable,
     )
@@ -834,7 +844,7 @@ async def recent_requests(
     ).scalars().all()
     return [
         {
-            "request_id": r.request_id, "ts": r.ts.isoformat(),
+            "request_id": r.request_id, "ts": _utc(r.ts).isoformat(),
             "model_requested": r.model_requested, "model_served": r.model_served,
             "provider": r.provider_name, "key_label": r.key_label,
             "status": r.status, "http_status": r.http_status,
@@ -859,8 +869,8 @@ def _user_out(u: User) -> dict[str, Any]:
         "id": u.id, "username": u.username, "email": u.email,
         "display_name": u.display_name, "role": u.role, "plan": u.plan,
         "disabled": u.disabled,
-        "deleted_at": u.deleted_at.isoformat() if u.deleted_at else None,
-        "created_at": u.created_at.isoformat() if u.created_at else None,
+        "deleted_at": _utc(u.deleted_at).isoformat() if u.deleted_at else None,
+        "created_at": _utc(u.created_at).isoformat() if u.created_at else None,
     }
 
 

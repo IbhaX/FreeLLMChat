@@ -13,21 +13,69 @@
   --t-xs:12px; --t-sm:13px; --t-md:14px; --t-lg:16px; --t-xl:20px; --t-2xl:28px;
 }
 
-/* ---------- Per-theme component character ---------- */
+/* ---------- Per-theme component character ----------
+   Each theme gets its own typeface, button geometry and surface
+   shape so the picker reads as a real design swap, not a recolor.
+   Radius lives in --r-* tokens per theme in themes.css; the rules
+   here cover fonts, weights, tracking and button geometry. */
+[data-theme="dark"] h1,[data-theme="dark"] h2,[data-theme="dark"] h3,[data-theme="dark"] h4{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:700;letter-spacing:-.03em}
+
+[data-theme="light"] body{font-family:"DM Sans",var(--font-ui)}
+[data-theme="light"] .ui-btn{border-radius:10px}
+
 [data-theme="stage"] .ui-btn{border-radius:10px}
+[data-theme="stage"] h1,[data-theme="stage"] h2,[data-theme="stage"] h3,[data-theme="stage"] h4{
+  font-family:"Playfair Display",Georgia,serif;letter-spacing:-.005em}
 
 [data-theme="elevenlabs"] .ui-btn{border-radius:999px}
 [data-theme="elevenlabs"] h1,[data-theme="elevenlabs"] h2,[data-theme="elevenlabs"] h3,[data-theme="elevenlabs"] h4{
   font-family:Georgia,"Times New Roman",serif;font-weight:300;letter-spacing:-.01em}
 [data-theme="elevenlabs"] body{letter-spacing:.15px}
+
+[data-theme="apple"] body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","Segoe UI",Arial,sans-serif}
 [data-theme="apple"] .ui-btn{border-radius:999px}
 [data-theme="apple"] h1,[data-theme="apple"] h2,[data-theme="apple"] h3,[data-theme="apple"] h4{font-weight:600;letter-spacing:-.01em}
-[data-theme="bmw"] .ui-btn{border-radius:0;font-weight:700;letter-spacing:.03em}
-[data-theme="bmw"] h1,[data-theme="bmw"] h2,[data-theme="bmw"] h3,[data-theme="bmw"] h4{letter-spacing:0}
-[data-theme="bmw"] body{font-weight:300}
-[data-theme="composio"] h1,[data-theme="composio"] h2,[data-theme="composio"] h3,[data-theme="composio"] h4{font-weight:500}
+
+[data-theme="bmw"] body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-weight:300}
+[data-theme="bmw"] .ui-btn{font-weight:700;letter-spacing:.03em;text-transform:uppercase;font-size:var(--t-xs)}
+[data-theme="bmw"] h1,[data-theme="bmw"] h2,[data-theme="bmw"] h3,[data-theme="bmw"] h4{
+  font-family:"Barlow Condensed","Arial Narrow",sans-serif;
+  font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+
+[data-theme="composio"] h1,[data-theme="composio"] h2,[data-theme="composio"] h3,[data-theme="composio"] h4{
+  font-family:"Space Grotesk",var(--font-ui);font-weight:600;letter-spacing:-.02em}
+[data-theme="composio"] .ui-btn{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:var(--t-xs)}
+
+[data-theme="meta"] body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif}
 [data-theme="meta"] .ui-btn{border-radius:999px;font-weight:700}
 [data-theme="meta"] h1,[data-theme="meta"] h2,[data-theme="meta"] h3,[data-theme="meta"] h4{font-weight:500;letter-spacing:-.01em}
+
+/* DJI — Open Sans showroom, pill CTAs, square-cornered tiles */
+[data-theme="dji"] body{font-family:"Open Sans",var(--font-ui);letter-spacing:-.02em}
+[data-theme="dji"] .ui-btn{border-radius:999px}
+[data-theme="dji"] h1,[data-theme="dji"] h2,[data-theme="dji"] h3,[data-theme="dji"] h4{font-weight:600;letter-spacing:-.03em}
+
+/* Expo — developer dialect: compact 8px CTAs, 600 display */
+[data-theme="expo"] .ui-btn{font-weight:500}
+[data-theme="expo"] h1,[data-theme="expo"] h2,[data-theme="expo"] h3,[data-theme="expo"] h4{font-weight:600;letter-spacing:-.03em}
+
+/* Figma — Work Sans (figmaSans substitute), pill is the only button */
+[data-theme="figma"] body{font-family:"Work Sans",var(--font-ui)}
+[data-theme="figma"] .ui-btn{border-radius:999px}
+[data-theme="figma"] h1,[data-theme="figma"] h2,[data-theme="figma"] h3,[data-theme="figma"] h4{font-weight:500;letter-spacing:-.02em}
+
+/* Slack — Lato humanist body, over-padded aubergine pills */
+[data-theme="slack"] body{font-family:"Lato",var(--font-ui)}
+[data-theme="slack"] .ui-btn{border-radius:999px;font-weight:700;padding:10px 22px}
+[data-theme="slack"] .ui-btn-sm{padding:6px 14px}
+[data-theme="slack"] h1,[data-theme="slack"] h2,[data-theme="slack"] h3,[data-theme="slack"] h4{font-weight:700;letter-spacing:-.012em}
+
+/* Notion — Public Sans (Notion-Sans adjacent), sober 8px buttons */
+[data-theme="notion"] body{font-family:"Public Sans",var(--font-ui)}
+[data-theme="notion"] .ui-btn{font-weight:500}
+[data-theme="notion"] h1,[data-theme="notion"] h2,[data-theme="notion"] h3,[data-theme="notion"] h4{font-weight:600;letter-spacing:-.015em}
 
 /* ---------- Base ---------- */
 *,*::before,*::after{box-sizing:border-box}
@@ -334,6 +382,16 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.02em;line-height:1.2}
 .stat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-2)}
 .stat-card .v{font-size:24px;font-weight:700;letter-spacing:-.02em;margin-top:6px;color:var(--accent)}
 .stat-card .l{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3)}
+.stat-card-btn{cursor:pointer;text-align:left;font:inherit;color:inherit}
+.stat-card-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stat-modal{max-width:780px;width:min(780px,94vw)}
+.stat-modal-body{max-height:62vh;overflow-y:auto;padding-right:4px}
+.stat-modal .sm-sec{font-size:var(--t-xs);font-weight:600;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--text-3);margin:18px 0 8px}
+.stat-modal .sm-sec:first-child{margin-top:0}
+.stat-modal .ui-table{font-size:var(--t-sm)}
+.stat-modal .ui-table-scroll>.ui-table{min-width:max-content}
+.stat-modal .ui-table th{white-space:nowrap}
 .stat-card .ico{
   width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
   background:var(--accent-soft);color:var(--accent);font-size:14px;

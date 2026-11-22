@@ -284,6 +284,7 @@ class User(Base):
     bio: Mapped[str] = mapped_column(String(512), default="")
     avatar_url: Mapped[str] = mapped_column(String(512), default="")
     github_username: Mapped[str] = mapped_column(String(64), default="")
+    github_connected: Mapped[bool] = mapped_column(Boolean, default=False)
     pronouns: Mapped[str] = mapped_column(String(64), default="")
     company: Mapped[str] = mapped_column(String(128), default="")
     location: Mapped[str] = mapped_column(String(128), default="")
@@ -778,3 +779,47 @@ class Job(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class GeneratedArtifact(Base):
+    """A generated artifact — files agents produce (documents, sheets,
+    media, code) registered for the Artifactory browser. Files live under
+    data/media served at /media/<path>; this row is the catalog entry."""
+
+    __tablename__ = "generated_artifacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(256), index=True)
+    title: Mapped[str] = mapped_column(String(256), default="")
+    kind: Mapped[str] = mapped_column(String(32), default="file", index=True)
+    mime: Mapped[str] = mapped_column(String(128), default="")
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    path: Mapped[str] = mapped_column(String(512), unique=True)
+    source: Mapped[str] = mapped_column(String(128), default="")
+    conversation_id: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, index=True)
+    owner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class UserConnector(Base):
+    """A user's personal connector credentials — one row per (user, service).
+
+    The whole config blob is Fernet-encrypted at rest (``config_enc``); the
+    API layer only ever returns field hints, never raw secrets. Tools resolve
+    the calling user's row at run time via the request contextvar, so one
+    user's GitHub/Slack token can never leak into another tenant's run."""
+
+    __tablename__ = "user_connectors"
+    __table_args__ = (UniqueConstraint("user_id", "service"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    service: Mapped[str] = mapped_column(String(64), index=True)
+    config_enc: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow)

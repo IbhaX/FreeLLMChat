@@ -1,3 +1,6 @@
+/* Per-theme typefaces — one bundled request. */
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=DM+Sans:wght@400;500;700&family=Lato:wght@400;700&family=Open+Sans:wght@400;500;600&family=Playfair+Display:wght@600;700&family=Public+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=Work+Sans:wght@400;500;600&display=swap");
+
 /* ---------- DARK (default) ---------- */
 :root,[data-theme="dark"]{
   --control-thumb:#fff; --on-provider:#fff; --code-text:#e6e6e6; --scrim:rgba(4,6,10,.6);
@@ -66,6 +69,7 @@
   --ring:0 0 0 3px rgba(79,70,229,.2);
   --glow:radial-gradient(60% 50% at 50% -10%,rgba(79,70,229,.06),transparent 70%);
   --code-bg:#0f1621;
+  --r-lg:16px; --r-xl:20px;
 }
 
 /* ==========================================================================
@@ -92,6 +96,7 @@
   --ring:0 0 0 3px rgba(41,37,36,.18);
   --glow:radial-gradient(60% 45% at 50% -10%,rgba(168,229,211,.28),rgba(200,184,224,.18) 55%,transparent 75%);
   --code-bg:#1c1917;
+  --r-md:10px; --r-lg:14px;
 }
 
 /* Apple: stark white, single Action Blue, pill CTAs */
@@ -114,6 +119,7 @@
   --ring:0 0 0 3px rgba(0,113,227,.28);
   --glow:none;
   --code-bg:#1d1d1f;
+  --r-md:10px; --r-lg:18px; --r-xl:22px;
 }
 
 /* BMW: corporate light, BMW blue, rectangular buttons, 700/300 type */
@@ -136,6 +142,7 @@
   --ring:0 0 0 3px rgba(28,105,212,.22);
   --glow:none;
   --code-bg:#1a2129;
+  --r-sm:0; --r-md:0; --r-lg:0; --r-xl:0;
 }
 
 /* Composio: near-black dev-infra, deep electric blue spotlight */
@@ -158,6 +165,7 @@
   --ring:0 0 0 3px rgba(26,38,255,.35);
   --glow:radial-gradient(60% 50% at 50% -10%,rgba(26,38,255,.30),transparent 70%);
   --code-bg:#000000;
+  --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:10px;
 }
 
 /* Meta: stark white commerce, cobalt buy-now blue, pill geometry */
@@ -180,7 +188,7 @@
   --ring:0 0 0 3px rgba(0,100,224,.25);
   --glow:none;
   --code-bg:#1c1e21;
-  --r-lg:20px; --r-xl:24px;
+  --r-md:12px; --r-lg:20px; --r-xl:24px;
 }
 
 /* Stage: cinematic blue-violet — the roleplay page's native palette */
@@ -204,4 +212,125 @@
   --ring:0 0 0 3px rgba(139,124,246,.25);
   --glow:radial-gradient(60% 50% at 50% -10%,rgba(139,124,246,.12),transparent 70%);
   --code-bg:#14111f;
+  --r-lg:14px; --r-xl:18px;
+}
+
+/* DJI: product-showroom white, single engineering blue, pill CTAs,
+   ink at stepped opacities, flat tile surfaces */
+[data-theme="dji"]{
+  --control-thumb:#fff; --on-provider:#fff; --code-text:#e6e6e6; --scrim:rgba(4,6,10,.6);
+  color-scheme:light;
+  --bg-0:#ffffff; --bg-1:#f7f9fa;
+  --surface-1:#ffffff; --surface-2:#f7f9fa; --surface-3:#f0f0f0;
+  --border-1:rgba(0,0,0,.06); --border-2:rgba(0,0,0,.10); --border-3:rgba(0,0,0,.16);
+  --text-1:#262626; --text-2:#595959; --text-3:#8c8c8c;
+  --accent:#0070d5; --accent-2:#0060ef; --on-accent:#ffffff;
+  --accent-soft:rgba(0,112,213,.10); --accent-line:rgba(0,112,213,.40);
+  --success:#16a34a; --success-soft:rgba(22,163,74,.12);
+  --warn:#be4e04; --warn-soft:rgba(190,78,4,.12);
+  --error:#f5222d; --error-soft:rgba(245,34,45,.10);
+  --shadow-1:0 1px 2px rgba(0,0,0,.04);
+  --shadow-2:0 2px 8px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-3:0 8px 24px rgba(0,0,0,.10),0 2px 6px rgba(0,0,0,.05);
+  --shadow-4:0 24px 64px rgba(0,0,0,.18),0 8px 20px rgba(0,0,0,.08);
+  --ring:0 0 0 3px rgba(0,112,213,.25);
+  --glow:none;
+  --code-bg:#272727;
+  --r-md:4px; --r-lg:0; --r-xl:0;
+}
+
+/* Expo: pure-white canvas, pure-black CTA, sky-blue hero wash,
+   Inter + JetBrains Mono developer dialect */
+[data-theme="expo"]{
+  --control-thumb:#fff; --on-provider:#fff; --code-text:#e6e6e6; --scrim:rgba(4,6,10,.6);
+  color-scheme:light;
+  --bg-0:#ffffff; --bg-1:#fafafa;
+  --surface-1:#ffffff; --surface-2:#fafafa; --surface-3:#f0f0f3;
+  --border-1:rgba(23,23,23,.07); --border-2:rgba(23,23,23,.12); --border-3:rgba(23,23,23,.20);
+  --text-1:#171717; --text-2:#60646c; --text-3:#999999;
+  --accent:#000000; --accent-2:#1a1a1a; --on-accent:#ffffff;
+  --accent-soft:rgba(0,0,0,.08); --accent-line:rgba(0,0,0,.35);
+  --success:#16a34a; --success-soft:rgba(22,163,74,.12);
+  --warn:#ab6400; --warn-soft:rgba(171,100,0,.12);
+  --error:#eb8e90; --error-soft:rgba(235,142,144,.15);
+  --shadow-1:0 1px 2px rgba(0,0,0,.04);
+  --shadow-2:0 4px 12px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.03);
+  --shadow-3:0 8px 24px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.05);
+  --shadow-4:0 24px 64px rgba(0,0,0,.14),0 8px 20px rgba(0,0,0,.07);
+  --ring:0 0 0 3px rgba(0,0,0,.20);
+  --glow:radial-gradient(60% 45% at 50% -10%,rgba(207,231,255,.7),rgba(168,200,232,.35) 55%,transparent 75%);
+  --code-bg:#171717;
+  --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px;
+}
+
+/* Figma: monochrome editorial chrome, pill CTAs, pastel color-block
+   glow — weight carries hierarchy, shadows stay rare */
+[data-theme="figma"]{
+  --control-thumb:#fff; --on-provider:#fff; --code-text:#e6e6e6; --scrim:rgba(4,6,10,.6);
+  color-scheme:light;
+  --bg-0:#ffffff; --bg-1:#f7f7f7;
+  --surface-1:#ffffff; --surface-2:#f5f5f5; --surface-3:#ececec;
+  --border-1:rgba(0,0,0,.08); --border-2:rgba(0,0,0,.12); --border-3:rgba(0,0,0,.20);
+  --text-1:#1e1e1e; --text-2:#5a5a5a; --text-3:#9b9b9b;
+  --accent:#000000; --accent-2:#1a1a1a; --on-accent:#ffffff;
+  --accent-soft:rgba(0,0,0,.08); --accent-line:rgba(0,0,0,.35);
+  --success:#0fa958; --success-soft:rgba(15,169,88,.12);
+  --warn:#d97706; --warn-soft:rgba(217,119,6,.12);
+  --error:#f24822; --error-soft:rgba(242,72,34,.10);
+  --shadow-1:0 1px 2px rgba(0,0,0,.04);
+  --shadow-2:0 4px 16px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-3:0 8px 24px rgba(0,0,0,.10),0 2px 6px rgba(0,0,0,.06);
+  --shadow-4:0 16px 48px rgba(0,0,0,.16),0 8px 20px rgba(0,0,0,.08);
+  --ring:0 0 0 3px rgba(0,0,0,.20);
+  --glow:radial-gradient(60% 45% at 50% -10%,rgba(199,185,255,.35),rgba(213,230,142,.20) 55%,transparent 75%);
+  --code-bg:#1e1e1e;
+  --r-md:8px; --r-lg:24px; --r-xl:32px;
+}
+
+/* Slack: deep aubergine primary on cream canvas, over-padded pill
+   CTAs, pastel-mesh atmospheric glow, blue inline links */
+[data-theme="slack"]{
+  --control-thumb:#fff; --on-provider:#fff; --code-text:#e6e6e6; --scrim:rgba(4,6,10,.6);
+  color-scheme:light;
+  --bg-0:#ffffff; --bg-1:#f4ede4;
+  --surface-1:#ffffff; --surface-2:#faf7f2; --surface-3:#efe9e1;
+  --border-1:rgba(29,29,29,.08); --border-2:rgba(29,29,29,.12); --border-3:rgba(29,29,29,.20);
+  --text-1:#1d1d1d; --text-2:#696969; --text-3:#9c9c9c;
+  --accent:#4a154b; --accent-2:#611f69; --on-accent:#ffffff;
+  --accent-soft:rgba(74,21,75,.08); --accent-line:rgba(74,21,75,.40);
+  --success:#007a5a; --success-soft:rgba(0,122,90,.12);
+  --warn:#eab308; --warn-soft:rgba(234,179,8,.14);
+  --error:#cc4117; --error-soft:rgba(204,65,23,.12);
+  --shadow-1:0 1px 2px rgba(0,0,0,.05);
+  --shadow-2:0 5px 20px rgba(0,0,0,.10),0 1px 2px rgba(0,0,0,.05);
+  --shadow-3:0 0 32px rgba(0,0,0,.10),0 2px 6px rgba(0,0,0,.06);
+  --shadow-4:0 24px 64px rgba(0,0,0,.16),0 1px 10px rgba(0,0,0,.10);
+  --ring:0 0 0 3px rgba(74,21,75,.22);
+  --glow:radial-gradient(60% 45% at 50% -10%,rgba(233,216,255,.55),rgba(255,240,230,.40) 55%,transparent 75%);
+  --code-bg:#3a0e3b;
+  --r-sm:4px; --r-lg:12px; --r-xl:16px;
+}
+
+/* Notion: workspace white, charcoal ink, signature purple CTA,
+   sober 8px buttons, pastel card-tint glow */
+[data-theme="notion"]{
+  --control-thumb:#fff; --on-provider:#fff; --code-text:#e6e6e6; --scrim:rgba(4,6,10,.6);
+  color-scheme:light;
+  --bg-0:#ffffff; --bg-1:#f7f7f5;
+  --surface-1:#ffffff; --surface-2:#f7f7f5; --surface-3:#efefed;
+  --border-1:rgba(55,53,47,.08); --border-2:rgba(55,53,47,.12); --border-3:rgba(55,53,47,.20);
+  --text-1:#37352f; --text-2:#787774; --text-3:#a3a29e;
+  --accent:#7c3aed; --accent-2:#6d28d9; --on-accent:#ffffff;
+  --accent-soft:rgba(124,58,237,.10); --accent-line:rgba(124,58,237,.40);
+  --success:#448361; --success-soft:rgba(68,131,97,.12);
+  --warn:#cb912f; --warn-soft:rgba(203,145,47,.14);
+  --error:#eb5757; --error-soft:rgba(235,87,87,.12);
+  --shadow-1:0 1px 2px rgba(15,15,15,.04);
+  --shadow-2:0 4px 12px rgba(15,15,15,.08),0 1px 2px rgba(15,15,15,.04);
+  --shadow-3:0 24px 48px -8px rgba(15,15,15,.20),0 2px 6px rgba(15,15,15,.06);
+  --shadow-4:0 16px 48px -8px rgba(15,15,15,.16),0 8px 20px rgba(15,15,15,.08);
+  --ring:0 0 0 3px rgba(124,58,237,.22);
+  --glow:radial-gradient(60% 45% at 50% -10%,rgba(253,234,220,.6),rgba(235,225,255,.35) 55%,transparent 75%);
+  --code-bg:#10172e;
+  --r-sm:4px; --r-md:8px; --r-lg:12px;
 }

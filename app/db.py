@@ -34,7 +34,7 @@ def get_engine() -> AsyncEngine:
             cursor = dbapi_conn.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.execute("PRAGMA busy_timeout=30000")
             cursor.close()
 
     return _engine
@@ -140,6 +140,7 @@ async def init_db() -> None:
             "bio": "VARCHAR(512) DEFAULT ''",
             "avatar_url": "VARCHAR(512) DEFAULT ''",
             "github_username": "VARCHAR(64) DEFAULT ''",
+            "github_connected": "BOOLEAN DEFAULT 0",
             "pronouns": "VARCHAR(64) DEFAULT ''",
             "company": "VARCHAR(128) DEFAULT ''",
             "location": "VARCHAR(128) DEFAULT ''",

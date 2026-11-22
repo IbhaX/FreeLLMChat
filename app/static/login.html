@@ -86,7 +86,7 @@
     document.getElementById('title').textContent=reg?'Create your account':'Welcome back';
     document.getElementById('subtitle').textContent=reg
       ?(refRequired
-        ?'Registration is invite-only — enter your referral code.'
+        ?'Registration is invite-only - enter your referral code.'
         :'The first account becomes the administrator of this install.')
       :'Sign in to continue to IbhaX.';
     btn.textContent=reg?'Create account':'Sign in';
@@ -110,7 +110,7 @@
       location.href=next();
     }catch(x){err.textContent=x.message||'Sign-in failed';btn.disabled=false;}
   };
-  // Google Identity Services — one-tap sign-in when GOOGLE_CLIENT_ID is set.
+  // Google Identity Services - one-tap sign-in when GOOGLE_CLIENT_ID is set.
   let googleOn=false;
   function initGoogle(clientId){
     googleOn=true;
@@ -148,7 +148,7 @@
     }
     if(d.google_client_id){
       initGoogle(d.google_client_id);
-      // New Google accounts also register — show the code in both modes.
+      // New Google accounts also register - show the code in both modes.
       if(refRequired){
         document.getElementById('refWrap').classList.remove('reg-only');
         document.getElementById('ref_lbl').textContent='Referral code (new accounts)';

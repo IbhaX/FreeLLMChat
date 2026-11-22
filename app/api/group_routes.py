@@ -132,6 +132,12 @@ async def group_stream(
                 content={"error": {"message": reason,
                                    "type": "quota_exceeded"}})
         await usage.record(session, subject_for(user), "chat")
+        # Commit now: the flush holds SQLite's single write lock for the
+        # whole stream; the detached job's own session would deadlock.
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
 
     # Detached (refresh-resilient) execution: the run is registered as a
     # conversation chat-job, identical to /v1/research/stream and the chat

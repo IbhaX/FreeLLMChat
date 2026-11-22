@@ -311,6 +311,84 @@ async def _exa_search(query: str, num_results: int = 5,
         return f"exa_search error: {type(e).__name__}: {e}"
 
 
+_PY_MAX_OUT = 8000
+_PY_MAX_FILES = 8
+
+
+async def _python_exec(code: str = "", timeout: int = 30) -> str:
+    """Run a python snippet in a scrubbed-env subprocess.
+
+    Isolated mode (``-I``), minimal environment (no app env vars — secrets
+    can't leak), tempdir cwd, hard timeout, bounded output. Files the
+    snippet produces are published under ``/media/<file>`` like generated
+    media.
+    """
+    if not str(code).strip():
+        return "error: empty code"
+    try:
+        timeout = max(1, min(int(timeout), 60))
+    except (TypeError, ValueError):
+        timeout = 30
+    import os
+    import sys
+    import tempfile
+    import time
+    from pathlib import Path
+
+    links: list[str] = []
+    rc = -1
+    with tempfile.TemporaryDirectory(prefix="pyexec_") as td:
+        script = Path(td) / "snippet.py"
+        script.write_text(code, encoding="utf-8")
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+            "WINDIR": os.environ.get("WINDIR", ""),
+            "TEMP": td, "TMP": td,
+            "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1",
+            "PYTHONNOUSERSITE": "1",
+        }
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-I", str(script),
+                cwd=td, env=env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT)
+            try:
+                out, _ = await asyncio.wait_for(
+                    proc.communicate(), timeout=timeout)
+            except TimeoutError:
+                with contextlib.suppress(Exception):
+                    proc.kill()
+                    await proc.wait()
+                return f"error: timed out after {timeout}s"
+        except Exception as e:
+            return f"error: could not run python: {e}"
+        rc = proc.returncode if proc.returncode is not None else -1
+        text = out.decode("utf-8", "replace").strip()
+        # publish artifacts the snippet produced
+        stamp = int(time.time() * 1000) % 10**11
+        for f in sorted(Path(td).rglob("*")):
+            if (len(links) >= _PY_MAX_FILES or not f.is_file()
+                    or f.name == "snippet.py"
+                    or f.stat().st_size > 50 * 1024 * 1024):
+                continue
+            dst = _media_dir() / f"f{stamp}_{f.name}"
+            dst.write_bytes(f.read_bytes())
+            links.append(f"/media/{dst.name}")
+            from app.services import artifacts as _artifacts
+
+            _artifacts.record(dst.name, extra={"tool": "python_exec"})
+    body = text[:_PY_MAX_OUT] + (
+        "\n…(truncated)" if len(text) > _PY_MAX_OUT else "")
+    if rc != 0:
+        body = f"exit {rc}\n{body}"
+    if links:
+        body += ("\n\n" if body else "") + \
+            "Files created: " + ", ".join(links)
+    return body or "(no output)"
+
+
 # ---------- media generation ----------
 
 _MEDIA_DIR = None
@@ -382,6 +460,10 @@ async def _generate_audio(text: str, voice: str = "aria") -> str:
         fname = f"{_uuid.uuid4().hex}.mp3"
         out = _media_dir() / fname
         await edge_tts.Communicate(text, voice_id).save(str(out))
+        from app.services import artifacts as _artifacts
+
+        _artifacts.record(fname, title=text[:80],
+                          extra={"tool": "generate_audio", "voice": voice_id})
         url = f"/media/{fname}"
         return (
             f"Generated audio URL: {url} (voice {voice_id})\n"
@@ -392,6 +474,151 @@ async def _generate_audio(text: str, voice: str = "aria") -> str:
         return "error: edge-tts not installed (pip install edge-tts)"
     except Exception as e:
         return f"audio generation error: {e}"
+
+
+async def _wikipedia(query: str) -> str:
+    """Resolve a topic to a Wikipedia summary via opensearch + REST."""
+    async with httpx.AsyncClient(
+            timeout=15, follow_redirects=True,
+            headers={"User-Agent": "nova-chat/1.0"}) as c:
+        sr = await c.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={"action": "opensearch", "search": query,
+                    "limit": 1, "namespace": 0, "format": "json"})
+        titles = sr.json()[1] if isinstance(sr.json(), list) else []
+        if not titles:
+            return f"no Wikipedia article found for '{query}'"
+        title = titles[0]
+        r = await c.get(
+            f"https://en.wikipedia.org/api/rest_v1/page/summary/"
+            f"{title.replace(' ', '_')}")
+    if r.status_code != 200:
+        return f"wikipedia error: {r.status_code}"
+    d = r.json()
+    return (f"{d.get('title')} — {d.get('description') or ''}\n"
+            f"{d.get('extract', '')[:2500]}\n"
+            f"{d.get('content_urls', {}).get('desktop', {}).get('page', '')}")
+
+
+async def _weather(place: str) -> str:
+    """Current conditions + 3-day forecast via wttr.in (no key)."""
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(f"https://wttr.in/{place.strip().replace(' ', '+')}",
+                        params={"format": "j1"})
+    if r.status_code != 200:
+        return f"weather error: {r.status_code} for '{place}'"
+    d = r.json()
+    cur = (d.get("current_condition") or [{}])[0]
+    area = (d.get("nearest_area") or [{}])[0]
+    loc = (area.get("areaName") or [{}])[0].get("value", place)
+    lines = [f"{loc}: {(cur.get('weatherDesc') or [{}])[0].get('value','?')}, "
+             f"{cur.get('temp_C')}°C (feels {cur.get('FeelsLikeC')}°C), "
+             f"humidity {cur.get('humidity')}%, wind {cur.get('windspeedKmph')} km/h"]
+    for day in (d.get("weather") or [])[:3]:
+        lines.append(
+            f"{day.get('date')}: {day.get('mintempC')}–{day.get('maxtempC')}°C, "
+            + ", ".join(h.get("weatherDesc", [{}])[0].get("value", "")
+                        for h in day.get("hourly", [])[::8]))
+    return "\n".join(lines)
+
+
+async def _rss_feed(url: str, limit: int = 10) -> str:
+    """Fetch an RSS/Atom feed and list recent items (title + link + date)."""
+    import xml.etree.ElementTree as ET
+
+    async with httpx.AsyncClient(
+            timeout=15, follow_redirects=True,
+            headers={"User-Agent": "nova-chat/1.0"}) as c:
+        r = await c.get(url)
+    if r.status_code != 200:
+        return f"feed error: {r.status_code}"
+    try:
+        root = ET.fromstring(r.content)
+    except ET.ParseError as exc:
+        return f"feed parse error: {exc}"
+    atom = "{http://www.w3.org/2005/Atom}"
+    items: list[tuple[str, str, str]] = []
+    for it in root.iter("item"):                       # RSS 2.0
+        t = (it.findtext("title") or "").strip()
+        l = (it.findtext("link") or "").strip()
+        d = (it.findtext("pubDate") or it.findtext("date") or "").strip()
+        items.append((t, l, d))
+    if not items:
+        for e in root.iter(f"{atom}entry"):            # Atom
+            t = (e.findtext(f"{atom}title") or "").strip()
+            link = e.find(f"{atom}link")
+            l = link.get("href", "") if link is not None else ""
+            d = (e.findtext(f"{atom}updated")
+                 or e.findtext(f"{atom}published") or "").strip()
+            items.append((t, l, d))
+    feed_title = (root.findtext(".//title") or url).strip()
+    lines = [f"# {feed_title}"]
+    lines += [f"• {t or '(untitled)'}\n  {l}  {d}".rstrip()
+              for t, l, d in items[:min(limit, 30)]]
+    return "\n".join(lines) or "(empty feed)"
+
+
+async def _currency_convert(amount: float, from_currency: str,
+                            to_currency: str) -> str:
+    """Convert between currencies via frankfurter.dev (ECB rates)."""
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get("https://api.frankfurter.dev/v1/latest",
+                        params={"base": from_currency.upper(),
+                                "symbols": to_currency.upper()})
+    if r.status_code != 200:
+        return f"currency error: {r.status_code} — check the ISO codes"
+    d = r.json()
+    rate = d.get("rates", {}).get(to_currency.upper())
+    if rate is None:
+        return f"unknown currency: {to_currency}"
+    return (f"{amount} {from_currency.upper()} = "
+            f"{round(amount * rate, 4)} {to_currency.upper()} "
+            f"(rate {rate}, {d.get('date')})")
+
+
+_TRANSFORMS = {
+    "base64_encode": lambda t: __import__("base64").b64encode(t.encode()).decode(),
+    "base64_decode": lambda t: __import__("base64").b64decode(t.encode()).decode(),
+    "url_encode": lambda t: __import__("urllib.parse", fromlist=["quote"]).quote(t),
+    "url_decode": lambda t: __import__("urllib.parse", fromlist=["unquote"]).unquote(t),
+    "md5": lambda t: __import__("hashlib").md5(t.encode()).hexdigest(),
+    "sha256": lambda t: __import__("hashlib").sha256(t.encode()).hexdigest(),
+    "hex_encode": lambda t: t.encode().hex(),
+    "hex_decode": lambda t: bytes.fromhex(t).decode(),
+    "upper": str.upper, "lower": str.lower, "title": str.title,
+    "reverse": lambda t: t[::-1],
+    "word_count": lambda t: f"{len(t.split())} words, {len(t)} chars",
+}
+
+
+async def _text_transform(text: str, operation: str) -> str:
+    """Deterministic text ops — no model needed for encoding/hashing."""
+    fn = _TRANSFORMS.get(operation)
+    if fn is None:
+        return "unknown op — use: " + ", ".join(sorted(_TRANSFORMS))
+    try:
+        return str(fn(text))
+    except Exception as exc:
+        return f"transform error: {exc}"
+
+
+async def _qr_code(text: str) -> str:
+    """Render text/URL as a QR PNG into the media dir + Artifactory."""
+    import uuid as _uuid
+
+    import segno
+
+    fname = f"qr_{_uuid.uuid4().hex[:10]}.png"
+    from app.services.artifacts import media_dir, record
+
+    path = media_dir() / fname
+
+    def _render() -> None:
+        segno.make(text, error="m").save(str(path), scale=8, border=2)
+
+    await asyncio.to_thread(_render)
+    record(fname, title=f"QR: {text[:60]}", extra={"tool": "qr_code"})
+    return f"QR code saved: /media/{fname} — {text[:80]}"
 
 
 # ---------- registry ----------
@@ -518,8 +745,146 @@ TOOLS: dict[str, Tool] = {
             },
             execute=_generate_audio,
         ),
+        Tool(
+            name="python_exec",
+            icon="🐍",
+            description=(
+                "Run a Python snippet and return its output. Standard "
+                "library plus installed packages are available (pypdf, "
+                "python-docx, openpyxl, python-pptx, pillow, reportlab). "
+                "Files written to the working directory are published as "
+                "/media/<file> links. Isolated, env-scrubbed, time-limited."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string",
+                             "description": "python source to execute"},
+                    "timeout": {"type": "integer",
+                                "description": "seconds, max 60",
+                                "default": 30},
+                },
+                "required": ["code"],
+            },
+            execute=_python_exec,
+        ),
+        Tool(
+            name="wikipedia",
+            icon="📚",
+            description=(
+                "Look up a topic on Wikipedia — resolves the best article "
+                "and returns its summary + link."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "topic to look up"}
+                },
+                "required": ["query"],
+            },
+            execute=_wikipedia,
+        ),
+        Tool(
+            name="weather",
+            icon="🌦️",
+            description=(
+                "Current weather + 3-day forecast for a place "
+                "(wttr.in, no key needed)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "place": {"type": "string",
+                              "description": "city, region or 'lat,lon'"}
+                },
+                "required": ["place"],
+            },
+            execute=_weather,
+        ),
+        Tool(
+            name="rss_feed",
+            icon="📰",
+            description=(
+                "Fetch an RSS or Atom feed and list recent items "
+                "(titles, links, dates)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "feed URL"},
+                    "limit": {"type": "integer",
+                              "description": "max items", "default": 10},
+                },
+                "required": ["url"],
+            },
+            execute=_rss_feed,
+        ),
+        Tool(
+            name="currency_convert",
+            icon="💱",
+            description=(
+                "Convert an amount between currencies using latest ECB rates "
+                "(frankfurter.dev, no key)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "amount": {"type": "number", "description": "amount"},
+                    "from_currency": {"type": "string",
+                                      "description": "ISO code e.g. USD"},
+                    "to_currency": {"type": "string",
+                                    "description": "ISO code e.g. INR"},
+                },
+                "required": ["amount", "from_currency", "to_currency"],
+            },
+            execute=_currency_convert,
+        ),
+        Tool(
+            name="text_transform",
+            icon="🔡",
+            description=(
+                "Deterministic text operations: base64/url/hex encode-decode, "
+                "md5/sha256 hashes, upper/lower/title case, reverse, "
+                "word_count."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "input text"},
+                    "operation": {"type": "string",
+                                  "enum": sorted(_TRANSFORMS)},
+                },
+                "required": ["text", "operation"],
+            },
+            execute=_text_transform,
+        ),
+        Tool(
+            name="qr_code",
+            icon="🔳",
+            description=(
+                "Generate a QR code PNG for text or a URL — returns a "
+                "downloadable /media/ link (also catalogued in Artifactory)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string",
+                             "description": "text or URL to encode"}
+                },
+                "required": ["text"],
+            },
+            execute=_qr_code,
+        ),
     ]
 }
+
+
+# Connector-backed tools — registered last so they share the same registry.
+# Each resolves the calling user's credentials at run time via the request
+# contextvar, keeping connector configs strictly per-tenant.
+from app.services import connectors as _connectors  # noqa: E402
+
+TOOLS.update(_connectors.tool_specs())
 
 
 def list_tools() -> list[dict[str, Any]]:
