@@ -403,6 +403,32 @@
 
   /* ---------------- document assembly ---------------- */
 
+  /* One chapter — same rich output as render(): banner, colored panel,
+   * callouts, charts, tables, illustrations. Exported for progressive
+   * per-chapter rendering during composition. */
+  function renderChapter(ch, host, lightbox) {
+    const lb = lightbox || ((url) => {
+      let box = $(".tb-lb");
+      if (!box) { box = el("div", { class: "tb-lb", onclick: () => box.classList.remove("on") }); document.body.append(box); }
+      box.innerHTML = ""; box.append(el("img", { src: url }));
+      box.classList.add("on");
+    });
+    const color = PALETTE[ch.color] ? "c-" + ch.color
+      : "c-" + ["navy", "sky", "mint", "yellow", "coral", "lavender"][(ch.number - 1) % 6];
+    const sec = el("section", { class: "tb-ch " + color, id: ch.id });
+    sec.append(el("div", { class: "tb-ch-banner" },
+      el("div", { class: "num" }, "Chapter " + ch.number),
+      el("div", { class: "tt" }, el("h2", null, ch.title))));
+    if (ch.intro) sec.append(el("p", { class: "tb-ch-intro", html: md(ch.intro) }));
+    (ch.blocks || []).forEach((b) => {
+      const n = block(b, lb);
+      if (n) sec.append(n);
+      (b.blocks || []).forEach((nb) => { const nn = block(nb, lb); if (nn) sec.append(nn); });
+    });
+    if (host) host.append(sec);
+    return sec;
+  }
+
   function render(doc, host, opts) {
     opts = opts || {};
     host.innerHTML = "";
@@ -443,20 +469,7 @@
     }
 
     /* chapters */
-    (doc.chapters || []).forEach((ch) => {
-      const color = PALETTE[ch.color] ? "c-" + ch.color : "c-" + ["navy", "sky", "mint", "yellow", "coral", "lavender"][(ch.number - 1) % 6];
-      const sec = el("section", { class: "tb-ch " + color, id: ch.id });
-      sec.append(el("div", { class: "tb-ch-banner" },
-        el("div", { class: "num" }, "Chapter " + ch.number),
-        el("div", { class: "tt" }, el("h2", null, ch.title))));
-      if (ch.intro) sec.append(el("p", { class: "tb-ch-intro", html: md(ch.intro) }));
-      (ch.blocks || []).forEach((b) => {
-        const n = block(b, lightbox);
-        if (n) sec.append(n);
-        (b.blocks || []).forEach((nb) => { const nn = block(nb, lightbox); if (nn) sec.append(nn); });
-      });
-      host.append(sec);
-    });
+    (doc.chapters || []).forEach((ch) => renderChapter(ch, host, lightbox));
 
     /* closing sections */
     if (doc.glossary && doc.glossary.length) {
@@ -549,5 +562,5 @@
     }
   }
 
-  window.NovaTextbook = { render, chrome };
+  window.NovaTextbook = { render, chrome, renderChapter };
 })();

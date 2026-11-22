@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/static/css/theme.css">
 <link rel="stylesheet" href="/static/css/render.css">
 <link rel="stylesheet" href="/static/css/activity.css">
+<link rel="stylesheet" href="/static/css/tb-live.css">
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
@@ -137,6 +138,7 @@
       <div>
         <div class="sec-title">Report</div>
         <div class="ui-card ui-card-pad" id="reportPrint">
+          <div id="bookHost" hidden></div>
           <div id="rxpad"></div>
           <div id="report" class="rs-report">
             <p class="tx-3" style="text-align:center;padding:48px 0">Run a research query or open a saved report.</p>
@@ -175,6 +177,7 @@
 <script src="/static/js/render/ResponseRenderer.js"></script>
 <script src="/static/js/render/StreamingRenderer.js"></script>
 <script src="/static/js/render/LiveRun.js"></script>
+<script src="/static/js/tb-live.js"></script>
 <script src="/static/js/research.js"></script>
 </body>
 </html>

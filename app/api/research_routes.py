@@ -325,8 +325,10 @@ async def get_run(run_id: int, session: AsyncSession = Depends(get_session)):
         return JSONResponse(status_code=404, content={"error": {"message": "not found"}})
     meta = dict(r.meta or {})
     meta.pop("document", None)   # cached textbook doc is served via /document
+    from app.services.research import _strip_group_markers
     return {
-        "id": r.id, "question": r.question, "depth": r.depth, "answer": r.answer,
+        "id": r.id, "question": r.question, "depth": r.depth,
+        "answer": _strip_group_markers(r.answer),
         "plan": r.plan, "findings": r.findings, "sources": r.sources, "meta": meta,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }
@@ -345,6 +347,8 @@ async def _document_for_run(
     from app.services.research_composer import (
         compose_document, markdown_to_document)
     from app.services.research_doc import validate_document
+    from app.services.research import (_strip_group_markers,
+        _strip_meta_fences)
 
     r = await session.get(ResearchRun, run_id)
     if r is None:
@@ -356,12 +360,13 @@ async def _document_for_run(
             return r, validate_document(cached)
         except Exception:
             pass
+    answer = _strip_meta_fences(_strip_group_markers(r.answer or ""))
     doc = await compose_document(
-        _gateway(request), r.question, r.answer or "",
+        _gateway(request), r.question, answer,
         sources=r.sources or [], run_id=r.id)
     if doc is None:
         doc = markdown_to_document(
-            r.question, r.answer or "", sources=r.sources or [], run_id=r.id)
+            r.question, answer, sources=r.sources or [], run_id=r.id)
     if doc is None:
         return r, None
     meta["document"] = doc.model_dump(mode="json")
@@ -385,6 +390,158 @@ async def research_document(
             status_code=422,
             content={"error": {"message": "run has no answer to compose"}})
     return doc.model_dump(mode="json")
+
+
+# One compose task per run: page refreshes and extra viewers attach to the
+# in-flight job instead of restarting it. Populated/cleared by _compose_task.
+_COMPOSE: dict[int, dict[str, Any]] = {}
+
+
+async def _compose_task(run_id: int, gateway: Any) -> None:
+    """Background composition for one run. Broadcasts real progress +
+    per-section markdown to every attached subscriber queue, then caches the
+    finished document under run.meta["document"] with its own session so it
+    survives the request that started it."""
+    from app.db import get_session_factory
+    from app.services.research_composer import (
+        compose_document, markdown_to_document)
+    from app.services.research import (_strip_group_markers,
+        _strip_meta_fences)
+
+    entry = _COMPOSE[run_id]
+
+    def broadcast(ev: dict[str, Any]) -> None:
+        for q in list(entry["subs"]):
+            q.put_nowait(ev)
+
+    try:
+        async with get_session_factory()() as s:
+            r = await s.get(ResearchRun, run_id)
+            if r is None:
+                entry["err"] = "not found"
+                return
+            answer = _strip_meta_fences(_strip_group_markers(r.answer or ""))
+
+            def prog(done: int, total: int, label: str,
+                     payload: Any = None) -> None:
+                entry["done"], entry["total"] = done, total
+                broadcast({"event": "compose_progress", "done": done,
+                           "total": total, "label": label})
+                if isinstance(payload, dict):
+                    idx = payload.get("index")
+                    ch = {"index": idx, "title": payload.get("title") or label,
+                          "intro": payload.get("intro") or "",
+                          "blocks": payload.get("blocks") or []}
+                    entry["chapters"][idx] = ch
+                    broadcast({"event": "chapter", **ch})
+
+            doc = await compose_document(
+                gateway, r.question, answer,
+                sources=r.sources or [], run_id=r.id, on_progress=prog)
+            if doc is None:
+                doc = markdown_to_document(
+                    r.question, answer, sources=r.sources or [], run_id=r.id)
+            if doc is not None:
+                meta = dict(r.meta or {})
+                meta["document"] = doc.model_dump(mode="json")
+                r.meta = meta
+                await s.commit()
+            entry["doc"] = doc
+    except Exception as exc:
+        entry["err"] = str(exc) or "compose failed"
+    finally:
+        broadcast({"event": "_final"})
+        # Only pop if this task's entry is still the registered one — a
+        # forced regenerate may have replaced it already.
+        if _COMPOSE.get(run_id) is entry:
+            _COMPOSE.pop(run_id, None)
+
+
+@router.get("/research/runs/{run_id}/document/stream")
+async def research_document_stream(
+    run_id: int, request: Request, force: bool = False,
+    session: AsyncSession = Depends(get_session),
+):
+    """SSE stream of real composition progress + finished chapters, then the
+    composed document. Attaching to an in-flight compose replays the progress
+    snapshot — a page refresh resumes watching instead of restarting.
+    ``?force=1`` discards the cached document and any in-flight compose so the
+    book is regenerated from the stored answer."""
+    from app.services.research_doc import validate_document
+
+    r = await session.get(ResearchRun, run_id)
+    if r is None:
+        return JSONResponse(status_code=404,
+                            content={"error": {"message": "not found"}})
+    if force:
+        old = _COMPOSE.pop(run_id, None)
+        if old is not None:
+            old["superseded"] = True
+            for q in list(old["subs"]):
+                q.put_nowait({"event": "_final"})
+            task = old.get("task")
+            if task is not None:
+                task.cancel()
+        meta = dict(r.meta or {})
+        if "document" in meta:
+            del meta["document"]
+            r.meta = meta
+            await session.commit()
+    else:
+        cached = (r.meta or {}).get("document")
+        if isinstance(cached, dict):
+            try:
+                doc = validate_document(cached)
+                async def cached_gen():
+                    yield "data: " + json.dumps(
+                        {"event": "document",
+                         "document": doc.model_dump(mode="json")}) + "\n\n"
+                return StreamingResponse(cached_gen(),
+                                         media_type="text/event-stream")
+            except Exception:
+                pass
+
+    entry = _COMPOSE.get(run_id)
+    if entry is None:
+        entry = {"subs": set(), "done": 0, "total": 0,
+                 "chapters": {}, "doc": None, "err": None, "task": None}
+        _COMPOSE[run_id] = entry
+        entry["task"] = asyncio.create_task(
+            _compose_task(run_id, _gateway(request)))
+
+    async def gen():
+        def send(ev: dict[str, Any]) -> str:
+            return "data: " + json.dumps(ev) + "\n\n"
+
+        q: asyncio.Queue = asyncio.Queue()
+        entry["subs"].add(q)
+        try:
+            # Replay state so a mid-flight attach catches up instantly.
+            if entry["total"]:
+                yield send({"event": "compose_progress",
+                            "done": entry["done"], "total": entry["total"],
+                            "label": "resumed"})
+            for i, ch in sorted(entry["chapters"].items()):
+                yield send({"event": "chapter", **ch})
+            while True:
+                ev = await q.get()
+                if ev["event"] == "_final":
+                    break
+                yield send(ev)
+            if entry.get("superseded"):
+                yield send({"event": "superseded"})
+                return
+            if entry["doc"] is not None:
+                yield send({"event": "document",
+                            "document": entry["doc"].model_dump(mode="json")})
+            else:
+                yield send({"event": "error",
+                            "message": entry["err"]
+                                       or "run has no answer to compose"})
+        finally:
+            entry["subs"].discard(q)
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @router.get("/research/runs/{run_id}/pdf")

@@ -1,34 +1,47 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Textbook — IbhaX Research</title>
-<link rel="icon" href="data:,">
+<script>
+  // Apply the saved app theme before paint so the page chrome never flashes.
+  document.documentElement.dataset.theme = localStorage.getItem('ui-theme') || 'dark';
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
 <link rel="stylesheet" href="/static/css/textbook.css">
+<link rel="stylesheet" href="/static/css/tb-live.css">
 <style>html,body{margin:0;padding:0}</style>
 </head>
 <body class="tb">
 <div class="tb-top" id="tbTop">
   <a class="tb-btn" href="/research" title="Back to research">← Research</a>
+  <button class="tb-btn tb-tocbtn" id="tbTocBtn" title="Table of contents">☰</button>
   <span class="tb-logo">IbhaX</span>
   <span class="tb-title" id="tbTitle">Textbook</span>
+  <button class="tb-btn" data-theme-btn title="Theme"></button>
+  <button class="tb-btn" id="tbRe" title="Regenerate textbook">↻</button>
   <button class="tb-btn primary" id="tbPdf" title="Export PDF">↓ PDF</button>
   <div class="tb-progress" id="tbProg"></div>
 </div>
+<div class="tb-scrim" id="tbScrim"></div>
 <div class="tb-layout">
   <aside class="tb-rail">
     <h5>Contents</h5>
     <nav class="tb-toc" id="tbRailToc"></nav>
   </aside>
   <main class="tb-book" id="tbBook">
-    <div class="tb-load"><div class="spin"></div><div>Composing your textbook…</div></div>
   </main>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script src="/static/js/theme.js"></script>
 <script src="/static/js/api.js"></script>
 <script src="/static/js/render/TextbookRenderer.js"></script>
+<script src="/static/js/tb-live.js"></script>
 <script>
 (function () {
   var m = location.pathname.match(/\/textbook\/(\d+)/);
@@ -59,6 +72,24 @@
       .finally(function () { pdfBtn.disabled = false; pdfBtn.textContent = '↓ PDF'; });
   };
 
+  // Mobile TOC drawer: rail slides in over the book at narrow widths.
+  var rail = document.querySelector('.tb-rail'),
+      tocBtn = document.getElementById('tbTocBtn'),
+      scrim = document.getElementById('tbScrim');
+  function tocOpen(open) {
+    if (!rail || !scrim) return;
+    rail.classList.toggle('open', open);
+    scrim.classList.toggle('on', open);
+  }
+  if (tocBtn) tocBtn.onclick = function () {
+    tocOpen(!(rail && rail.classList.contains('open')));
+  };
+  if (scrim) scrim.onclick = function () { tocOpen(false); };
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('.tb-toc a');
+    if (a) tocOpen(false);
+  });
+
   function fail(msg) {
     book.innerHTML = '<div class="tb-error"><h2>Couldn’t build the textbook</h2><p>'
       + msg + '</p></div>';
@@ -73,20 +104,216 @@
     return h;
   }
 
-  fetch((window.API_BASE || '') + '/v1/research/runs/' + runId + '/document',
-        { headers: hdrs() })
-    .then(function (r) {
-      if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent(location.pathname); throw r; }
-      if (!r.ok) throw new Error('document ' + r.status);
-      return r.json();
-    })
-    .then(function (doc) {
-      document.title = (doc.title || 'Textbook') + ' — IbhaX Research';
-      document.getElementById('tbTitle').textContent = doc.title || 'Textbook';
-      var res = window.NovaTextbook.render(doc, book, {});
-      if (!printMode) window.NovaTextbook.chrome(doc, res);
-    })
-    .catch(function (e) { fail(e && e.message ? e.message : 'unknown error'); });
+  // Skeleton book first — synchronous, before the stream attaches, so
+  // chapter events always have a real slot to land in (no reordering).
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var TL = window.Nova && Nova.TextbookLive;
+  if (!printMode && TL) TL.skeleton(book, { chapters: [] });
+
+  function addSkelChapter(i, title) {
+    var pro = book.querySelector('.tbl-pro');
+    if (!pro || !TL || pro.querySelector('.tbl-chapter[data-index="' + i + '"]')) return;
+    var ch = TL.skeletonChapter(i, title);
+    var next = null;
+    pro.querySelectorAll('.tbl-chapter').forEach(function (c) {
+      if (!next && +c.dataset.index > +i) next = c;
+    });
+    pro.insertBefore(ch, next || null);
+  }
+
+  function showSkeleton() {
+    fetch((window.API_BASE || '') + '/v1/research/runs/' + runId,
+          { headers: hdrs() })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (run) {
+        if (!run) return;
+        var title = run.question || 'Research textbook';
+        var titles = [];
+        (run.answer || '').split('\n').forEach(function (ln) {
+          var m = ln.match(/^##\s+(.+)/);
+          if (m && titles.length < 12) titles.push(m[1].trim());
+        });
+        var pro = book.querySelector('.tbl-pro');
+        if (pro) {
+          var h1 = pro.querySelector('.tbl-cover-title h1');
+          if (h1) h1.textContent = title;
+          titles.forEach(function (t, i) {
+            var ch = pro.querySelector('.tbl-chapter[data-index="' + i + '"]');
+            if (ch) {
+              var h3 = ch.querySelector('.tbl-ch-head h3');
+              if (h3 && (h3.textContent === '…' || !h3.textContent.trim()))
+                h3.textContent = t;
+            } else addSkelChapter(i, t);
+          });
+        }
+        var rail = document.getElementById('tbRailToc');
+        if (rail && !rail.children.length && titles.length)
+          rail.innerHTML = titles.map(function (t, i) {
+            return '<a href="javascript:void(0)"><span class="n">' +
+              String(i + 1).padStart(2, '0') + '</span>' +
+              t.replace(/</g, '&lt;') + '</a>';
+          }).join('');
+        var ti = document.getElementById('tbTitle');
+        if (ti) ti.textContent = title;
+      })
+      .catch(function () {});
+  }
+  if (!printMode) showSkeleton();
+
+  // Real composition progress: each frame is one genuinely finished
+  // composer task (outline + N section calls) — the % is honest.
+  // Live activity feed inside the cover — every row is a real stream event.
+  var lastAct = '';
+  function actLine(text, cls) {
+    var list = book.querySelector('.tbl-ca-list');
+    if (!list || !text || text === lastAct) return;
+    lastAct = text;
+    var row = document.createElement('div');
+    row.className = 'tbl-ca-row' + (cls ? ' ' + cls : '');
+    row.textContent = text;
+    list.appendChild(row);
+    while (list.children.length > 14) list.firstChild.remove();
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function progress(done, total, label) {
+    var pct = total ? Math.round(done / total * 100) : 0;
+    var bar = book.querySelector('.tbl-prog-bar i');
+    var num = book.querySelector('.tbl-prog-pct');
+    var st = book.querySelector('.tbl-cover-status');
+    if (bar) bar.style.width = pct + '%';
+    if (num) num.textContent = pct + '%';
+    if (st) st.textContent = 'Composing ' + (label || 'book') +
+      ' — chapter ' + done + ' of ' + total;
+    if (label && label !== 'resumed')
+      actLine('Composer finished “' + label + '”', 'is-done');
+    var ch = book.querySelectorAll('.tbl-chip');
+    ch.forEach(function (c, i) {
+      if (i < done - 1 && c.textContent !== 'done') { c.textContent = 'done'; c.className = 'tbl-chip tbl-chip-done'; }
+    });
+  }
+  // A composer section finished — swap its skeleton for the real rich
+  // chapter (.tb-ch: banner, colored panel, callouts, charts) so the
+  // reader sees an actual textbook page, not raw markdown.
+  var PAL_CYCLE = ['navy', 'sky', 'mint', 'yellow', 'coral', 'lavender'];
+  function renderChapter(index, title, intro, blocks) {
+    var pro = book.querySelector('.tbl-pro');
+    if (!pro) return;
+    var slot = pro.querySelector('[data-index="' + index + '"]');
+    if (slot && slot.dataset.filled) return;
+
+    var sec = null;
+    if (window.NovaTextbook && NovaTextbook.renderChapter) {
+      sec = NovaTextbook.renderChapter({
+        number: index + 1, id: 'live-ch-' + index, title: title,
+        intro: intro || '', color: PAL_CYCLE[index % PAL_CYCLE.length],
+        blocks: blocks || []});
+      sec.dataset.index = index;
+      sec.dataset.filled = '1';
+    }
+    actLine('Chapter ' + (index + 1) + ' typeset — ' + (title || ''), 'is-done');
+    if (slot) {
+      if (sec) { slot.replaceWith(sec); }
+    } else if (sec) {
+      var next = null;
+      pro.querySelectorAll('[data-index]').forEach(function (c) {
+        if (!next && +c.dataset.index > +index) next = c;
+      });
+      pro.insertBefore(sec, next || null);
+    }
+    if (sec && window.gsap && !reduced)
+      gsap.fromTo(sec, { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: .6, ease: 'power2.out', clearProps: 'transform' });
+  }
+  function consumeDocStream(resp) {
+    var reader = resp.body.getReader(), dec = new TextDecoder(), buf = '';
+    function pump() {
+      return reader.read().then(function (r) {
+        if (r.done) return null;
+        buf += dec.decode(r.value, { stream: true });
+        var idx, got = null;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          var frame = buf.slice(0, idx); buf = buf.slice(idx + 2);
+          frame.split('\n').forEach(function (line) {
+            if (!line.startsWith('data:')) return;
+            try {
+              var ev = JSON.parse(line.slice(5).trim());
+              if (ev.event === 'compose_progress')
+                progress(ev.done, ev.total, ev.label);
+              else if (ev.event === 'chapter')
+                renderChapter(ev.index, ev.title, ev.intro, ev.blocks);
+              else if (ev.event === 'document') got = ev.document;
+              else if (ev.event === 'superseded') got = '__superseded__';
+              else if (ev.event === 'error') throw new Error(ev.message);
+            } catch (e) { if (e.message && e.message.indexOf('JSON') < 0) throw e; }
+          });
+        }
+        if (got) return got;
+        return pump();
+      });
+    }
+    return pump();
+  }
+
+  var streamCtl = null;
+  function startStream(force) {
+    if (streamCtl) streamCtl.abort();
+    var ctl = streamCtl = new AbortController();
+    actLine(force ? 'Regenerating textbook…' : 'Composer attached to run #' + runId, 'is-run');
+    var url = (window.API_BASE || '') + '/v1/research/runs/' + runId +
+      '/document/stream' + (force ? '?force=1' : '');
+    fetch(url, { headers: hdrs(), signal: ctl.signal })
+      .then(function (r) {
+        if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent(location.pathname); throw r; }
+        if (r.status === 404 || !r.ok || !r.body) {
+          // Older server without the stream endpoint — plain fetch fallback.
+          return fetch((window.API_BASE || '') + '/v1/research/runs/' + runId + '/document',
+                { headers: hdrs() })
+            .then(function (r2) { if (!r2.ok) throw new Error('document ' + r2.status); return r2.json(); });
+        }
+        return consumeDocStream(r);
+      })
+      .then(function (doc) {
+        if (doc === '__superseded__' || ctl.signal.aborted) return;
+        if (!doc) throw new Error('empty document');
+        book.innerHTML = '';
+        document.title = (doc.title || 'Textbook') + ' — IbhaX Research';
+        document.getElementById('tbTitle').textContent = doc.title || 'Textbook';
+        var res = window.NovaTextbook.render(doc, book, {});
+        if (!printMode) {
+          window.NovaTextbook.chrome(doc, res);
+          // Progressive entrance — chapters reveal like they were just typeset.
+          if (window.gsap && !reduced) {
+            var chapters = book.querySelectorAll('.tb-ch');
+            gsap.fromTo(chapters,
+              { opacity: 0, y: 26 },
+              { opacity: 1, y: 0, duration: .65, stagger: .14,
+                ease: 'power2.out', clearProps: 'transform' });
+            var cov = book.querySelector('.tb-cover,.tb-cov');
+            if (cov) gsap.fromTo(cov, { opacity: 0, scale: .98 },
+              { opacity: 1, scale: 1, duration: .7, ease: 'power2.out' });
+          }
+        }
+      })
+      .catch(function (e) {
+        if (e && e.name === 'AbortError') return;
+        fail(e && e.message ? e.message : 'unknown error');
+      });
+  }
+  startStream(false);
+
+  // Regenerate: wipe cache + in-flight compose server-side, rebuild the
+  // skeleton, and watch the book get typeset again.
+  var reBtn = document.getElementById('tbRe');
+  if (reBtn) reBtn.onclick = function () {
+    if (!confirm('Regenerate the textbook? The current document will be rebuilt.')) return;
+    book.innerHTML = '';
+    if (!printMode && TL) {
+      TL.skeleton(book, { chapters: [] });
+      showSkeleton();
+    }
+    startStream(true);
+  };
 })();
 </script>
 </body>

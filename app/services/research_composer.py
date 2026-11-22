@@ -161,6 +161,7 @@ async def compose_document(
     run_id: int = 0,
     model: Optional[str] = None,
     emit: Any = None,
+    on_progress: Any = None,
 ) -> Optional[ResearchDocument]:
     """Compose a ``ResearchDocument`` section-wise so every provider call
     stays inside free-tier request limits.
@@ -185,12 +186,24 @@ async def compose_document(
         return None
 
     sem = asyncio.Semaphore(3)
+    total = len(sections) + 1
+    done_n = [0]
+
+    def _tick(label: str, payload: Optional[dict[str, Any]] = None) -> None:
+        done_n[0] += 1
+        if on_progress is not None:
+            try:
+                on_progress(done_n[0], total, label, payload)
+            except Exception:
+                pass
 
     async def skeleton() -> Any:
         async with sem:
-            return await _try_output(
+            out = await _try_output(
                 gateway, model, COMPOSE_SYSTEM,
                 _outline_prompt(question, sections), _SkeletonDoc, emit)
+        _tick("cover and outline")
+        return out
 
     async def section(i: int, title: str, body: str) -> tuple[str, list[Block], bool]:
         """(intro, blocks, composed?) — composed=False means the
@@ -201,9 +214,15 @@ async def compose_document(
             out = await _try_output(
                 gateway, model, SECTION_SYSTEM,
                 _section_prompt(question, title, body), _SectionDoc, emit)
+
         if isinstance(out, _SectionDoc) and out.blocks:
-            return out.intro, out.blocks, True
-        return "", _blocks_from_lines(body.split("\n")), False
+            intro, blocks = out.intro, out.blocks
+        else:
+            intro, blocks = "", _blocks_from_lines(body.split("\n"))
+        _tick(title or f"section {i + 1}", payload={
+            "index": i, "title": title, "intro": intro,
+            "blocks": [b.model_dump(mode="json") for b in blocks]})
+        return intro, blocks, isinstance(out, _SectionDoc) and bool(out.blocks)
 
     sk, *secs = await asyncio.gather(
         skeleton(),

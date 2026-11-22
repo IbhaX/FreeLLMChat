@@ -349,14 +349,18 @@ async def extract_and_store(gateway, user_id: str, user_text: str,
         tenant = _writable_tenant(user_id)
     except PermissionError:
         return
-    # Skip the extra LLM call on trivial turns — greetings/one-liners
-    # almost never carry durable facts worth extracting.
-    if len(user_text.strip()) < 25 or len(assistant_text.strip()) < 50:
+    # Skip the extra LLM call only on truly trivial inputs — short
+    # self-disclosures ("my name is Albin") are exactly the durable facts
+    # this extractor exists for, so the bar is low on purpose.
+    if len(user_text.strip()) < 8 or not assistant_text.strip():
         return
     prompt = (
         "From this exchange, extract 0-5 durable facts worth remembering "
-        "about the user long-term (preferences, names, projects, decisions). "
-        "Reply with a JSON array of short strings only — [] if none.\n\n"
+        "about the user long-term (names, preferences, projects, decisions). "
+        "Reply with a JSON array of short self-contained statements only — "
+        "each must make sense on its own, e.g. \"the user's name is Albin\" "
+        "or \"user prefers dark themes\". Bare fragments like \"Albin\" are "
+        "wrong. [] if none.\n\n"
         f"USER: {user_text[:2000]}\nASSISTANT: {assistant_text[:2000]}"
     )
     try:

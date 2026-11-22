@@ -7,6 +7,7 @@
   let running=false;
   let actLog=null;
   let liveRun=null,liveHost=null,accAnswer='';
+  let liveBook=null;   // Nova.TextbookLive workspace for the running research
 
   AdminShell.mount('research');
   window.addEventListener('admin-ready',init);
@@ -23,6 +24,7 @@
         return;
       }
     }
+    if(liveBook)liveBook.activity(ev);
     if(actLog){actLog.ingest(typeof ev==='string'?{event:'note',text:ev}:ev);return;}
     const d=document.createElement('div');
     d.className='rs-stage';
@@ -100,6 +102,7 @@
   async function openRun(id,el){
     document.querySelectorAll('.rs-run.active').forEach(x=>x.classList.remove('active'));
     if(el)el.classList.add('active');
+    const bh=$('#bookHost');if(bh)bh.hidden=true;
     try{
       const r=await v1Api('/v1/research/runs/'+id);
       renderAnswer(r.answer||'',{
@@ -152,10 +155,10 @@
     if(meta!==undefined)currentMeta=meta;
     $('#rxpad').innerHTML=renderRx(currentMeta);
     const host=$('#report');host.innerHTML='';
-    const IbhaX=window.NovaRender||{};
-    if(Nova.ResponseRenderer&&Nova.ResponseRenderer.renderMessage){
+    const RR=(window.NovaRender||{}).ResponseRenderer||window.Nova&&Nova.ResponseRenderer;
+    if(RR&&RR.renderMessage){
       try{
-        Nova.ResponseRenderer.renderMessage({role:'assistant',text:text},host,{showActions:false});
+        RR.renderMessage({role:'assistant',text:text},host,{showActions:false});
         // Guard: if the renderer produced nothing visible, fall through
         // to the <pre> fallback rather than showing a blank report.
         if(host.textContent.trim()||host.querySelector('canvas,img,svg,video,audio')){
@@ -215,7 +218,12 @@
     $('#stages').innerHTML='';$('#rxpad').innerHTML='';
     if(liveHost&&liveHost.parentNode)liveHost.parentNode.removeChild(liveHost);
     liveHost=null;liveRun=null;accAnswer='';
-    $('#report').innerHTML='<p class="tx-3" style="text-align:center;padding:48px 0">Research in progress — the report appears here when complete.</p>';
+    const bh=$('#bookHost');
+    if(liveBook){try{liveBook.destroy();}catch(_){}liveBook=null;}
+    if(bh){bh.hidden=false;bh.innerHTML='';
+      if(window.Nova&&Nova.TextbookLive)
+        liveBook=Nova.TextbookLive.create(bh,{title:$('#q').value.trim()});}
+    $('#report').innerHTML='';
     actLog=window.Nova&&Nova.ActivityLog?Nova.ActivityLog.create($('#stages'),{
       onModel:()=>{const s=$('#model');if(!s)return;s.focus();
         if(s.showPicker){try{s.showPicker()}catch(_){s.click()}}else s.click();}
@@ -225,6 +233,14 @@
 
   function endRunUI(){
     if(liveRun){try{liveRun.finish('done');}catch(_){}liveRun=null;}
+    if(liveBook){
+      // finish only on a real completion — aborts/errors show "stopped".
+      try{
+        if(currentMeta&&(currentMeta.run_id||currentMeta.event==='research_done'))
+          liveBook.finish(currentMeta);
+        else liveBook.fail('run ended before completion');
+      }catch(_){}
+    }
     if(actLog)actLog.finish();
     running=false;paintNeural(false);
     $('#runBtn').disabled=false;$('#runBtn').textContent='Run research';
@@ -250,6 +266,16 @@
             const ev=JSON.parse(data);
             if(ev.nova){
               const e=ev.nova;
+              // Live textbook workspace events — handled before the
+              // activity-log path so they never render twice.
+              if(e.event==='document_plan'){
+                if(liveBook)liveBook.plan(e.sections||[]);
+                continue;
+              }
+              if(e.event==='answer_section'&&liveBook){
+                liveBook.section(e.index,e.title,e.text);
+                continue;
+              }
               if(e.event==='research_done'){
                 currentMeta={...e,question:$('#q').value.trim(),model:$('#model').value,
                   created_at:new Date().toISOString()};

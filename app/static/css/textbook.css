@@ -4,42 +4,88 @@
    view and the PDF exporter (one renderer, one stylesheet).
    ========================================================================== */
 
+/* standalone stylesheet — also loaded by the PDF exporter, so it owns its
+   own border-box reset rather than depending on ui.css */
+*,*::before,*::after{box-sizing:border-box}
+
 :root{
   --tb-navy:#243B64; --tb-sky:#79C9ED; --tb-mint:#A9DCC8; --tb-yellow:#FFE49A;
-  --tb-coral:#F4A58C; --tb-lav:#C6B6EB; --tb-cream:#FFF9ED; --tb-ink:#273247;
-  --tb-ink2:#5A6478; --tb-line:rgba(36,59,100,.14); --tb-paper:#FFFDF6;
+  --tb-coral:#F4A58C; --tb-lav:#C6B6EB;
+  /* Page chrome follows the global theme (falls back to the original cream
+     palette when theme.css isn't loaded). */
+  --tb-cream:var(--bg-0,#FFF9ED); --tb-ink:var(--text-1,#273247);
+  --tb-ink2:var(--text-2,#5A6478); --tb-line:var(--border-2,rgba(36,59,100,.14));
+  --tb-paper:var(--surface-1,#FFFDF6);
   --tb-serif:Georgia,'Times New Roman',serif;
   --tb-disp:'Nunito',var(--font,'Inter'),system-ui,sans-serif;
   --tb-body:'Inter',system-ui,sans-serif;
 }
 
+/* Printed matter keeps the paper palette in every theme — the book is a
+   document artifact; only the page chrome themes. */
+.tb-ch,.tb-tocpage,.tb-cover{
+  --tb-ink:#273247; --tb-ink2:#5A6478; --tb-paper:#FFFDF6;
+  --tb-line:rgba(36,59,100,.14);
+}
+/* inherited `color` must be pinned too — var() remaps alone don't stop
+   white theme text bleeding onto paper panels */
+.tb-ch,.tb-tocpage{color:#273247}
+
 body.tb{background:var(--tb-cream);color:var(--tb-ink);font-family:var(--tb-body);
   -webkit-font-smoothing:antialiased}
 
 /* ---------- top chrome (screen only) ---------- */
+:root{--tb-toph:56px}
 .tb-top{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;
-  padding:10px 22px;background:rgba(255,249,237,.92);backdrop-filter:blur(10px);
-  border-bottom:1px solid var(--tb-line)}
-.tb-top .tb-logo{font-family:var(--tb-disp);font-weight:800;font-size:15px;color:var(--tb-navy)}
+  height:var(--tb-toph);padding:0 22px;
+  background:color-mix(in srgb,var(--tb-cream) 92%,transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--tb-line)}
+.tb-top .tb-logo{font-family:var(--tb-disp);font-weight:800;font-size:15px;color:var(--accent,var(--tb-navy))}
 .tb-top .tb-title{font-size:12.5px;color:var(--tb-ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.tb-progress{position:absolute;left:0;bottom:-1px;height:3px;background:linear-gradient(90deg,var(--tb-sky),var(--tb-lav));
+.tb-progress{position:absolute;left:0;bottom:-1px;height:3px;
+  background:linear-gradient(90deg,var(--accent,var(--tb-sky)),var(--accent-2,var(--tb-lav)));
   width:0%;transition:width .2s;border-radius:0 3px 3px 0}
-.tb-btn{border:1px solid var(--tb-line);background:var(--tb-paper);color:var(--tb-navy);
+.tb-btn{border:1px solid var(--tb-line);background:var(--tb-paper);color:var(--tb-ink);
   font:600 12px var(--tb-disp);padding:7px 14px;border-radius:10px;cursor:pointer;transition:.15s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-.tb-btn:hover{border-color:var(--tb-navy);transform:translateY(-1px)}
-.tb-btn.primary{background:var(--tb-navy);color:#fff;border-color:var(--tb-navy)}
+.tb-btn:hover{border-color:var(--accent,var(--tb-navy));transform:translateY(-1px)}
+.tb-btn.primary{background:var(--accent,var(--tb-navy));color:var(--on-accent,#fff);border-color:var(--accent,var(--tb-navy))}
 
 /* ---------- book layout ---------- */
-.tb-layout{display:grid;grid-template-columns:240px 1fr;gap:0;max-width:1180px;margin:0 auto}
-.tb-rail{position:sticky;top:57px;align-self:start;height:calc(100vh - 57px);overflow:auto;
-  padding:28px 18px;border-right:1px solid var(--tb-line)}
-.tb-rail h5{font:800 10px var(--tb-disp);letter-spacing:.14em;text-transform:uppercase;color:var(--tb-ink2);margin:0 0 14px}
+.tb-layout{display:grid;grid-template-columns:240px 1fr;gap:0;max-width:1180px;
+  margin:0 auto;padding:0 clamp(12px,2vw,24px)}
+.tb-rail{position:sticky;top:var(--tb-toph);align-self:start;
+  height:calc(100vh - var(--tb-toph));overflow:auto;
+  padding:28px 18px 28px 0;border-right:1px solid var(--tb-line)}
+.tb-rail h5{font:800 10px var(--tb-disp);letter-spacing:.14em;text-transform:uppercase;color:var(--text-3,var(--tb-ink2));margin:0 0 14px}
 .tb-toc a{display:flex;gap:9px;padding:8px 10px;border-radius:9px;text-decoration:none;color:var(--tb-ink2);font-size:12.5px;line-height:1.35;transition:.15s}
-.tb-toc a:hover{background:rgba(121,201,237,.18);color:var(--tb-navy)}
-.tb-toc a.on{background:var(--tb-navy);color:#fff}
-.tb-toc a .n{font:700 10.5px var(--tb-disp);color:var(--tb-sky);flex:none;padding-top:2px;min-width:16px}
-.tb-toc a.on .n{color:var(--tb-yellow)}
-.tb-book{padding:36px clamp(20px,4vw,56px) 80px;max-width:840px}
+.tb-toc a:hover{background:var(--accent-soft,rgba(121,201,237,.18));color:var(--tb-ink)}
+.tb-toc a.on{background:var(--accent,var(--tb-navy));color:var(--on-accent,#fff)}
+.tb-toc a .n{font:700 10.5px var(--tb-disp);color:var(--accent,var(--tb-sky));flex:none;padding-top:2px;min-width:16px}
+.tb-toc a.on .n{color:var(--on-accent,var(--tb-yellow))}
+.tb-book{padding:36px clamp(28px,6vw,56px) 80px;max-width:840px;margin:0 auto;width:100%}
+/* ---------- responsive ---------- */
+.tb-tocbtn{display:none}
+@media(max-width:900px){
+  .tb-layout{display:block;padding:0 8px}
+  .tb-rail{position:fixed;inset:var(--tb-toph) 30% 0 0;z-index:60;display:block;
+    height:auto;background:var(--tb-cream);border-right:1px solid var(--tb-line);
+    padding:20px 16px;overflow:auto;transform:translateX(-105%);
+    transition:transform .25s ease;box-shadow:8px 0 30px rgba(36,59,100,.18)}
+  .tb-rail.open{transform:none}
+  .tb-scrim{position:fixed;inset:0;z-index:55;background:rgba(39,50,71,.35);
+    opacity:0;pointer-events:none;transition:opacity .25s}
+  .tb-scrim.on{opacity:1;pointer-events:auto}
+  .tb-tocbtn{display:inline-flex}
+  .tb-top{padding:0 12px;gap:8px}
+  .tb-top .tb-title{font-size:11.5px}
+  .tb-book{padding:20px 12px 56px}
+  .tb-cover{min-height:52vh;border-radius:18px;padding:20px;margin-bottom:26px}
+  .tb-ch{padding:14px 14px 22px;border-radius:14px;margin-bottom:30px}
+  .tb-ch-banner{flex-direction:column;align-items:flex-start;gap:8px;
+    padding:14px 16px;border-radius:14px;margin-bottom:16px}
+  .tb-ch-banner h2{font-size:20px}
+  .tb-ch-intro{font-size:14px}
+}
 
 /* ---------- cover ---------- */
 .tb-cover{position:relative;min-height:78vh;border-radius:26px;overflow:hidden;
@@ -73,7 +119,9 @@ body.tb{background:var(--tb-cream);color:var(--tb-ink);font-family:var(--tb-body
 .tb-tocpage a:hover .t{color:var(--tb-navy);text-decoration:underline}
 
 /* ---------- chapter ---------- */
-.tb-ch{margin-bottom:52px;scroll-margin-top:80px}
+.tb-ch{margin-bottom:52px;scroll-margin-top:calc(var(--tb-toph) + 20px);
+  border-radius:20px;
+  padding:clamp(14px,2vw,20px) clamp(20px,3vw,36px) clamp(24px,3.2vw,38px)}
 .tb-ch-banner{position:relative;display:flex;align-items:center;gap:16px;
   border-radius:18px;padding:20px 24px;margin-bottom:26px;color:#fff;overflow:hidden}
 .tb-ch-banner::after{content:'';position:absolute;right:-40px;top:-40px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.15)}
@@ -87,6 +135,15 @@ body.tb{background:var(--tb-cream);color:var(--tb-ink);font-family:var(--tb-body
 .tb-ch.c-yellow .tb-ch-banner{background:linear-gradient(120deg,#E9BC4E,var(--tb-yellow));color:var(--tb-ink)}
 .tb-ch.c-coral .tb-ch-banner{background:linear-gradient(120deg,#E07F62,var(--tb-coral))}
 .tb-ch.c-lavender .tb-ch-banner{background:linear-gradient(120deg,#8B74C9,var(--tb-lav))}
+/* chapter panels tint to match their banner — literal pastels so the
+   printed page stays readable in every app theme */
+.tb-ch{background:var(--tb-paper);border:1px solid var(--tb-line)}
+.tb-ch.c-navy{background:#EDF1F9}
+.tb-ch.c-sky{background:#EAF6FD}
+.tb-ch.c-mint{background:#EDF8F3}
+.tb-ch.c-yellow{background:#FFF7E0}
+.tb-ch.c-coral{background:#FDEEE9}
+.tb-ch.c-lavender{background:#F2EDFB}
 
 /* ---------- text blocks ---------- */
 .tb-p{font-size:14.5px;line-height:1.78;color:var(--tb-ink);margin:0 0 16px;max-width:72ch}
@@ -137,7 +194,7 @@ body.tb{background:var(--tb-cream);color:var(--tb-ink);font-family:var(--tb-body
 .tb-table td{padding:10px 14px;border-top:1px solid var(--tb-line);background:var(--tb-paper)}
 .tb-table tr:nth-child(even) td{background:#FBF4E4}
 .tb-table .tt{font-family:var(--tb-disp);font-weight:800;font-size:14px;color:var(--tb-navy)}
-.tb-tblwrap{margin:0 0 18px}
+.tb-tblwrap{margin:0 0 18px;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .tb-tblwrap .cap-top{font:800 12.5px var(--tb-disp);color:var(--tb-navy);margin-bottom:9px}
 
 .tb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:0 0 20px;page-break-inside:avoid}

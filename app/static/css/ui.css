@@ -593,3 +593,13 @@ body:has(.app-topnav) .sh-top-in>#appNavBtn{display:none}
 .nova-state .ui-skeleton{margin-top:16px}
 .ui-menu [role="menuitem"]:focus-visible{background:var(--surface-2);outline:2px solid var(--accent);outline-offset:-2px}
 @media(prefers-reduced-motion:reduce){.ui-skeleton{animation:none}}
+
+/* Floating appearance picker — injected by theme.js on pages without a
+   declared [data-theme-btn]. */
+.ui-theme-fab{position:fixed;right:18px;bottom:18px;z-index:80;width:36px;height:36px;
+  display:grid;place-items:center;border-radius:50%;cursor:pointer;
+  background:var(--surface-1);color:var(--text-2);border:1px solid var(--border-2);
+  box-shadow:var(--shadow-2);transition:.15s}
+.ui-theme-fab:hover{color:var(--accent);border-color:var(--accent-line);
+  transform:translateY(-1px);box-shadow:var(--shadow-3)}
+@media print{.ui-theme-fab{display:none}}

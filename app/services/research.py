@@ -1517,6 +1517,12 @@ async def _synthesize_sections(
           "stage": "synthesize", "agent": "synthesizer",
           "detail": "\n".join(f"{i + 1}. {g['title']}"
                              for i, g in enumerate(groups[:12]))})
+    # Structured plan for the live textbook workspace — the client renders
+    # chapter skeletons immediately and fills them as answer_section events
+    # (one per real completed section) arrive.
+    emit({"event": "document_plan",
+          "sections": [{"index": i, "title": str(g.get("title") or "Section")}
+                       for i, g in enumerate(groups[:12])]})
     results = await asyncio.gather(
         write_summary(),
         *(write_section(g, index=i) for i, g in enumerate(groups[:12])),
@@ -1892,6 +1898,45 @@ def _strip_tool_blobs(text: str) -> str:
     return re.sub(r"<arg_(?:key|value)>[^<]*</arg_(?:key|value)>", "", text)
 
 
+_GROUP_HEAD_RE = re.compile(
+    r"^(\s*#{1,6}\s*)g\d+(?:\s+(\d+))?\s*$", re.MULTILINE)
+_GROUP_HEAD_PREFIX = re.compile(
+    r"^(\s*#{1,6}\s*)g\d+\s*\d*\s*[-–—.:]\s*", re.MULTILINE)
+_GROUP_MARK_RE = re.compile(r"\bg\d+\s*\d*\b")
+_GROUP_PAREN_RE = re.compile(
+    r"\(\s*(?:Aspect|Part|Section|Group|Appendix)?\s*g\d+\s*\d*\s*\)")
+
+
+_META_FENCE_RE = re.compile(
+    r"```nova-response\s*\n.*?(?:```|$)", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_meta_fences(answer: str) -> str:
+    """Remove the trailing ``nova-response`` metadata fence (and any stray
+    unterminated one) — it is machine metadata for the chat renderer, not
+    prose, so the textbook composer should never see it."""
+    if not answer or "nova-response" not in answer.lower():
+        return answer
+    return _META_FENCE_RE.sub("", answer).rstrip()
+
+
+def _strip_group_markers(answer: str) -> str:
+    """Rewrite '## g1 2'-style internal group markers the writer model leaks
+    into headings as readable 'Section N' titles, strip marker prefixes like
+    '## g2 1 – Real title', and drop marker-only parentheticals."""
+    if not answer or "g" not in answer:
+        return answer
+
+    def _head(m: re.Match[str]) -> str:
+        return f"{m.group(1)}Section {m.group(2) or ''}".rstrip()
+
+    text = _GROUP_HEAD_RE.sub(_head, answer)
+    text = _GROUP_HEAD_PREFIX.sub(lambda m: m.group(1), text)
+    text = _GROUP_PAREN_RE.sub("", text)
+    text = _GROUP_MARK_RE.sub("", text)
+    return re.sub(r"[ \t]{2,}", " ", text)
+
+
 def _clean_answer(answer: str, state: ResearchState) -> str:
     answer = _strip_tool_blobs(answer)
     """Guard against weak models emitting JSON-LD/schema.org or raw JSON as
@@ -2232,6 +2277,7 @@ async def run_research(
     custom = await get_custom_instructions(session)
     state.answer = await _synthesize(gateway, session, synth_model, question, state, emit,
                                      custom_instructions=custom)
+    state.answer = _strip_group_markers(state.answer)
     checkpoint("synthesize")
     await _qa_gate(gateway, session, qa_model, question, state, emit)
     meta_quality = await _quality_check(state, emit)

@@ -11,6 +11,7 @@ Layering: this module is pure domain — no I/O, no gateway imports.
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Any, Optional
 
@@ -150,6 +151,12 @@ class ResearchDocument(BaseModel):
 
     def ensure_structure(self) -> "ResearchDocument":
         """Fill derived fields the composer commonly leaves blank."""
+        for ch in self.chapters:
+            ch.blocks = _clean_headings(ch.blocks)
+            if ch.title:
+                t = _GROUP_MARK.sub("", str(ch.title))
+                t = _EMPTY_PAREN.sub("", t)
+                ch.title = re.sub(r"\s{2,}", " ", t).strip(" \t-–—:,.") or ch.title
         for i, ch in enumerate(self.chapters, 1):
             if not ch.number:
                 ch.number = i
@@ -171,6 +178,68 @@ class ResearchDocument(BaseModel):
 
 
 Block.model_rebuild()
+
+_GROUP_MARK = re.compile(r"\bg\d+\s*\d*\b")
+_EMPTY_PAREN = re.compile(r"\(\s*(?:Aspect|Part|Section|Group|Appendix)?\s*\)")
+_META_TAIL = re.compile(
+    r"`{0,3}\s*nova-response[\s\S]*$", re.IGNORECASE)
+
+
+def _scrub_text(value: Any) -> Any:
+    """Truncate leaked `nova-response` metadata payloads that trail real
+    prose inside a block's text fields."""
+    if isinstance(value, str):
+        return _META_TAIL.sub("", value).rstrip(" `\n")
+    if isinstance(value, list):
+        return [_scrub_text(v) for v in value]
+    return value
+
+
+def _clean_headings(blocks: list[Block]) -> list[Block]:
+    """Remove 'g1 2'-style section markers the writer models leak into
+    headings. A heading reduced to nothing is dropped outright."""
+    out: list[Block] = []
+    for b in blocks:
+        if b.type == BlockType.HEADING:
+            text = _GROUP_MARK.sub("", str(b.data.get("text", "")))
+            text = _EMPTY_PAREN.sub("", text)
+            text = re.sub(r"\s{2,}", " ", text).strip(" \t-–—:,.")
+            if not text:
+                continue
+            b.data["text"] = text
+        for k, v in b.data.items():
+            if isinstance(v, (str, list)):
+                b.data[k] = _scrub_text(v)
+        b.blocks = _clean_headings(b.blocks)
+        if _is_empty(b):
+            continue
+        out.append(b)
+    return out
+
+
+_CONTENT_KEYS = ("text", "code", "items", "points", "rows", "events",
+                 "steps", "expression", "definition", "sections", "data")
+
+
+def _is_empty(b: Block) -> bool:
+    """A block is empty when its *content* fields are all blank — e.g. a
+    code_block stripped to nothing by metadata scrubbing. Metadata fields
+    like `language`/`title` don't count as content."""
+    if b.blocks:
+        return False
+    vals = [b.data[k] for k in _CONTENT_KEYS
+            if isinstance(b.data.get(k), (str, list))]
+    if not vals:
+        return b.type in (BlockType.CODE_BLOCK, BlockType.PARAGRAPH,
+                          BlockType.HEADING, BlockType.SECTION)
+
+    def blank(v: Any) -> bool:
+        if isinstance(v, str):
+            return not v.strip()
+        if isinstance(v, list):
+            return all(blank(x) for x in v)
+        return False
+    return all(blank(v) for v in vals)
 
 
 def validate_document(obj: dict[str, Any]) -> ResearchDocument:

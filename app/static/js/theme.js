@@ -300,5 +300,15 @@
   applyVars(custom?custom.vars:null);
   document.addEventListener('DOMContentLoaded',()=>{
     document.querySelectorAll('[data-theme-btn]').forEach(b=>UITheme.bind(b));
+    // Pages without a declared theme button get the floating one so the
+    // appearance picker is reachable everywhere.
+    if(!document.querySelector('[data-theme-btn]')){
+      const fab=document.createElement('button');
+      fab.type='button';
+      fab.className='ui-theme-fab';
+      fab.setAttribute('data-theme-btn','');
+      UITheme.bind(fab);
+      document.body.append(fab);
+    }
   });
 })();
