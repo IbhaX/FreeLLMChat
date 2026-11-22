@@ -108,14 +108,16 @@ async def research(
     if body.depth == "deep" and not entitled(_user, "deep_research"):
         from app.services import entitlements
         raise HTTPException(403, entitlements.upgrade_error("deep_research"))
+    _usage_ev_id = None
     if _user is not None:
         from app.services import usage
         ok, reason = await usage.check_quota(
             session, subject_for(_user), "research", _user.plan)
         if not ok:
             raise HTTPException(429, reason)
-        await usage.record(session, subject_for(_user), "research",
-                           model=body.model or "")
+        _uev = await usage.record(session, subject_for(_user), "research",
+                                  model=body.model or "")
+        _usage_ev_id = _uev.id if _uev is not None else None
         # Release the write lock before run_research's long network work.
         try:
             await session.commit()
@@ -141,6 +143,15 @@ async def research(
             status_code=503,
             content={"error": {"message": str(e)[:300], "type": "research_failed"}},
         )
+    finally:
+        from app.services import usage as _usage
+
+        await _usage.settle_tokens(
+            _usage_ev_id,
+            sum(int(e.get("tokens_in") or 0)
+                for e in events if e.get("event") == "usage"),
+            sum(int(e.get("tokens_out") or 0)
+                for e in events if e.get("event") == "usage"))
     answer = state.answer if state is not None else ""
     done = next((e for e in reversed(events) if e.get("event") == "research_done"), {})
     meta = {k: v for k, v in done.items() if k not in ("event", "text")}
@@ -178,14 +189,16 @@ async def research_stream(
                 headers={"Cache-Control": "no-cache"})
     # Fresh runs meter; replays of a detached job are free.
     _u0 = await optional_user(request)
+    _usage_ev_id = None
     if _u0 is not None:
         from app.services import usage
         ok, reason = await usage.check_quota(
             session, subject_for(_u0), "research", _u0.plan)
         if not ok:
             raise HTTPException(429, reason)
-        await usage.record(session, subject_for(_u0), "research",
-                           model=body.model or "")
+        _uev = await usage.record(session, subject_for(_u0), "research",
+                                  model=body.model or "")
+        _usage_ev_id = _uev.id if _uev is not None else None
         # Commit now: the flush holds SQLite's single write lock, and this
         # request's session stays open for the whole stream. The ledger
         # session below (and every other writer) would deadlock on
@@ -213,6 +226,14 @@ async def research_stream(
     _user = await optional_user(request)
     _owner = _user.id if _user else None
 
+    _tok = {"in": 0, "out": 0}
+
+    def _metered_emit(ev: dict) -> None:
+        if isinstance(ev, dict) and ev.get("event") == "usage":
+            _tok["in"] += int(ev.get("tokens_in") or 0)
+            _tok["out"] += int(ev.get("tokens_out") or 0)
+        queue.put_nowait(ev)
+
     async def run() -> None:
         # The run must outlive the HTTP request: it gets its OWN sessions
         # (the request-scoped one is closed as soon as this handler returns
@@ -223,7 +244,7 @@ async def research_stream(
                 state = await run_research(
                     gw, rs, _messages(body), model=body.model, depth=body.depth,
                     conversation_id=body.conversation_id,
-                    on_event=agent_log.tap_emit(arun, queue.put_nowait),
+                    on_event=agent_log.tap_emit(arun, _metered_emit),
                 )
             state_box["state"] = state
             async with factory() as ps:
@@ -256,6 +277,11 @@ async def research_stream(
                 await agent_log.finish_run(ls, arun, "failed",
                                            duration_ms=int((time.monotonic() - _t0) * 1000))
                 await ls.commit()
+        finally:
+            from app.services import usage as _usage
+
+            await _usage.settle_tokens(
+                _usage_ev_id, _tok["in"], _tok["out"])
 
     task = asyncio.ensure_future(run())
 

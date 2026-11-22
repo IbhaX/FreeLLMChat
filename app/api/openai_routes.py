@@ -306,6 +306,14 @@ def _stream_pieces(text: str) -> list[str]:
     return [text[i:i + size] for i in range(0, len(text), size)]
 
 
+async def _settle_usage_tokens(usage_ev_id: int | None,
+                               tokens_in: int, tokens_out: int) -> None:
+    """Backfill real billed tokens onto the request's UsageEvent row."""
+    from app.services import usage as _usage
+
+    await _usage.settle_tokens(usage_ev_id, tokens_in, tokens_out)
+
+
 def _remember(gateway, conv_id: str | None, user_text: str, reply: str,
               owner_id: int | None = None) -> None:
     """Fire-and-forget: store the turn in short-term memory, extract
@@ -485,13 +493,15 @@ async def chat_completions(
     # Quotas/metrics are per-user billing; anonymous local traffic is
     # unlimited so single-tenant installs aren't throttled by shared
     # 'anon' counters.
+    usage_ev_id: int | None = None
     if _user is not None:
         ok, reason = await _usage.check_quota(
             session, subject_for(_user), "chat", _user.plan)
         if not ok:
             raise HTTPException(status_code=429, detail=reason)
-        await _usage.record(session, subject_for(_user), "chat",
-                            model=str(payload.get("model") or ""))
+        _ev = await _usage.record(session, subject_for(_user), "chat",
+                                  model=str(payload.get("model") or ""))
+        usage_ev_id = _ev.id if _ev is not None else None
     # Commit now: the flush holds SQLite's single write lock, and the
     # memory lookup below is a network call. Holding it any longer locks
     # out every other writer (including this request's own job session).
@@ -620,6 +630,17 @@ async def chat_completions(
             session = get_session_factory()()
 
         events: asyncio.Queue[dict] = asyncio.Queue()
+        # Token metering: the gateway emits {"event": "usage", tokens_in/out}
+        # per upstream call — accumulate them here and settle the UsageEvent
+        # row when the run finishes so credits/requests actually decrement.
+        _tokens = {"in": 0, "out": 0}
+
+        def metered_emit(ev: dict) -> None:
+            if isinstance(ev, dict) and ev.get("event") == "usage":
+                _tokens["in"] += int(ev.get("tokens_in") or 0)
+                _tokens["out"] += int(ev.get("tokens_out") or 0)
+            events.put_nowait(ev)
+
         # Announce the resolved/auto-selected agent, skills and tools in the
         # activity panel before the run starts.
         if sel_ctx["agent"] or sel_ctx["skills"] or sel_ctx["tools"]:
@@ -669,7 +690,7 @@ async def chat_completions(
         async def _open():
             try:
                 return await chat_stream_or_auto(
-                    gateway, session, payload, events.put_nowait
+                    gateway, session, payload, metered_emit
                 )
             except Exception as e:  # surfaced as an SSE error below
                 return e
@@ -703,7 +724,7 @@ async def chat_completions(
                         prompt = str(rest[i].get("content") or "")
                         del rest[i]
                         break
-                deps = AgentDeps(gateway, emit=events.put_nowait,
+                deps = AgentDeps(gateway, emit=metered_emit,
                                  max_tool_calls=12)
                 names = builtin if isinstance(builtin, list) else ["*"]
                 agent = build_simple_agent(
@@ -734,7 +755,7 @@ async def chat_completions(
                     gateway, session, payload.get("messages") or [],
                     model=str(payload.get("model") or "auto"),
                     conversation_id=conv_id,
-                    on_event=events.put_nowait,
+                    on_event=metered_emit,
                 )
             except Exception as e:
                 return e
@@ -747,7 +768,7 @@ async def chat_completions(
                     gateway, session, last_user or "",
                     payload=payload,
                     history=payload.get("messages") or [],
-                    emit=events.put_nowait,
+                    emit=metered_emit,
                 )
             except Exception as e:
                 return e
@@ -771,6 +792,14 @@ async def chat_completions(
             return f"data: {_json.dumps(chunk)}\n\n".encode()
 
         async def gen():
+            try:
+                async for chunk in _gen():
+                    yield chunk
+            finally:
+                await _settle_usage_tokens(
+                    usage_ev_id, _tokens["in"], _tokens["out"])
+
+        async def _gen():
             while not (task.done() and events.empty()):
                 try:
                     ev = await asyncio.wait_for(events.get(), timeout=0.1)
@@ -899,7 +928,7 @@ async def chat_completions(
                     try:
                         plain, *_ = await chat_or_auto(
                             gateway, session, {**payload, "stream": False},
-                            events.put_nowait)
+                            metered_emit)
                         text = "".join(
                             (c.get("message") or {}).get("content") or ""
                             for c in plain.get("choices", []))
@@ -1019,6 +1048,11 @@ async def chat_completions(
                                "type": "gateway_exhausted",
                                "code": e.last_status or 503}},
         )
+    _u = (result or {}).get("usage") or {}
+    await _settle_usage_tokens(
+        usage_ev_id,
+        int(_u.get("prompt_tokens") or 0),
+        int(_u.get("completion_tokens") or 0))
     return JSONResponse(
         content=result,
         headers={

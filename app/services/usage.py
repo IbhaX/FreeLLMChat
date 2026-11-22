@@ -13,16 +13,42 @@ from app.services.auth import plan_limits
 
 async def record(session: Any, subject: str, kind: str, *,
                  model: str = "", provider: str = "",
-                 tokens_in: int = 0, tokens_out: int = 0) -> None:
-    """Append one usage event. Never raises — metering must not break requests."""
+                 tokens_in: int = 0, tokens_out: int = 0
+                 ) -> Optional[UsageEvent]:
+    """Append one usage event; returns the row so callers can settle token
+    counts after the upstream call completes. Never raises — metering must
+    not break requests."""
     try:
-        session.add(UsageEvent(
+        ev = UsageEvent(
             subject=str(subject or "anon"), kind=kind,
             model=model or "", provider=provider or "",
-            tokens_in=int(tokens_in or 0), tokens_out=int(tokens_out or 0)))
+            tokens_in=int(tokens_in or 0), tokens_out=int(tokens_out or 0))
+        session.add(ev)
         await session.flush()
+        return ev
     except Exception:
-        pass
+        return None
+
+
+async def settle_tokens(event_id: Optional[int], tokens_in: int,
+                        tokens_out: int) -> None:
+    """Backfill real token counts onto the UsageEvent row recorded at the
+    start of a request — events are written upfront for quota counting,
+    but credits only decrement once billed tokens land here. Uses its own
+    session so it is safe to call after the request session closed."""
+    if not event_id or not (tokens_in or tokens_out):
+        return
+    try:
+        from app.db import get_session_factory
+
+        async with get_session_factory()() as s:
+            row = await s.get(UsageEvent, int(event_id))
+            if row is not None:
+                row.tokens_in = int(tokens_in)
+                row.tokens_out = int(tokens_out)
+                await s.commit()
+    except Exception:
+        pass  # metering must never break the response path
 
 
 async def today_count(session: Any, subject: str, kind: str | None = None) -> int:

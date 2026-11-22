@@ -166,14 +166,16 @@ async def agent_chat(
         raise HTTPException(403, "agent is disabled")
     gw = _gateway(request)
     _user = await optional_user(request)
+    _usage_ev_id = None
     if _user is not None:
         from app.services import usage
         ok, reason = await usage.check_quota(
             session, subject_for(_user), "chat", _user.plan)
         if not ok:
             raise HTTPException(429, reason)
-        await usage.record(session, subject_for(_user), "chat",
-                           model=body.model or a.model or "")
+        _uev = await usage.record(session, subject_for(_user), "chat",
+                                  model=body.model or a.model or "")
+        _usage_ev_id = _uev.id if _uev is not None else None
         # Commit now: the flush holds SQLite's single write lock and this
         # session outlives the request; the run's own sessions below would
         # otherwise hit "database is locked".
@@ -230,8 +232,13 @@ async def agent_chat(
             return ""
 
     async def _wrap_stream():
+        _tok = {"in": 0, "out": 0}
+
         def _drain() -> bytes:
             ev = evq.get_nowait()
+            if isinstance(ev, dict) and ev.get("event") == "usage":
+                _tok["in"] += int(ev.get("tokens_in") or 0)
+                _tok["out"] += int(ev.get("tokens_out") or 0)
             return f"data: {json.dumps({'nova': ev})}\n\n".encode()
 
         parts: list[str] = []
@@ -264,6 +271,11 @@ async def agent_chat(
                     duration_ms=int((time.monotonic()-_t0)*1000))
                 await ls.commit()
             raise
+        finally:
+            from app.services import usage as _usage
+
+            await _usage.settle_tokens(
+                _usage_ev_id, _tok["in"], _tok["out"])
 
     if body.stream:
         return StreamingResponse(

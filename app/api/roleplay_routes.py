@@ -186,13 +186,15 @@ async def run_turn(rid: int, body: TurnIn, request: Request,
                    user: User | None = Depends(optional_user)):
     """Append a beat and stream each character's reply (SSE nova frames)."""
     room = await _owned_room(session, rid, user)
+    _usage_ev_id = None
     if user is not None:
         ok, reason = await usage.check_quota(
             session, subject_for(user), "chat", user.plan)
         if not ok:
             raise HTTPException(429, reason)
-        await usage.record(session, subject_for(user), "chat",
-                           model=room.model or "")
+        _uev = await usage.record(session, subject_for(user), "chat",
+                                  model=room.model or "")
+        _usage_ev_id = _uev.id if _uev is not None else None
     from app.services import artifacts as _artifacts
 
     _artifacts.set_context(
@@ -208,7 +210,29 @@ async def run_turn(rid: int, body: TurnIn, request: Request,
         # record-only: consume just the 'beat' frame synchronously
         agen = rp.beat_only(factory, rid, kind=kind, text=body.text.strip(),
                             whisper_to=body.whisper_to)
-    return _stream_job(rid, agen)
+
+    async def _metered(src: Any) -> Any:
+        """Settle real billed tokens onto the UsageEvent row by scanning
+        usage events embedded in the stream's nova frames."""
+        tin = tout = 0
+        try:
+            async for chunk in src:
+                try:
+                    for part in chunk.split(b"data:"):
+                        part = part.strip()
+                        if not part or part == b"[DONE]":
+                            continue
+                        ev = (json.loads(part) or {}).get("nova") or {}
+                        if ev.get("event") == "usage":
+                            tin += int(ev.get("tokens_in") or 0)
+                            tout += int(ev.get("tokens_out") or 0)
+                except Exception:
+                    pass
+                yield chunk
+        finally:
+            await usage.settle_tokens(_usage_ev_id, tin, tout)
+
+    return _stream_job(rid, _metered(agen))
 
 
 @router.get("/rooms/{rid}/live")
