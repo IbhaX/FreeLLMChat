@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Billing - IbhaX</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/theme.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('ui-theme')||'dark';</script>
+<style>
+  .pay-hero{background:
+    radial-gradient(120% 200% at 10% 0%,var(--accent) 0%,transparent 55%),
+    var(--surface-2);border-bottom:1px solid var(--border-1);
+    padding:22px;border-radius:14px 14px 0 0}
+  .pay-hero h2{font-size:20px;font-weight:800;letter-spacing:-.01em}
+  .pay-hero p{color:var(--text-2);font-size:13px;margin-top:4px;max-width:52ch}
+  .plans{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:12px;align-items:stretch}
+  .plan{display:flex;flex-direction:column;background:var(--surface-2);
+    border:1px solid var(--border-1);border-radius:14px;padding:16px 14px;
+    position:relative;transition:border-color .15s,transform .15s,
+    box-shadow .15s}
+  .plan:hover{border-color:var(--accent-line,var(--border-2));
+    transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .plan.best{border-color:var(--accent);
+    background:linear-gradient(180deg,var(--surface-2),var(--surface-1));
+    box-shadow:0 0 0 1px var(--accent),0 10px 30px -12px var(--accent)}
+  .plan .tag{position:absolute;top:-10px;left:50%;transform:translateX(-50%);
+    background:var(--accent);color:var(--on-accent,#fff);font-size:9.5px;
+    font-weight:800;padding:2px 10px;border-radius:99px;
+    letter-spacing:.08em;white-space:nowrap}
+  .plan .pname{font-weight:700;font-size:13px;color:var(--text-2);
+    text-transform:uppercase;letter-spacing:.05em}
+  .plan .price{margin:8px 0 2px}
+  .plan .price b{font-size:26px;font-weight:800;letter-spacing:-.02em}
+  .plan .price span{font-size:11.5px;color:var(--text-3);margin-left:1px}
+  .plan .inr{font-size:10.5px;color:var(--text-3);min-height:14px}
+  .plan .pdiv{height:1px;background:var(--border-1);margin:12px -14px}
+  .plan ul{list-style:none;margin:0 0 14px;padding:0;flex:1}
+  .plan li{font-size:11.5px;color:var(--text-2);padding:4px 0 4px 17px;
+    position:relative;line-height:1.35}
+  .plan li::before{content:"✓";position:absolute;left:0;top:4px;
+    color:var(--accent);font-weight:700;font-size:11px}
+  .plan .ui-btn{width:100%;justify-content:center}
+  .plan .free-note{font-size:11.5px;color:var(--text-3);text-align:center;
+    padding:8px 0;border:1px dashed var(--border-1);border-radius:8px}
+  @media (max-width:1100px){.plans{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media (max-width:720px){.plans{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media (max-width:440px){.plans{grid-template-columns:1fr}}
+  .pay-state{display:flex;align-items:center;gap:10px;margin-top:14px;
+    font-size:13px;color:var(--text-2);min-height:20px}
+  .pay-dot{width:9px;height:9px;border-radius:50%;background:var(--text-3);flex:none}
+  .pay-state.ok{color:#4ade80}.pay-state.ok .pay-dot{background:#4ade80}
+  .pay-state.err{color:var(--error)}.pay-state.err .pay-dot{background:var(--error)}
+  .pay-state.busy .pay-dot{background:var(--accent);animation:paypulse 1s ease-in-out infinite}
+  @keyframes paypulse{50%{opacity:.35;transform:scale(1.35)}}
+  .pay-ref{font-size:11px;color:var(--text-3);font-family:var(--mono,monospace);
+    word-break:break-all;margin-top:4px}
+  .pay-note{margin-top:14px;font-size:11.5px;color:var(--text-3)}
+  .pay-note code{background:var(--surface-2);border-radius:4px;padding:1px 5px;
+    font-size:11px}
+</style>
+</head>
+<body>
+<main class="ui-main">
+  <div class="ui-page" style="max-width:1060px">
+    <div class="ui-pagehead">
+      <button class="ui-btn ui-btn-ghost ui-btn-icon" data-app-back="/dashboard" title="Back"></button>
+      <div>
+        <h1>Billing</h1>
+        <div class="sub">Subscription plans — secure checkout by Razorpay</div>
+      </div>
+    </div>
+
+    <div class="ui-card" style="margin-bottom:16px">
+      <div class="pay-hero">
+        <h2>Choose your plan</h2>
+        <p>Monthly subscription, billed in INR at checkout. Your payment is
+           verified server-side — a signature check runs on every
+           transaction. Cancel anytime.</p>
+      </div>
+      <div class="ui-card-pad">
+        <div class="plans" id="plans">
+          <div class="t-sm tx-3">Loading plans…</div>
+        </div>
+        <div class="pay-state" id="payState" hidden>
+          <span class="pay-dot"></span><span id="payStateText"></span>
+        </div>
+        <div class="pay-ref" id="payRef" hidden></div>
+        <div class="pay-note" id="payNote" hidden>
+          Test mode — use Razorpay test cards, e.g.
+          <code>4111 1111 1111 1111</code>, any future expiry and CVV.
+          Subscriptions are billed in INR at the displayed conversion.
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app-nav.js"></script>
+<script src="/static/js/admin-shell.js"></script>
+<script src="/static/js/pay.js"></script>
+</body>
+</html>

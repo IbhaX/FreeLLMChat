@@ -12,13 +12,14 @@ import asyncio
 import json
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_user
+from app.api.deps import (entitled, optional_user, require_user,
+                          subject_for)
 from app.db import get_session, get_session_factory
 from app.models import (
     Claim,
@@ -86,6 +87,17 @@ async def create_run(
 ):
     idem = request.headers.get("idempotency-key")
     depth = body.depth or classify_depth(body.question)
+    if depth == "deep" and not entitled(user, "deep_research"):
+        from app.services import entitlements
+        raise HTTPException(403, entitlements.upgrade_error("deep_research"))
+    if user is not None:
+        from app.services import usage
+        ok, reason = await usage.check_quota(
+            session, subject_for(user), "research", user.plan)
+        if not ok:
+            return _err(429, "quota_exceeded", reason)
+        await usage.record(session, subject_for(user), "research",
+                           model="auto")
     run, created = await rv2.create_run(
         session, question=body.question, depth=depth,
         options=body.options, budget_override=body.budget_override,

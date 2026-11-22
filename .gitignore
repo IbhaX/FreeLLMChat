@@ -15,3 +15,6 @@ __pycache__/
 freellmchat.db
 server_ollama.log
 .playwright-mcp/
+.e2e/
+rzp_*.png
+server_pay.log

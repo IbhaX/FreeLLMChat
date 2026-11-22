@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_user
+from app.api.deps import entitled, optional_user, require_user
 from app.db import get_session
 from app.models import CustomSkill, User
 from app.services.skills import load_custom_skills
@@ -45,6 +45,9 @@ async def list_custom(session: AsyncSession = Depends(get_session)):
 async def create_skill(body: SkillIn,
                        session: AsyncSession = Depends(get_session),
                        user: User | None = Depends(optional_user)):
+    if not entitled(user, "custom_agents"):
+        from app.services import entitlements
+        raise HTTPException(403, entitlements.upgrade_error("custom_agents"))
     existing = (await session.execute(
         select(CustomSkill).where(CustomSkill.name == body.name))
     ).scalar_one_or_none()

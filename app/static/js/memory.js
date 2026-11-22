@@ -50,6 +50,9 @@
       build(g);
       $('#memStatus').className='pill ok';$('#memStatus').textContent='● connected';
     }catch(e){
+      if(window.isUpgradeRequired&&isUpgradeRequired(e)){
+        stage.innerHTML='';stage.appendChild(upgradeWall(e));return;
+      }
       if($('#memStatus')){$('#memStatus').className='pill err';$('#memStatus').textContent='● error';}
       empty('Could not load memory',e&&e.message||'fetch failed');
     }

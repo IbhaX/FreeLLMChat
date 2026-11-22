@@ -26,6 +26,7 @@ Design rules (see global engineering rules):
 from __future__ import annotations
 
 import json
+import re
 from enum import Enum
 from typing import Any, Optional
 
@@ -271,6 +272,157 @@ def envelope_to_fence(envelope: ResponseEnvelope) -> str:
         + json.dumps(envelope.model_dump(mode="json"), ensure_ascii=False)
         + "\n```"
     )
+
+
+# ----------------------------------------------------- envelope → markdown
+# Memory, capture, and other text sinks must never store the raw
+# ``nova-response`` JSON blob — render the envelope back into readable
+# markdown first.
+
+_ENVELOPE_HEAD = re.compile(
+    r"`{0,3}\s*nova-response\s*\"?\s*(\{)", re.IGNORECASE)
+
+
+def _brace_match(text: str, start: int) -> int:
+    """Index just past the '}' closing the '{' at ``start``; -1 if none."""
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return -1
+
+
+def _kv_lines(data: dict[str, Any], skip: frozenset[str]) -> list[str]:
+    """Readable ``- key: value`` lines for component data fields."""
+    import json
+
+    lines: list[str] = []
+    for k, v in data.items():
+        if k in skip:
+            continue
+        if isinstance(v, bool) or isinstance(v, (int, float)):
+            lines.append(f"- {k}: {v}")
+        elif isinstance(v, str) and v.strip():
+            lines.append(f"- {k}: {v.strip()}")
+        elif isinstance(v, list):
+            for it in v[:20]:
+                if isinstance(it, dict):
+                    lab = it.get("label") or it.get("key") or it.get("name")
+                    val = (it.get("value") or it.get("text")
+                           or it.get("description"))
+                    if lab is not None and val is not None:
+                        lines.append(f"- {lab}: {val}")
+                    else:
+                        lines.append(
+                            "- " + json.dumps(it, ensure_ascii=False)[:160])
+                elif isinstance(it, (str, int, float)):
+                    lines.append(f"- {it}")
+        elif isinstance(v, dict):
+            lines.append(
+                f"- {k}: " + json.dumps(v, ensure_ascii=False)[:160])
+    return lines
+
+
+def _component_to_md(comp: dict[str, Any]) -> str:
+    data = comp.get("data")
+    if not isinstance(data, dict):
+        return str(data)[:400] if data is not None else ""
+    title = data.get("name") or data.get("title") or ""
+    body = (data.get("description") or data.get("text")
+            or data.get("body") or "")
+    lines: list[str] = []
+    if title and body:
+        lines.append(f"**{title}** — {body}")
+    elif title:
+        lines.append(f"**{title}**")
+    elif body:
+        lines.append(body)
+    lines += _kv_lines(
+        data, frozenset({"name", "title", "description", "text", "body"}))
+    return "\n".join(lines)
+
+
+def _envelope_to_md(env: dict[str, Any]) -> str:
+    parts: list[str] = []
+    content = env.get("content")
+    if isinstance(content, str) and content.strip():
+        parts.append(content.strip())
+    for comp in env.get("components") or []:
+        if isinstance(comp, dict):
+            md = _component_to_md(comp)
+            if md:
+                parts.append(md)
+    return "\n\n".join(parts)
+
+
+def reply_to_markdown(text: str) -> str:
+    """Render a reply containing ``nova-response`` envelopes into clean
+    markdown — prose plus readable component summaries, never the raw
+    JSON blob. Replies without envelopes are returned trimmed."""
+    import json
+
+    if not text:
+        return ""
+    s = text.strip()
+    # Whole reply is a single envelope (possibly a JSON-quoted string).
+    for _ in range(2):
+        if not s.startswith(('"', "{")):
+            break
+        try:
+            inner = json.loads(s)
+        except Exception:
+            break
+        if isinstance(inner, str):
+            s = inner.strip()
+            continue
+        if isinstance(inner, dict) and (
+                "response_type" in inner or "components" in inner):
+            md = _envelope_to_md(inner)
+            if md:
+                return md
+        break
+    out: list[str] = []
+    i = 0
+    for m in _ENVELOPE_HEAD.finditer(s):
+        j = _brace_match(s, m.start(1))
+        if j < 0:
+            continue
+        try:
+            env = json.loads(s[m.start(1):j])
+        except Exception:
+            continue
+        out.append(s[i:m.start()])
+        md = _envelope_to_md(env)
+        if md:
+            out.append(md)
+        i = j
+        # Consume an optional closing fence on this or the next line.
+        k = i
+        while k < len(s) and s[k] in " \t\r\n":
+            k += 1
+        if s[k:k + 1] == "`":
+            while k < len(s) and s[k] == "`":
+                k += 1
+            i = k
+    out.append(s[i:])
+    return "\n".join(
+        p.strip() for p in out if p and p.strip()).strip()
 
 
 def component_schemas() -> dict[str, dict[str, Any]]:

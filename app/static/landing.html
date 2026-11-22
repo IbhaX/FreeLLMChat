@@ -146,6 +146,13 @@ img{max-width:100%}
   box-shadow:0 10px 34px -10px color-mix(in srgb,var(--ln-acc) 65%,transparent)}
 .lp-btn.pri:hover{box-shadow:0 16px 44px -10px color-mix(in srgb,var(--ln-acc) 80%,transparent)}
 .lp-btn.sm{padding:9px 17px;font-size:13px;border-radius:10px}
+.lp-theme{display:inline-flex;align-items:center;justify-content:center;width:37px;height:37px;
+  padding:0;border-radius:10px;border:1px solid var(--ln-line2);cursor:pointer;
+  color:var(--ln-text2,#9aa3b2);background:var(--ln-surface);transition:transform .18s,
+  border-color .18s,color .18s,background .18s;flex:none}
+.lp-theme:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--ln-acc) 60%,transparent);
+  color:var(--ln-acc);background:var(--ln-surface2)}
+.lp-theme svg{width:17px;height:17px}
 
 /* ---------- hero ---------- */
 .lp-hero{position:relative;min-height:100svh;display:flex;align-items:center;overflow:hidden}

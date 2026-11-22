@@ -7,15 +7,17 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_user
+from app.api.deps import optional_user, require_user, subject_for
 from app.db import get_session
 from app.models import RoleplayRoom, User
 from app.services import chat_jobs
 from app.services import roleplay as rp
+from app.services import usage
 from app.services import worlds as wd
+from app.services.auth import plan_limits
 
 router = APIRouter(prefix="/v1/roleplay", tags=["roleplay"],
                    dependencies=[Depends(require_user)])
@@ -93,6 +95,16 @@ async def list_rooms(session: AsyncSession = Depends(get_session),
 async def create_room(body: RoomIn,
                       session: AsyncSession = Depends(get_session),
                       user: User | None = Depends(optional_user)):
+    if user is not None:
+        lim = plan_limits(user.plan).get("rooms", 0)
+        if lim > 0:
+            n = (await session.execute(
+                select(func.count(RoleplayRoom.id))
+                .where(RoleplayRoom.owner_id == user.id))).scalar() or 0
+            if n >= lim:
+                raise HTTPException(
+                    429, f"room limit reached for the {user.plan} plan "
+                         f"({n}/{lim})")
     room = RoleplayRoom(name=body.name.strip(), scenario=body.scenario,
                         character_ids=body.character_ids, model=body.model,
                         tools_enabled=body.tools_enabled,
@@ -136,8 +148,16 @@ async def send_message(rid: int, body: MessageIn, request: Request,
                        session: AsyncSession = Depends(get_session),
                        user: User | None = Depends(optional_user)):
     room = await _owned_room(session, rid, user)
+    if user is not None:
+        ok, reason = await usage.check_quota(
+            session, subject_for(user), "chat", user.plan)
+        if not ok:
+            raise HTTPException(429, reason)
     replies = await rp.room_turn(_gateway(request), session, room,
                                  body.text, speaker_filter=body.speaker)
+    if user is not None:
+        await usage.record(session, subject_for(user), "chat",
+                           model=room.model or "")
     await session.commit()
     return {"replies": replies, "messages": room.messages}
 
@@ -162,6 +182,13 @@ async def run_turn(rid: int, body: TurnIn, request: Request,
                    user: User | None = Depends(optional_user)):
     """Append a beat and stream each character's reply (SSE nova frames)."""
     room = await _owned_room(session, rid, user)
+    if user is not None:
+        ok, reason = await usage.check_quota(
+            session, subject_for(user), "chat", user.plan)
+        if not ok:
+            raise HTTPException(429, reason)
+        await usage.record(session, subject_for(user), "chat",
+                           model=room.model or "")
     kind = body.kind if body.kind in ("talk", "narrate", "ooc", "whisper") else "talk"
     if not body.text.strip():
         raise HTTPException(400, "text required")

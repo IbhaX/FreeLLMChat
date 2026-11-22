@@ -111,3 +111,32 @@ async def require_user_or_admin(
 def subject_for(user: "User | None") -> str:
     """Metering subject string for a (possibly anonymous) request."""
     return f"u{user.id}" if user else "anon"
+
+
+def entitled(user: "User | None", capability: str) -> bool:
+    """Plan-capability check for the resolved user.
+
+    Anonymous requests are fully entitled only in no-auth local mode —
+    in an authed deployment they never get this far (``require_user``
+    401s first)."""
+    from app.services import entitlements
+    from app.services.auth import auth_required
+    if user is None:
+        return not auth_required()
+    return entitlements.has_cap(
+        user.plan, capability, user.id,
+        is_admin=user.role == "admin")
+
+
+def require_capability(capability: str):
+    """Dependency factory: 403 ``upgrade_required`` when the caller's
+    plan doesn't hold the capability (or isn't in its rollout)."""
+    async def _dep(request: Request) -> "User | None":
+        user = await require_user(request)
+        if not entitled(user, capability):
+            from app.services import entitlements
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=entitlements.upgrade_error(capability))
+        return user
+    return _dep

@@ -27,6 +27,15 @@
 
     <div class="stat-grid" id="stats"></div>
 
+    <div class="sec-title" data-admin="1">User management</div>
+    <div class="ui-card ui-card-pad" data-admin="1" style="margin-bottom:14px">
+      <input type="text" id="uq" class="ui-input" placeholder="filter users…" style="width:240px;margin-bottom:10px">
+      <div class="ui-table-scroll"><table class="ui-table" id="users"><thead><tr>
+        <th>User</th><th>Email</th><th>Role</th><th>Plan</th><th>Access</th><th>Joined</th>
+      </tr></thead><tbody></tbody></table></div>
+      <div class="t-xs tx-3" style="margin-top:8px">Plan changes take effect immediately — entitlements read the user's plan live.</div>
+    </div>
+
     <div class="sec-title">Token budget (est. free-tier daily)</div>
     <div class="ui-table-scroll"><table class="ui-table" id="budget"><thead><tr>
       <th>Provider</th><th>Keys</th><th>Used 24h</th><th>Est. daily budget</th><th style="width:34%">Usage</th>
@@ -61,6 +70,7 @@
 </main>
 <script src="/static/js/theme.js"></script>
 <script src="/static/js/api.js"></script>
+<script src="/static/js/ui/dialog.js"></script>
 <script src="/static/js/app-nav.js"></script>
 <script src="/static/js/admin-shell.js"></script>
 <script src="/static/js/dashboard.js"></script>

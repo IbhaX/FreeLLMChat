@@ -105,6 +105,16 @@ async def capture(owner_id: Optional[int], kind: str, question: str,
 
     factory = get_session_factory()
     async with factory() as session:
+        # Plan gate: library captures are a basic+ entitlement. Anonymous
+        # owners (no-auth local mode) are allowed through.
+        if owner_id is not None:
+            from app.models import User
+            from app.services import entitlements
+            owner = await session.get(User, owner_id)
+            if owner is not None and not entitlements.has_cap(
+                    owner.plan, "library_captures", owner.id,
+                    is_admin=owner.role == "admin"):
+                return None
         col = await _collection(session, owner_id)
         day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         doc = await _document(session, col, owner_id,

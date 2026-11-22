@@ -291,6 +291,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), default="user")
     plan: Mapped[str] = mapped_column(String(32), default="free")
     disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

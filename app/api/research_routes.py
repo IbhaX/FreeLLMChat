@@ -9,13 +9,14 @@ import time
 import uuid
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_user
+from app.api.deps import (entitled, optional_user, require_user,
+                          subject_for)
 from app.db import get_session
 from app.models import ResearchRun
 from app.services import agent_log
@@ -103,6 +104,18 @@ async def research(
 ):
     """Non-streaming research run. Returns the answer plus run metadata."""
     gw = _gateway(request)
+    _user = await optional_user(request)
+    if body.depth == "deep" and not entitled(_user, "deep_research"):
+        from app.services import entitlements
+        raise HTTPException(403, entitlements.upgrade_error("deep_research"))
+    if _user is not None:
+        from app.services import usage
+        ok, reason = await usage.check_quota(
+            session, subject_for(_user), "research", _user.plan)
+        if not ok:
+            raise HTTPException(429, reason)
+        await usage.record(session, subject_for(_user), "research",
+                           model=body.model or "")
     events: list[dict] = []
 
     def emit(ev: dict) -> None:
@@ -139,6 +152,10 @@ async def research_stream(
 ):
     """SSE stream of stage events; one terminal chunk carries the answer."""
     gw = _gateway(request)
+    if body.depth == "deep" and not entitled(
+            await optional_user(request), "deep_research"):
+        from app.services import entitlements
+        raise HTTPException(403, entitlements.upgrade_error("deep_research"))
     conv_key = str(body.conversation_id) if body.conversation_id else None
     # Refresh-resilient: if this conversation already has a detached job
     # running, replay its buffered frames instead of starting over.
@@ -150,6 +167,16 @@ async def research_stream(
             return StreamingResponse(
                 running.stream(), media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache"})
+    # Fresh runs meter; replays of a detached job are free.
+    _u0 = await optional_user(request)
+    if _u0 is not None:
+        from app.services import usage
+        ok, reason = await usage.check_quota(
+            session, subject_for(_u0), "research", _u0.plan)
+        if not ok:
+            raise HTTPException(429, reason)
+        await usage.record(session, subject_for(_u0), "research",
+                           model=body.model or "")
     queue: asyncio.Queue[dict] = asyncio.Queue()
     state_box: dict[str, Any] = {}
     # Durable agent ledger for this research run.

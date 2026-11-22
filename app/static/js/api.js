@@ -52,4 +52,19 @@
   };
 
   window.esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  /* Plan gating — 403 upgrade_required helpers shared by gated pages. */
+  window.isUpgradeRequired=e=>e&&e.status===403&&e.body&&e.body.detail
+    &&e.body.detail.error&&e.body.detail.error.type==='upgrade_required';
+  window.upgradeWall=(e)=>{
+    const d=(e.body&&e.body.detail&&e.body.detail.error)||{};
+    const plan=d.plan_required||'a higher';
+    const w=document.createElement('div');
+    w.style.cssText='display:grid;place-items:center;min-height:50vh;text-align:center;padding:30px';
+    w.innerHTML='<div><div style="font-size:34px;opacity:.5">🔒</div>'
+      +'<h3 style="margin:10px 0 6px">Plan upgrade required</h3>'
+      +`<p class="tx-2" style="max-width:40ch;margin:0 auto 14px">${esc(d.message||('This feature requires the '+plan+' plan.'))}</p>`
+      +'<a class="ui-btn ui-btn-primary" href="/pay">View plans</a></div>';
+    return w;
+  };
 })();

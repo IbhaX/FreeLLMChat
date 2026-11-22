@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import optional_user, require_user
+from app.api.deps import optional_user, require_user, subject_for
 from app.db import get_session
 from app.models import AgentConfig, SharedConversation, User
 from app.services.agents import run_agent
@@ -122,6 +122,16 @@ async def group_stream(
         )
     gw = _gateway(request)
     conv_id = str(body.conversation_id) if body.conversation_id else None
+    if user is not None:
+        from app.services import usage
+        ok, reason = await usage.check_quota(
+            session, subject_for(user), "chat", user.plan)
+        if not ok:
+            return JSONResponse(
+                status_code=429,
+                content={"error": {"message": reason,
+                                   "type": "quota_exceeded"}})
+        await usage.record(session, subject_for(user), "chat")
 
     # Detached (refresh-resilient) execution: the run is registered as a
     # conversation chat-job, identical to /v1/research/stream and the chat

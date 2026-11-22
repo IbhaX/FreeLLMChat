@@ -144,6 +144,7 @@ async def init_db() -> None:
             "company": "VARCHAR(128) DEFAULT ''",
             "location": "VARCHAR(128) DEFAULT ''",
             "website": "VARCHAR(512) DEFAULT ''",
+            "deleted_at": "DATETIME",
         }
         for col, ddl in u_adds.items():
             if u_cols and col not in u_cols:

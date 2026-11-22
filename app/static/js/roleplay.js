@@ -959,7 +959,7 @@
       const r=await v1Api(`/v1/roleplay/rooms/${room.id}/choices`,
         {method:'POST',body:'{}'});
       if(mine!==choicesReq||streaming||!room)return;
-      const list=(r.choices||[]).slice(0,5);
+      const list=(r.choices||[]).slice(0,10);
       if(!list.length)return;
       const hint=document.createElement('span');
       hint.className='st-choices-hint';hint.textContent='What do you do?';

@@ -479,21 +479,24 @@ def _fallback_choices(room: RoleplayRoom,
     last_kind = (room.messages or [{}])[-1].get("kind") if room.messages else ""
     picks = [c.name for c in cast[:3]]
     out: list[str] = []
-    if picks:
-        out.append(f"Ask {picks[0]} what they know")
+    for name in picks:
+        out.append(f"Ask {name} what they know")
     if len(picks) > 1:
         out.append(f"Turn to {picks[1]} for a second opinion")
+        out.append(f"Ask {picks[-1]} what they're not saying")
     out.append("Look around carefully")
     if last_kind == "narration":
         out.append("Press on before the moment passes")
     else:
         out.append("Stay quiet and watch")
-    return out[:4]
+    out.append("Say what you're really thinking")
+    out.append("Wait and see what happens")
+    return out[:8]
 
 
 async def suggest_choices(gateway: Any, room: RoleplayRoom,
                           cast: list[Character]) -> list[str]:
-    """3–5 contextual 'what do you do' options grounded in the transcript."""
+    """8–10 contextual 'what do you do' options grounded in the transcript."""
     world = normalize_world(room)
     names = ", ".join(c.name for c in cast) or "the characters present"
     beats = "\n".join(_recent_beat_texts(room, 10)) or "(the scene has just opened)"
@@ -501,9 +504,12 @@ async def suggest_choices(gateway: Any, room: RoleplayRoom,
         "You write next-action options for an interactive fiction game. "
         "Each choice is a short first-person action the player could take "
         "right now (5–10 words, imperative). Ground every option in the "
-        "current situation — reference things actually present. Vary the "
-        "verbs (ask, investigate, wait, reveal, leave). Never repeat the "
-        "player's last action. 3–5 options.")
+        "current situation — reference things actually present. Cover a "
+        "wide spread: questions to specific characters, investigation, "
+        "bold moves, quiet observation, a reveal, a risk, and a mundane "
+        "beat. Vary the verbs (ask, investigate, wait, reveal, leave, "
+        "touch, lie, confess). Never repeat the player's last action. "
+        "8–10 options.")
     prompt = (
         f"World: {world.get('title') or room.name}\n"
         f"Location: {world.get('location') or 'unspecified'}\n"
@@ -523,7 +529,7 @@ async def suggest_choices(gateway: Any, room: RoleplayRoom,
                 seen.add(t.lower())
                 out.append(t)
         if out:
-            return out[:5]
+            return out[:10]
     return _fallback_choices(room, cast)
 
 

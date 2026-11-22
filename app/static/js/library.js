@@ -32,7 +32,13 @@
       });
       if(window.NovaMotion&&!loadCols._painted){loadCols._painted=1;
         NovaMotion.stagger(host.children,{x:-8,y:0,dur:.25,stagger:.03});}
-    }catch(e){toast(e.message,'err');}
+    }catch(e){
+      if(window.isUpgradeRequired&&isUpgradeRequired(e)){
+        const m=document.querySelector('.ui-main,.ui-page')||document.body;
+        m.innerHTML='';m.appendChild(upgradeWall(e));return;
+      }
+      toast(e.message,'err');
+    }
   }
 
   async function addCollection(){

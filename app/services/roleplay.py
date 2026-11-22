@@ -664,9 +664,12 @@ async def _pick_responder(
              f"Recent transcript:\n{recent}\n\nLatest line: {text}"}],
             "temperature": 0}
         from app.services.model_policy import internal_chat
-        res = await internal_chat(gateway, session, payload,
-                                  requested=room.model or "auto",
-                                  role="general", retries=0)
+        import asyncio
+        res = await asyncio.wait_for(
+            internal_chat(gateway, session, payload,
+                          requested=room.model or "auto",
+                          role="general", retries=0, emit=emit),
+            timeout=8.0)
         if res.ok and res.text:
             m = re.fullmatch(r"\s*(\d+)\s*\.?\s*", res.text)
             pick = next((c for c in live if m and c.id == int(m.group(1))),
@@ -849,22 +852,56 @@ async def _char_reply_stream(
         return
 
     got_any = False
+    _sent = object()
+    q: "_aio.Queue[Any]" = _aio.Queue()
+
+    async def _produce() -> None:
+        """Feed text deltas into ``q``; terminal item is _sent or an error."""
+        try:
+            async with agent.run_stream(
+                    prompt, deps=deps, message_history=mh,
+                    usage_limits=_turn_limits()) as result:
+                async for delta in result.stream_text(delta=True):
+                    if delta:
+                        q.put_nowait(delta)
+        except Exception as e:
+            q.put_nowait(e)
+        q.put_nowait(_sent)
+
+    task = _aio.ensure_future(_produce())
     try:
-        async with agent.run_stream(
-                prompt, deps=deps, message_history=mh,
-                usage_limits=_turn_limits()) as result:
-            async for delta in result.stream_text(delta=True):
-                if delta:
-                    got_any = True
-                    yield delta
+        while True:
+            try:
+                item = await _aio.wait_for(q.get(), timeout=0.3)
+            except _aio.TimeoutError:
+                # Heartbeat: lets the caller drain queued failover/routing
+                # activity while the upstream stream is still opening.
+                yield ""
+                continue
+            if item is _sent:
+                break
+            if isinstance(item, Exception):
+                break
+            got_any = True
+            yield item
+    finally:
+        if not task.done():
+            task.cancel()
+    if got_any:
+        return
+    # Stream produced nothing (clean end or failure before any token):
+    # fall back to the buffered single-call reply.
+    rep = _aio.ensure_future(_reply(gateway, session, model, system, history,
+                                    emit=emit))
+    while not rep.done():
+        await _aio.sleep(0.3)
+        yield ""
+    try:
+        text = rep.result() or ""
     except Exception:
-        if got_any:
-            return
-    if not got_any:
-        text = await _reply(gateway, session, model, system, history,
-                            emit=emit)
-        if text:
-            yield text
+        text = ""
+    if text:
+        yield text
 
 
 def _research_suffix(ctx: str, tools_enabled: bool) -> str:
@@ -1001,7 +1038,9 @@ async def turn_stream(
         # one responder takes the stage; others react only when the player
         # explicitly addresses the whole group
         responder = await _pick_responder(gateway, session, room, live,
-                                          user_text)
+                                          user_text, emit=emit)
+        while not evq.empty():
+            yield _sse(evq.get_nowait())
         group_address = re.search(
             r"\b(?:introduce yourselves|each of you|both of you|all of you"
             r"|everyone)\b", user_text, re.I)

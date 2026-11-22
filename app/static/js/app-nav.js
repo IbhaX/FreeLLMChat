@@ -11,10 +11,11 @@
     {id:'roleplay',href:'/roleplay',label:'Roleplay',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'},
     {id:'agents',href:'/agents',label:'Agents',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4m-4 8h.01M16 12h.01M9 16h6"/></svg>'},
     {id:'skills',href:'/skills',label:'Skills',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3 6 6 .9-4.5 4.2 1 6.4-5.5-3-5.5 3 1-6.4L3 8.9 9 8z"/></svg>'},
-    {id:'memory',href:'/memory',label:'Memory',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 .98.25 1.9.7 2.7A5.5 5.5 0 0 0 4 13.5 5.5 5.5 0 0 0 9.5 19c.36 0 .7-.04 1.04-.1A3.5 3.5 0 0 0 14 22a3.5 3.5 0 0 0 3.46-3.1A5.5 5.5 0 0 0 20 13.5a5.5 5.5 0 0 0-.7-3.3c.45-.8.7-1.72.7-2.7A5.5 5.5 0 0 0 14.5 2a5.6 5.6 0 0 0-2.5.6A5.6 5.6 0 0 0 9.5 2z"/><circle cx="9" cy="8" r=".8" fill="currentColor"/><circle cx="15" cy="8" r=".8" fill="currentColor"/><circle cx="12" cy="13" r=".8" fill="currentColor"/><circle cx="8" cy="15" r=".8" fill="currentColor"/><circle cx="16" cy="15" r=".8" fill="currentColor"/></svg>'},
+    {id:'memory',href:'/memory',label:'Memory',cap:'memory_explorer',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 .98.25 1.9.7 2.7A5.5 5.5 0 0 0 4 13.5 5.5 5.5 0 0 0 9.5 19c.36 0 .7-.04 1.04-.1A3.5 3.5 0 0 0 14 22a3.5 3.5 0 0 0 3.46-3.1A5.5 5.5 0 0 0 20 13.5a5.5 5.5 0 0 0-.7-3.3c.45-.8.7-1.72.7-2.7A5.5 5.5 0 0 0 14.5 2a5.6 5.6 0 0 0-2.5.6A5.6 5.6 0 0 0 9.5 2z"/><circle cx="9" cy="8" r=".8" fill="currentColor"/><circle cx="15" cy="8" r=".8" fill="currentColor"/><circle cx="12" cy="13" r=".8" fill="currentColor"/><circle cx="8" cy="15" r=".8" fill="currentColor"/><circle cx="16" cy="15" r=".8" fill="currentColor"/></svg>'},
     {sec:'Workspace'},
     {id:'profile',href:'/profile',label:'Profile',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>'},
-    {id:'library',href:'/library',label:'Library',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>'},
+    {id:'library',href:'/library',label:'Library',cap:'library_captures',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>'},
+    {id:'pay',href:'/pay',label:'Billing',ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>'},
     {id:'keys',href:'/keys',label:'API Keys',admin:true,ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M11 12 21 2m-3 3 3 3"/></svg>'},
     {id:'settings',href:'/settings',label:'Settings',admin:true,ico:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 19.4 9c.23.61.84 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.67 0-1.28.39-1.51 1z"/></svg>'},
   ];
@@ -46,6 +47,18 @@
     document.addEventListener('DOMContentLoaded',initBack);
   else initBack();
 
+  /* Plan gating cache + applicator. Declared before initTopnav because the
+     topnav/menu mount races the entitlements fetch — whichever lands last
+     still applies the lock classes. */
+  var _caps=null;
+  function applyCapLocks(root){
+    if(!_caps)return;
+    (root||document).querySelectorAll('[data-cap]').forEach(el=>{
+      el.classList.toggle('locked',
+        _caps[el.getAttribute('data-cap')]===false);
+    });
+  }
+
   /* Top navbar — horizontal destination strip injected into every page.
      Hidden on desktop where the admin sidebar exists (body.has-shell);
      always visible on immersive pages and on mobile. */
@@ -60,7 +73,7 @@
     nav.className='app-topnav';
     nav.innerHTML='<a class="tb-brand" href="/"><img class="tb-logo" src="/static/img/logo-mark.png" alt="">IbhaX</a>'
       +NAV.filter(n=>n.href).map(n=>
-        `<a class="tn-link${n.id===active?' sel':''}" href="${n.href}"${n.admin?' data-admin="1"':''}>${n.ico}${n.label}</a>`).join('')
+        `<a class="tn-link${n.id===active?' sel':''}" href="${n.href}"${n.admin?' data-admin="1"':''}${n.cap?` data-cap="${n.cap}"`:''}>${n.ico}${n.label}${n.cap?'<span class="tn-lock">🔒</span>':''}</a>`).join('')
       +'<button class="tn-burger ui-btn ui-btn-ghost ui-btn-icon" title="Apps — all pages"></button>';
     AppNav.attach(nav.querySelector('.tn-burger'),active);
     nav.addEventListener('pointerover',e=>{
@@ -72,6 +85,7 @@
       ||document.querySelector('main.main')
       ||document.body;
     host.insertBefore(nav,host.firstChild);
+    applyCapLocks(nav);
     if(window.NovaMotion)NovaMotion.enter(nav,{y:-12,dur:NovaMotion.D.med});
     if(window.NovaAuth&&NovaAuth.applyRoleNav)NovaAuth.applyRoleNav();
   }
@@ -95,7 +109,7 @@
     menu.className='ui-menu';
     menu.innerHTML=NAV.map(n=>n.sec
       ?`<div class="mi-head">${n.sec}</div>`
-      :`<a class="mi appnav-mi ${n.id===active?'sel':''}" href="${n.href}"${n.admin?' data-admin="1"':''}>${n.ico}<span class="tb-tx">${n.label}</span></a>`).join('');
+      :`<a class="mi appnav-mi ${n.id===active?'sel':''}" href="${n.href}"${n.admin?' data-admin="1"':''}${n.cap?` data-cap="${n.cap}"`:''}>${n.ico}<span class="tb-tx">${n.label}</span>${n.cap?'<span class="tn-lock">🔒</span>':''}</a>`).join('');
     // Hover prefetch: warm each destination as the pointer travels the menu.
     menu.addEventListener('pointerover',e=>{
       const a=e.target.closest('a.mi');
@@ -110,6 +124,7 @@
     BACK,
     prefetch,
     goBack,
+    applyCapLocks,
     /* Toggle an anchored app-switcher popover on a button click.
        Empty buttons get the grid glyph so any page can wire just an
        <button id="appNavBtn"></button> in the top-left corner. */
@@ -128,6 +143,7 @@
         if(menu){close();return;}
         menu=buildMenu(active);
         document.body.appendChild(menu);
+        applyCapLocks(menu);
         if(window.NovaAuth&&NovaAuth.applyRoleNav)NovaAuth.applyRoleNav();
         const r=btn.getBoundingClientRect();
         const mw=menu.offsetWidth,mh=menu.offsetHeight;
@@ -155,4 +171,17 @@
       return this.attach(btn,active);
     },
   };
+
+  /* Plan gating — fetch the capability map once and let applyCapLocks
+     paint it onto nav markup as it mounts. The badge is a hint; the
+     backend enforces the real gate. */
+  const _t=localStorage.getItem('nova_user_token');
+  if(_t)fetch('/api/entitlements',{headers:{'x-user-token':_t}})
+    .then(r=>r.ok?r.json():null)
+    .then(j=>{
+      if(!j||!j.capabilities)return;
+      _caps=j.capabilities;
+      applyCapLocks();
+    })
+    .catch(()=>{});
 })();

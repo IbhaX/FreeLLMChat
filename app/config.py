@@ -90,6 +90,13 @@ class Settings(BaseSettings):
     research_sandbox_timeout_s: int = 30
     research_sandbox_mem_mb: int = 512
 
+    # ---- Razorpay payments ----
+    # Public key id is safe to expose to the browser; the secret is
+    # backend-only and used for HMAC-SHA256 signature verification.
+    # Env vars: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET.
+    razorpay_key_id: Optional[str] = None
+    razorpay_key_secret: Optional[SecretStr] = None
+
 
 @lru_cache
 def get_settings() -> Settings:

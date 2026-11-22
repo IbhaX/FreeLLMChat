@@ -9,16 +9,20 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import Integer, case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import optional_user, require_admin, require_user_or_admin
+from app.api.deps import (entitled, optional_user, require_admin,
+                          require_user_or_admin)
 from app.crypto import decrypt_key
 from app.db import get_session
 from app.gateway import Gateway
-from app.models import ApiKey, KeyUsage, Provider, RequestLog, User
+from app.models import ApiKey, AuthToken, KeyUsage, Provider, RequestLog, User
 from app.providers.registry import build_adapter, seed_providers
 from app.schemas import (
     KeyBulkTestItem,
@@ -708,6 +712,13 @@ async def memory_graph(user: User | None = Depends(require_user_or_admin)) -> di
     from app.services import astra_memory
     from app.services import memory_graph as mg
 
+    # Plan gate: plus+. user=None means ADMIN_TOKEN or no-auth local mode —
+    # both fully entitled. Signed-in users are checked against their tier.
+    if user is not None and not entitled(user, "memory_explorer"):
+        from app.services import entitlements
+        raise HTTPException(403, entitlements.upgrade_error(
+            "memory_explorer"))
+
     return await asyncio.to_thread(
         mg.graph_cached, astra_memory.tenant_key(user))
 
@@ -833,3 +844,86 @@ async def recent_requests(
         }
         for r in rows
     ]
+
+
+# ---------- user management ----------
+
+class UserUpdateIn(BaseModel):
+    """Admin user-management payload — plan and/or access toggle."""
+    plan: str | None = None
+    disabled: bool | None = None
+
+
+def _user_out(u: User) -> dict[str, Any]:
+    return {
+        "id": u.id, "username": u.username, "email": u.email,
+        "display_name": u.display_name, "role": u.role, "plan": u.plan,
+        "disabled": u.disabled,
+        "deleted_at": u.deleted_at.isoformat() if u.deleted_at else None,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
+@user_router.get("/users")
+async def list_users(
+        session: AsyncSession = Depends(get_session)) -> list[dict[str, Any]]:
+    """Every registered account — the dashboard's user-management table."""
+    rows = (await session.execute(
+        select(User).order_by(User.id))).scalars().all()
+    return [_user_out(u) for u in rows]
+
+
+@router.patch("/users/{uid}")
+async def update_user(
+        uid: int, body: UserUpdateIn,
+        request: Request,
+        session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    """Upgrade/downgrade a user's plan or toggle their access.
+
+    Admin-only (router dependency). A plan change takes effect on the
+    user's next request — entitlements read ``user.plan`` live."""
+    from app.services import payments
+    u = await session.get(User, uid)
+    if u is None:
+        raise HTTPException(404, "user not found")
+    if body.plan is not None:
+        if body.plan not in payments.PLANS:
+            raise HTTPException(400, f"unknown plan '{body.plan}'")
+        u.plan = body.plan
+    if body.disabled is not None:
+        caller = await optional_user(request)
+        if caller is not None and caller.id == uid and body.disabled:
+            raise HTTPException(400, "cannot disable your own account")
+        u.disabled = body.disabled
+        if not body.disabled:
+            u.deleted_at = None  # re-enabling restores a soft-delete too
+    await session.commit()
+    return _user_out(u)
+
+
+@router.delete("/users/{uid}")
+async def delete_user(
+        uid: int, request: Request, mode: str = "soft",
+        session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    """Delete a user — ``mode=soft`` (default) disables the account, marks
+    it deleted and revokes every session token (recoverable via PATCH
+    ``disabled:false``); ``mode=hard`` removes the row permanently.
+    Tokens cascade-delete; owned resources are left with NULL owners."""
+    if mode not in ("soft", "hard"):
+        raise HTTPException(400, "mode must be 'soft' or 'hard'")
+    u = await session.get(User, uid)
+    if u is None:
+        raise HTTPException(404, "user not found")
+    caller = await optional_user(request)
+    if caller is not None and caller.id == uid:
+        raise HTTPException(400, "cannot delete your own account")
+    out = _user_out(u)
+    if mode == "soft":
+        u.disabled = True
+        u.deleted_at = datetime.now(timezone.utc)
+        await session.execute(
+            delete(AuthToken).where(AuthToken.user_id == uid))
+    else:
+        await session.delete(u)
+    await session.commit()
+    return {"deleted": mode, "user": out}

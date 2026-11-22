@@ -22,6 +22,7 @@ from app.api.group_routes import public_router as share_public_router
 from app.api.group_routes import router as group_router
 from app.api.knowledge_routes import router as knowledge_router
 from app.api.openai_routes import router as openai_router
+from app.api.payment_routes import router as payment_router
 from app.api.person_routes import router as person_router
 from app.api.research_routes import router as research_router
 from app.api.research_v2_routes import router as research_v2_router
@@ -126,6 +127,7 @@ async def no_cache_html(request, call_next):
     return resp
 
 app.include_router(openai_router)
+app.include_router(payment_router)
 app.include_router(admin_router)
 app.include_router(admin_user_router)
 app.include_router(auth_router)
@@ -258,6 +260,11 @@ async def library_page() -> Response:
 @app.get("/memory", include_in_schema=False)
 async def memory_page() -> Response:
     return render_page(static_dir=static_dir, name="memory.html")
+
+
+@app.get("/pay", include_in_schema=False)
+async def pay_page() -> Response:
+    return render_page(static_dir=static_dir, name="pay.html")
 
 
 @app.get("/textbook/{run_id}", include_in_schema=False)

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 from app.api.deps import (
     optional_user, require_admin, require_user,
-    require_user_or_admin)
+    require_user_or_admin, subject_for)
 from app.db import get_session
 from app.models import AgentConfig
 from app.schemas import AgentChatRequest, AgentCreate, AgentOut, AgentUpdate
@@ -166,6 +166,14 @@ async def agent_chat(
         raise HTTPException(403, "agent is disabled")
     gw = _gateway(request)
     _user = await optional_user(request)
+    if _user is not None:
+        from app.services import usage
+        ok, reason = await usage.check_quota(
+            session, subject_for(_user), "chat", _user.plan)
+        if not ok:
+            raise HTTPException(429, reason)
+        await usage.record(session, subject_for(_user), "chat",
+                           model=body.model or a.model or "")
     _owner = _user.id if _user else None
     from app.db import get_session_factory
     from app.services import agent_log

@@ -7,10 +7,80 @@ const fmt={
 };
 const ICONS={req:'⇄',err:'⚠',tin:'↓',tout:'↑',prov:'⬡',key:'⚿',cd:'⏸'};
 
+let _plans=null;
+async function loadUsers(){
+  if(!_plans){
+    const pj=await adminApi('/api/plans');
+    _plans=(pj.plans||[]).map(p=>p.id);
+  }
+  const users=await adminApi('/admin/users');
+  const q=($('#uq')?.value||'').toLowerCase();
+  const rows=users.filter(u=>!q||(u.username+' '+u.email+' '+u.display_name)
+    .toLowerCase().includes(q));
+  document.querySelector('#users tbody').innerHTML=rows.map(u=>`<tr>
+    <td><b>${esc(u.display_name||u.username)}</b><br>
+      <span class="tx-3 t-xs">@${esc(u.username)} · #${u.id}</span></td>
+    <td class="tx-2">${esc(u.email||'—')}</td>
+    <td><span class="pill ${u.role==='admin'?'ok':'mut'}">${esc(u.role)}</span></td>
+    <td><select class="ui-select" style="width:110px"
+        onchange="setPlan(${u.id},this.value)">
+      ${_plans.map(p=>`<option value="${p}"${p===u.plan?' selected':''}>${p}</option>`).join('')}
+    </select></td>
+    <td>${u.deleted_at
+        ?`<span class="pill bad">deleted</span>
+          <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="toggleUser(${u.id},0)">restore</button>`
+        :`<button class="ui-btn ui-btn-ghost ui-btn-sm ${u.disabled?'ui-btn-danger':''}"
+          onclick="toggleUser(${u.id},${u.disabled?0:1})">${u.disabled?'disabled':'enabled'}</button>
+          <button class="ui-btn ui-btn-ghost ui-btn-sm ui-btn-danger"
+          onclick="deleteUser(${u.id},'${esc(u.username)}')">delete</button>`}</td>
+    <td class="tx-3 t-xs">${u.created_at?new Date(u.created_at).toLocaleDateString():'—'}</td>
+  </tr>`).join('')||'<tr><td colspan="6" class="tx-3">No users</td></tr>';
+}
+async function setPlan(id,plan){
+  try{await adminApi(`/admin/users/${id}`,{method:'PATCH',
+      body:JSON.stringify({plan})});
+    toast(`Plan → ${plan}`,'ok');}
+  catch(e){toast(e.message||'Plan change failed','err');}
+  loadUsers().catch(()=>{});
+}
+async function deleteUser(id,username){
+  const v=await NovaUI.Dialog.form({
+    title:`Delete @${username}`,
+    message:'Soft delete disables the account and revokes sessions '
+      +'(recoverable). Hard delete removes the user permanently.',
+    fields:[
+      {name:'mode',type:'select',label:'Delete mode',options:[
+        {value:'soft',label:'Soft delete — recoverable'},
+        {value:'hard',label:'Hard delete — permanent'}]},
+      {name:'confirm',type:'text',required:true,
+       label:`Type "${username}" to confirm`},
+    ],
+    confirmLabel:'Delete',danger:true,
+  });
+  if(!v)return;
+  if((v.confirm||'').trim()!==username){
+    toast('Confirmation text did not match — user not deleted','err');return;
+  }
+  try{
+    const r=await adminApi(`/admin/users/${id}?mode=${v.mode}`,{method:'DELETE'});
+    toast(v.mode==='hard'?`@${username} permanently deleted`
+        :`@${username} soft-deleted`,'ok');
+  }catch(e){toast(e.message||'Delete failed','err');}
+  loadUsers().catch(()=>{});
+}
+async function toggleUser(id,dis){
+  try{await adminApi(`/admin/users/${id}`,{method:'PATCH',
+      body:JSON.stringify({disabled:!!dis})});
+    toast(dis?'Account disabled':'Account enabled','ok');}
+  catch(e){toast(e.message||'Access change failed','err');}
+  loadUsers().catch(()=>{});
+}
+
 async function refresh(){
   const [stats,providers,keys,reqs]=await Promise.all([
     adminApi('/admin/stats'),adminApi('/admin/providers'),
     adminApi('/admin/keys'),adminApi('/admin/requests?limit=30')]);
+  loadUsers().catch(()=>{});
 
   $('#health').textContent='● online';$('#health').className='pill ok';
 
@@ -146,4 +216,5 @@ window.addEventListener('admin-ready',()=>refresh().catch(e=>{
   if(e.status===403)AdminShell.restricted();
   else toast(e.message||'Failed to load','err');}));
 setInterval(()=>{const d=document.getElementById('adminDot');if(d&&d.classList.contains('ok'))refresh();},15000);
+document.getElementById('uq').oninput=()=>loadUsers().catch(()=>{});
 if(innerWidth<=820)document.getElementById('menuBtn').style.display='grid';

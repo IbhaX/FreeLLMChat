@@ -18,7 +18,7 @@
       <div><div style="font-weight:700;font-size:14px">IbhaX</div><div style="font-size:10px;color:var(--text-3)">Gateway admin</div></div>
       <button class="ui-btn ui-btn-ghost ui-btn-icon" id="sbClose" style="margin-left:auto;display:none">✕</button>
     </div>
-    ${NAV.map(n=>n.sec?`<div class="nav-sec">${n.sec}</div>`:`<a class="ui-navitem ${n.id===active?'active':''}" href="${n.href}"${n.admin?' data-admin="1"':''}>${n.ico}${n.label}</a>`).join('')}
+    ${NAV.map(n=>n.sec?`<div class="nav-sec">${n.sec}</div>`:`<a class="ui-navitem ${n.id===active?'active':''}" href="${n.href}"${n.admin?' data-admin="1"':''}${n.cap?` data-cap="${n.cap}"`:''}>${n.ico}${n.label}${n.cap?'<span class="tn-lock">🔒</span>':''}</a>`).join('')}
     <div style="flex:1"></div>
     <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-top:1px solid var(--border-1)">
       <span id="adminDot" class="pill mut" style="font-size:9px;display:none">●</span>
@@ -63,6 +63,7 @@
       // Hide admin-only items immediately when the cached role says so;
       // NovaAuth re-applies once /v1/auth/me resolves.
       if(window.NovaAuth&&NovaAuth.applyRoleNav)NovaAuth.applyRoleNav();
+      if(window.AppNav&&AppNav.applyCapLocks)AppNav.applyCapLocks(nav);
       document.querySelector('#logoutBtn').onclick=()=>{
         if(window.NovaAuth)NovaAuth.logout();
         else location.href='/login';

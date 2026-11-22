@@ -164,7 +164,8 @@ def _insert(col_name: str, doc: dict[str, Any]) -> None:
 
 def store_short(user_id: str, conversation_id: str, role: str, text: str) -> None:
     """One chat turn into short-term memory, owned by ``user_id``."""
-    text = (text or "").strip()
+    from app.response_protocol import reply_to_markdown
+    text = reply_to_markdown(text or "")
     if not text or _db() is None:
         return
     try:
@@ -188,7 +189,8 @@ def store_short(user_id: str, conversation_id: str, role: str, text: str) -> Non
 
 def store_long(user_id: str, fact: str, source: str = "auto") -> None:
     """Durable extracted fact into long-term memory, owned by ``user_id``."""
-    fact = (fact or "").strip()
+    from app.response_protocol import reply_to_markdown
+    fact = reply_to_markdown(fact or "")
     if not fact or _db() is None:
         return
     try:
@@ -349,6 +351,10 @@ async def extract_and_store(gateway, user_id: str, user_text: str,
         tenant = _writable_tenant(user_id)
     except PermissionError:
         return
+    # Render any nova-response envelope before the extractor sees it —
+    # facts must be drawn from readable prose, not a JSON blob.
+    from app.response_protocol import reply_to_markdown
+    assistant_text = reply_to_markdown(assistant_text)
     # Skip the extra LLM call only on truly trivial inputs — short
     # self-disclosures ("my name is Albin") are exactly the durable facts
     # this extractor exists for, so the bar is low on purpose.

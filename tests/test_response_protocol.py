@@ -253,3 +253,65 @@ def test_flowchart_is_allowlisted_and_prompt_teaches_when_to_use_it():
     assert "architecture_diagram" in prompt
     assert "flowchart" in prompt
     assert "do not substitute a text/ASCII diagram" in prompt
+
+
+# --------------------------------------------------- reply_to_markdown
+
+def _pc_env() -> dict:
+    return {
+        "response_type": "person_card",
+        "content": "That's the name I have stored for you in memory.",
+        "components": [{
+            "type": "person_card",
+            "data": {
+                "name": "Albin Anthony",
+                "description": "Preferred name",
+                "facts": [{"label": "Preferred name",
+                           "value": "Albin Anthony"},
+                          {"label": "Source", "value": "user"}],
+            },
+        }],
+    }
+
+
+def test_reply_to_markdown_renders_fenced_envelope():
+    import json
+    from app.response_protocol import reply_to_markdown
+    fenced = "```nova-response\n" + json.dumps(_pc_env()) + "\n```"
+    md = reply_to_markdown(fenced)
+    assert "nova-response" not in md
+    assert "```" not in md
+    assert "{" not in md
+    assert "name I have stored" in md
+    assert "**Albin Anthony**" in md
+    assert "- Preferred name: Albin Anthony" in md
+
+
+def test_reply_to_markdown_renders_bare_and_quoted_envelope():
+    import json
+    from app.response_protocol import reply_to_markdown
+    bare = "nova-response " + json.dumps(_pc_env())
+    assert "nova-response" not in reply_to_markdown(bare)
+    quoted = json.dumps(bare)  # JSON-string-wrapped variant
+    md = reply_to_markdown(quoted)
+    assert "nova-response" not in md
+    assert "Albin Anthony" in md
+
+
+def test_reply_to_markdown_keeps_surrounding_prose():
+    import json
+    from app.response_protocol import reply_to_markdown
+    fenced = "```nova-response\n" + json.dumps(_pc_env()) + "\n```"
+    md = reply_to_markdown("Here you go:\n" + fenced + "\nDone.")
+    assert md.startswith("Here you go:")
+    assert md.endswith("Done.")
+    assert "```" not in md
+
+
+def test_reply_to_markdown_passes_plain_text_and_handles_garbage():
+    from app.response_protocol import reply_to_markdown
+    assert reply_to_markdown("  just text  ") == "just text"
+    assert reply_to_markdown("") == ""
+    # Unparseable envelope text is left alone rather than crash.
+    assert "nova-response {broken" in reply_to_markdown(
+        "nova-response {broken json")

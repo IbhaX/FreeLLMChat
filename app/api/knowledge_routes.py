@@ -7,17 +7,19 @@ from typing import Any, Optional
 from fastapi import (APIRouter, Depends, File, Form, HTTPException,
                      Request, UploadFile)
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import (optional_user, require_user,
+from app.api.deps import (optional_user, require_capability, require_user,
                           subject_for)
 from app.db import get_session
 from app.models import Collection, Document, DocumentChunk, User
 from app.services import documents as docs
+from app.services.auth import plan_limits
 
 router = APIRouter(prefix="/v1/knowledge", tags=["knowledge"],
-                   dependencies=[Depends(require_user)])
+                   dependencies=[Depends(require_capability(
+                                     "library_captures"))])
 
 
 class CollectionBody(BaseModel):
@@ -46,6 +48,15 @@ async def collections(session: AsyncSession = Depends(get_session),
 async def create_collection(body: CollectionBody,
                             session: AsyncSession = Depends(get_session),
                             user: User | None = Depends(optional_user)):
+    if user is not None:
+        lim = plan_limits(user.plan).get("collections", 0)
+        if lim > 0:
+            n = (await session.execute(select(func.count(Collection.id))
+                 .where(Collection.owner_id == user.id))).scalar() or 0
+            if n >= lim:
+                raise HTTPException(
+                    429, f"collection limit reached for the {user.plan} "
+                         f"plan ({n}/{lim})")
     c = Collection(name=body.name.strip(), description=body.description,
                    owner_id=_scope(user))
     session.add(c)
@@ -86,6 +97,15 @@ async def upload_document(file: UploadFile = File(...),
                           collection_id: Optional[int] = Form(None),
                           session: AsyncSession = Depends(get_session),
                           user: User | None = Depends(optional_user)):
+    if user is not None:
+        lim = plan_limits(user.plan).get("documents", 0)
+        if lim > 0:
+            n = (await session.execute(select(func.count(Document.id))
+                 .where(Document.owner_id == user.id))).scalar() or 0
+            if n >= lim:
+                raise HTTPException(
+                    429, f"document limit reached for the {user.plan} "
+                         f"plan ({n}/{lim})")
     data = await file.read()
     try:
         doc = await docs.ingest(session, name=file.filename or "upload",

@@ -100,7 +100,7 @@ def test_choices_returns_actions():
         r = c.post(f"/v1/roleplay/rooms/{rid}/choices", json={})
         assert r.status_code == 200
         choices = r.json()["choices"]
-    assert 2 <= len(choices) <= 5
+    assert 2 <= len(choices) <= 10
     assert all(isinstance(x, str) and x for x in choices)
 
 
