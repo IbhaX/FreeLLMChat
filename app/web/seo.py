@@ -15,9 +15,9 @@ from html import escape
 
 from starlette.requests import Request
 
-SITE_NAME = "IbhaX"
+SITE_NAME = "iChat"
 DEFAULT_DESCRIPTION = (
-    "IbhaX is one AI workspace for every model: automatic failover across "
+    "iChat is one AI workspace for every model: automatic failover across "
     "providers, rich structured answers, deep research, agents and roleplay."
 )
 OG_IMAGE = "/static/img/logo.png"          # 1200x800
@@ -34,37 +34,37 @@ class PageSEO:
 
 PAGES: dict[str, PageSEO] = {
     "landing.html": PageSEO(
-        "IbhaX - Every AI model in one workspace",
-        "Chat with every leading AI model in one workspace. IbhaX routes "
+        "iChat | Every AI model in one workspace",
+        "Chat with every leading AI model in one workspace. iChat routes "
         "across providers with automatic failover, renders rich structured "
         "answers, and runs deep research, agents and roleplay.",
         indexable=True,
     ),
     "login.html": PageSEO(
-        "Sign in - IbhaX",
-        "Sign in or create your IbhaX account to chat with every AI model, "
+        "Sign in | iChat",
+        "Sign in or create your iChat account to chat with every AI model, "
         "run deep research and build agents in one workspace.",
         indexable=True,
     ),
-    "chat.html": PageSEO("Chat - IbhaX"),
-    "dashboard.html": PageSEO("Dashboard - IbhaX"),
-    "keys.html": PageSEO("API Keys - IbhaX"),
-    "settings.html": PageSEO("Settings - IbhaX"),
-    "profile.html": PageSEO("Profile - IbhaX"),
-    "research.html": PageSEO("Research - IbhaX"),
-    "worlds.html": PageSEO("Worlds - IbhaX"),
-    "roleplay.html": PageSEO("The Stage - IbhaX"),
-    "agents.html": PageSEO("Agents - IbhaX"),
-    "skills.html": PageSEO("Skills - IbhaX"),
-    "library.html": PageSEO("Library - IbhaX"),
-    "memory.html": PageSEO("Memory - IbhaX"),
-    "artifacts.html": PageSEO("Artifactory - IbhaX"),
-    "connectors.html": PageSEO("Connectors - IbhaX"),
-    "pay.html": PageSEO("Billing - IbhaX"),
-    "textbook.html": PageSEO("Textbook - IbhaX Research"),
+    "chat.html": PageSEO("Chat | iChat"),
+    "dashboard.html": PageSEO("Dashboard | iChat"),
+    "keys.html": PageSEO("API Keys | iChat"),
+    "settings.html": PageSEO("Settings | iChat"),
+    "profile.html": PageSEO("Profile | iChat"),
+    "research.html": PageSEO("Research | iChat"),
+    "worlds.html": PageSEO("Worlds | iChat"),
+    "roleplay.html": PageSEO("The Stage | iChat"),
+    "agents.html": PageSEO("Agents | iChat"),
+    "skills.html": PageSEO("Skills | iChat"),
+    "library.html": PageSEO("Library | iChat"),
+    "memory.html": PageSEO("Memory | iChat"),
+    "artifacts.html": PageSEO("Artifactory | iChat"),
+    "connectors.html": PageSEO("Connectors | iChat"),
+    "pay.html": PageSEO("Billing | iChat"),
+    "textbook.html": PageSEO("Textbook | iChat Research"),
     "share.html": PageSEO(
-        "Shared conversation - IbhaX",
-        "A conversation shared from IbhaX, the AI workspace for every model.",
+        "Shared conversation | iChat",
+        "A conversation shared from iChat, the AI workspace for every model.",
     ),
 }
 
@@ -76,7 +76,7 @@ SITEMAP_PAGES: tuple[tuple[str, str, str, str], ...] = (
 
 
 def page_seo(name: str) -> PageSEO:
-    return PAGES.get(name) or PageSEO(f"{SITE_NAME}")
+    return PAGES.get(name) or PageSEO(SITE_NAME)
 
 
 def public_origin(request: Request | None) -> str:
@@ -181,8 +181,8 @@ def seo_head(name: str, request: Request | None = None) -> str:
 
 def web_manifest() -> dict:
     return {
-        "name": "IChat",
-        "short_name": "IChat",
+        "name": "iChat",
+        "short_name": "iChat",
         "description": DEFAULT_DESCRIPTION,
         "start_url": "/chat",
         "scope": "/",
