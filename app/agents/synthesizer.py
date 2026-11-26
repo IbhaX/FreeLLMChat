@@ -26,7 +26,7 @@ log = logging.getLogger("nova.synthesizer")
 SYNTHESIZER_MODEL = os.environ.get("SYNTHESIZER_MODEL", "auto")
 _SYNTH_TIMEOUT_S = 45.0
 
-_SYSTEM = """You are IbhaX's identity synthesizer. You are given a queried name \
+_SYSTEM = """You are iChat's identity synthesizer. You are given a queried name \
 and a JSON list of public profile candidates found across the web (GitHub, \
 LinkedIn, Wikipedia, social search listings). Fuse them into ONE \
 assessment and reply with ONLY a JSON object (no prose, no markdown \

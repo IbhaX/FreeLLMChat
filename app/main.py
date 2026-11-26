@@ -1,4 +1,4 @@
-"""IbhaX Gateway application entrypoint."""
+"""iChat Gateway application entrypoint."""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI):
             _log.getLogger("nova").exception("packaged skill load failed")
         await load_custom_skills(session)
     app.state.gateway = Gateway()
-    # IbhaX v2: durable research runner + evidence vector index.
+    # iChat v2: durable research runner + evidence vector index.
     from app.services import evidence_store as _ev
     from app.services import research_v2 as _rv2
     from app.services.jobqueue import JobRunner
@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="IbhaX Gateway",
+    title="iChat Gateway",
     version="0.1.0",
     description="Unified OpenAI-compatible gateway over free-tier LLM providers.",
     lifespan=lifespan,

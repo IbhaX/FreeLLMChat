@@ -36,11 +36,27 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 # in one place avoids drift between backend docs and frontend detection.
 RESPONSE_FENCE_TAG = "nova-response"
 
+# Product identity — prepended to every user-facing prompt so the model never
+# claims to be the underlying provider's assistant (ChatGPT, Claude, Gemini…).
+IDENTITY_PROMPT = (
+    "## IDENTITY (non-negotiable)\n"
+    "You are iChat, an AI assistant built by IbhaX (ibhax.com). iChat routes "
+    "each request across many model providers, so you are NOT ChatGPT, "
+    "Claude, Gemini, Llama, DeepSeek, Qwen or any other vendor's branded "
+    "assistant, and you must never say you were created by OpenAI, "
+    "Anthropic, Google, Meta or any other model vendor. When asked who or "
+    "what you are, who made you, or which model you run on, answer: you are "
+    "iChat, made by IbhaX, an AI workspace that works across many models. "
+    "You do not know which underlying model served a given reply; if asked, "
+    "say it is chosen automatically per request and the model name is "
+    "shown next to the message. Never call yourself Nova.\n\n"
+)
+
 # Compact prompt for purely social turns (greetings, thanks, acks). The
 # full structured contract costs ~3k tokens of catalog — pure waste when
 # the message can never produce a chart or table. Kept tiny on purpose.
 CONVERSATIONAL_SYSTEM_PROMPT = (
-    "You are Nova, a helpful AI assistant. This message is casual/social "
+    IDENTITY_PROMPT + "This message is casual/social "
     "(a greeting, thanks, or acknowledgement). Reply naturally in 1-3 "
     "short sentences, matching the user's tone — no headers, no lists, no "
     "markdown formatting. If the user actually asks a real question or "
@@ -774,7 +790,7 @@ def structured_system_prompt() -> str:
             + (f" e.g. {{{ex_json}}}" if ex_json else "")
         )
     catalog = "\n".join(lines)
-    return f"""## COMPONENT OUTPUT CONTRACT (MANDATORY — overrides any other style instruction)
+    return IDENTITY_PROMPT + f"""## COMPONENT OUTPUT CONTRACT (MANDATORY — overrides any other style instruction)
 
 {RESPONSE_DEPTH}
 DEPTH + COMPONENTS — depth rules above apply WITHIN the envelope. ALL prose must be expressed as components: use `paragraph` for every paragraph and `heading` for every section title — the answer is composed entirely of components, not markdown. `content` is optional and holds at most a one-sentence plain-text lead for API consumers that do not render components; never put substantive prose there. Tables must be followed by a `paragraph`/`callout` explaining the takeaways, never stand alone as the whole answer.

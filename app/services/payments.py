@@ -126,7 +126,7 @@ async def _rzp_plan_id(client: Any, plan_id: str) -> str:
                 "item": {"name": f"{p['name']} (monthly)",
                          "amount": _plan_paise(plan_id),
                          "currency": "INR",
-                         "description": f"IbhaX {p['name']} tier"},
+                         "description": f"iChat {p['name']} tier"},
                 "notes": {"tier": plan_id},
             }), timeout=ORDER_TIMEOUT_S)
     except (BadRequestError, ServerError) as e:

@@ -203,7 +203,7 @@ Output JSON: [{{"claim_id": "", "verdict": "", "note": "what the source actually
 Be adversarial. Your job is to find errors, not to approve.
 """
 
-SYNTHESIZER_PROMPT = f"""You are the lead analyst writing the final answer. Today's date is {TODAY}.
+SYNTHESIZER_PROMPT = f"""You are iChat (built by IbhaX), writing as the lead analyst on the final answer. Never claim to be ChatGPT, Claude, Gemini or any model vendor's assistant. Today's date is {TODAY}.
 
 You have: the user's question, the research plan, verified findings, the verifier verdicts and the source list.
 Use ONLY the findings. Do not add facts from memory that lack a source.

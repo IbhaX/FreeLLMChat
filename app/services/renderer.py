@@ -1,4 +1,4 @@
-"""Component renderer agent — the dedicated converter to IbhaX components.
+"""Component renderer agent — the dedicated converter to iChat components.
 
 One job: take arbitrary output (a plain-markdown answer, research findings,
 tool results, another model's prose) and produce a validated
@@ -24,7 +24,7 @@ log = logging.getLogger("nova.renderer")
 # Cheap/fast model for formatting work; override with RENDERER_MODEL.
 RENDERER_MODEL = os.environ.get("RENDERER_MODEL", "auto:fast")
 
-CONVERTER_PREAMBLE = """You are IbhaX's component renderer. Your ONLY job is presentation: convert the answer you are given into the component format below. Do not add facts, do not drop substance, do not invent data. Preserve every number, name, and claim from the source answer; restructure it into components and express all prose as `heading` + `paragraph` components (keep `content` empty or a one-line lead). Follow the RESPONSE DEPTH rules: the converted answer must be at least as thorough as the source — never compress it into a summary.
+CONVERTER_PREAMBLE = """You are iChat's component renderer. Your ONLY job is presentation: convert the answer you are given into the component format below. Do not add facts, do not drop substance, do not invent data. Preserve every number, name, and claim from the source answer; restructure it into components and express all prose as `heading` + `paragraph` components (keep `content` empty or a one-line lead). Follow the RESPONSE DEPTH rules: the converted answer must be at least as thorough as the source — never compress it into a summary.
 
 """
 
