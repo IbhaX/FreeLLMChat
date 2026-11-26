@@ -126,7 +126,7 @@
       cover.classList.remove('tbl-skel-cover');
       cover.querySelector('.tbl-cover-lines').innerHTML = '';
       const t = el('div', 'tbl-cover-title');
-      t.innerHTML = '<span class="tbl-cover-kick">IbhaX Research</span>' +
+      t.innerHTML = '<span class="tbl-cover-kick">iChat Research</span>' +
         '<h1>' + esc(opts.title || 'Research textbook') + '</h1>';
       cover.insertBefore(t, cover.lastChild);
       sections.forEach(function (sec) {
@@ -303,7 +303,7 @@
     cov.innerHTML =
       '<div class="tbl-cover-main">' +
       '<div class="tbl-cover-emb"></div>' +
-      '<div class="tbl-cover-title"><span class="tbl-cover-kick">IbhaX Research</span>' +
+      '<div class="tbl-cover-title"><span class="tbl-cover-kick">iChat Research</span>' +
       '<h1>' + esc(opts.title || 'Research textbook') + '</h1></div>' +
       '<div class="tbl-cover-status">Composing your textbook…</div>' +
       '<div class="tbl-prog"><div class="tbl-prog-bar"><i></i></div>' +

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Textbook - IbhaX Research</title>
+<title>Textbook - iChat Research</title>
 <script>
   // Apply the saved app theme before paint so the page chrome never flashes.
   document.documentElement.dataset.theme = localStorage.getItem('ui-theme') || 'dark';
@@ -19,7 +19,7 @@
 <div class="tb-top" id="tbTop">
   <a class="tb-btn" href="/research" title="Back to research">← Research</a>
   <button class="tb-btn tb-tocbtn" id="tbTocBtn" title="Table of contents">☰</button>
-  <span class="tb-logo">IbhaX</span>
+  <span class="tb-logo">iChat</span>
   <span class="tb-title" id="tbTitle">Textbook</span>
   <button class="tb-btn" data-theme-btn title="Theme"></button>
   <button class="tb-btn" id="tbRe" title="Regenerate textbook">↻</button>
@@ -277,7 +277,7 @@
         if (doc === '__superseded__' || ctl.signal.aborted) return;
         if (!doc) throw new Error('empty document');
         book.innerHTML = '';
-        document.title = (doc.title || 'Textbook') + ' - IbhaX Research';
+        document.title = (doc.title || 'Textbook') + ' - iChat Research';
         document.getElementById('tbTitle').textContent = doc.title || 'Textbook';
         var res = window.NovaTextbook.render(doc, book, {});
         if (!printMode) {

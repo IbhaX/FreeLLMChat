@@ -114,7 +114,7 @@ async function subscribe(p){
     const rzp=new window.Razorpay({
       key:keyId,
       subscription_id:sub.subscription_id,
-      name:'IbhaX '+p.name,
+      name:'iChat '+p.name,
       description:p.name+' plan — '+usd(p.usd_cents)+'/mo ('+
         inr(sub.amount)+' INR)',
       handler:async function(resp){

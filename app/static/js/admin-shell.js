@@ -15,7 +15,7 @@
     const role=u?u.role:'';
     return `<div class="sb-head" style="display:flex;align-items:center;gap:10px;padding:2px 6px 10px">
       <button class="avatar" id="appNavBtn" title="Apps — all pages" style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;border:0;cursor:pointer">IX</button>
-      <div><div style="font-weight:700;font-size:14px">IbhaX</div><div style="font-size:10px;color:var(--text-3)">AI workspace</div></div>
+      <div><div style="font-weight:700;font-size:14px">iChat</div><div style="font-size:10px;color:var(--text-3)">AI workspace</div></div>
       <button class="ui-btn ui-btn-ghost ui-btn-icon" id="sbClose" style="margin-left:auto;display:none">✕</button>
     </div>
     ${NAV.map(n=>n.sec?`<div class="nav-sec">${n.sec}</div>`:`<a class="ui-navitem ${n.id===active?'active':''}" href="${n.href}"${n.admin?' data-admin="1"':''}${n.cap?` data-cap="${n.cap}"`:''}>${n.ico}${n.label}${n.cap?'<span class="tn-lock">🔒</span>':''}</a>`).join('')}

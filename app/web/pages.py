@@ -85,7 +85,7 @@ def render_page(
     if partial.is_file():
         markup = markup.replace('</head>', partial.read_text(encoding='utf-8') + '</head>', 1)
     markup = markup.replace(
-        '<link rel="stylesheet" href="/static/css/theme.css">',
+        '<link rel="stylesheet" href="/static/css/theme.css?v=2">',
         '<link rel="stylesheet" href="/static/css/themes.css">'
         '<link rel="stylesheet" href="/static/css/ui.css">',
     )

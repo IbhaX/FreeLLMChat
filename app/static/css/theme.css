@@ -1,2 +1,7 @@
 @import url("themes.css");
 @import url("ui.css");
+/* subtle page grid (matches iRead / iDrive) */
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(var(--hair,rgba(255,255,255,.06)) 1px,transparent 1px),linear-gradient(90deg,var(--hair,rgba(255,255,255,.06)) 1px,transparent 1px);
+  background-size:44px 44px;mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,#000 30%,transparent 75%);-webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,#000 30%,transparent 75%)}
+:root[data-theme="light"]{--hair:rgba(13,18,32,.07)}

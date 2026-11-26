@@ -146,7 +146,7 @@
         ${meta.run_id?`<div class="rx-no">№<b>${esc(String(meta.run_id))}</b></div>`:''}
       </div>
       ${rows?`<div class="rx-body">${rows}</div>`:''}
-      <div class="rx-foot"><span>${esc(assurance)}</span><span>IbhaX Research Center</span></div>
+      <div class="rx-foot"><span>${esc(assurance)}</span><span>iChat Research Center</span></div>
     </div>`;
   }
 

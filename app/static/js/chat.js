@@ -148,7 +148,7 @@ function mkConv(name){return{id:Math.random().toString(36).slice(2,9),name,msgs:
 function seed(){
   const c=mkConv('Welcome chat');
   c.msgs.push({role:'assistant',t:Date.now(),
-    text:"Welcome to **IbhaX Chat** — powered by your IbhaX Gateway.\n\nTry:\n- Asking me anything (I stream replies)\n- Typing `/` for commands\n- Agents & modes from **＋** in the message box\n- Switching models in the top bar"});
+    text:"Welcome to **iChat Chat** — powered by your iChat Gateway.\n\nTry:\n- Asking me anything (I stream replies)\n- Typing `/` for commands\n- Agents & modes from **＋** in the message box\n- Switching models in the top bar"});
   state.conversations.push(c);state.current=c;
 }
 
@@ -368,7 +368,7 @@ function maybeAttachPerson(c,msg,bubble){
 function msgEl(m){
   const row=document.createElement('div');
   row.className='msg-row '+(m.role==='user'?'row-user':'row-ai');
-  const name=m.role==='user'?'You':(m.agentName||state.agent?.name||'IbhaX');
+  const name=m.role==='user'?'You':(m.agentName||state.agent?.name||'iChat');
   row.innerHTML=`<div class="msg-av ${m.role==='user'?'me':'ai'}">${m.role==='user'?'A':((m.agentName||state.agent)?'🤖':'N')}</div>
     <div class="msg-col">
       <div class="msg-meta"><b>${esc(name)}</b><time>${timeStr(m.t)}</time>${m.model?`<time>· ${esc(m.model)}</time>`:''}</div>
@@ -377,11 +377,11 @@ function msgEl(m){
       ${m.regen?`<div class="regen-note">Regenerated ×${m.regen}</div>`:''}
     </div>`;
   const bubble=row.querySelector('.bubble');
-  // Use the IbhaX Render Engine when available; fall back to legacy md().
+  // Use the iChat Render Engine when available; fall back to legacy md().
   if(window.NovaRender&&NovaRender.ResponseRenderer){
     NovaRender.ResponseRenderer.renderMessage(m,bubble,{showActions:true});
     if(m.person)appendPersonCard(bubble,m.person);
-    // Wire IbhaX action events to existing chat handlers.
+    // Wire iChat action events to existing chat handlers.
     bubble.addEventListener('nova:action',e=>{
       const{action,message}=e.detail;
       if(action==='regen'||action==='retry')regenerate(m,row);
@@ -985,7 +985,7 @@ async function streamGroupReply(c,live){
   const inner=$('#chatInner'),scroller=$('#chatScroll');
   const messages=c.msgs
     .filter(m=>m.role==='user'||m.role==='assistant')
-    .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||'IbhaX'),content:m.text}));
+    .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||'iChat'),content:m.text}));
   const last=messages[messages.length-1];
   const payload={message:last.content,history:messages.slice(0,-1),
     agent_ids:state.group.agents.map(a=>a.id),conversation_id:c.id,
@@ -1152,7 +1152,7 @@ async function streamResearchReply(c){
   const inner=$('#chatInner'),scroller=$('#chatScroll');
   const messages=c.msgs
     .filter(m=>m.role==='user'||m.role==='assistant')
-    .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||'IbhaX'),content:m.text}));
+    .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||'iChat'),content:m.text}));
   const last=messages[messages.length-1];
   const payload={message:last.content,history:messages.slice(0,-1),model:state.model.id,
     depth:state.depth==='auto'?null:state.depth,conversation_id:c.id,save:true};
@@ -1455,7 +1455,7 @@ $('#shareBtn').onclick=async()=>{
   if(!c||!c.msgs.length)return toast('Nothing to share','err');
   const msgs=c.msgs
     .filter(m=>m.role==='user'||m.role==='assistant')
-    .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||state.agent?.name||'IbhaX'),agentName:m.agentName||null,text:m.text}));
+    .map(m=>({role:m.role,name:m.role==='user'?'You':(m.agentName||state.agent?.name||'iChat'),agentName:m.agentName||null,text:m.text}));
   try{
     const r=await fetch(API_BASE+'/v1/share',{method:'POST',headers:apiHeaders(),
       body:JSON.stringify({title:c.name,messages:msgs})});

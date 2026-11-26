@@ -1,4 +1,4 @@
-const VERSION = 'ichat-v1';
+const VERSION = 'ichat-v2';
 const SHELL = [
   '/',
   '/chat',

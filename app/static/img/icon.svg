@@ -1,1 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><defs><linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1a1a"/><stop offset="1" stop-color="#0d0d0d"/></linearGradient><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b3a3a"/><stop offset="1" stop-color="#5e2626"/></linearGradient><mask id="m"><rect width="180" height="180" fill="#fff"/><rect x="88.5" y="74" width="3" height="10" rx="1.5" fill="#000"/><rect x="87.5" y="94" width="5" height="15" rx="2.5" fill="#000"/><rect x="86" y="120" width="8" height="22" rx="4" fill="#000"/></mask></defs><rect width="180" height="180" rx="42" fill="url(#t)"/><rect x="1" y="1" width="178" height="178" rx="41" fill="none" stroke="#8b3a3a" stroke-opacity=".35" stroke-width="2"/><g mask="url(#m)" fill="url(#g)"><circle cx="90" cy="38" r="14"/><path d="M81 62H99L120 150Q121 156 115 156H65Q59 156 60 150Z"/></g><!-- chat bubbles --><rect x="112" y="98" width="42" height="28" rx="9" fill="#8b3a3a" opacity=".9"/><polygon points="122,126 128,134 134,126" fill="#8b3a3a" opacity=".9"/><circle cx="125" cy="112" r="3.5" fill="#1a1a1a"/><circle cx="133" cy="112" r="3.5" fill="#1a1a1a"/><circle cx="141" cy="112" r="3.5" fill="#1a1a1a"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+ <defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#11152b"/><stop offset="1" stop-color="#070a13"/></linearGradient>
+  <radialGradient id="glow"><stop stop-color="#6b4dff" stop-opacity=".55"/><stop offset="1" stop-color="#6b4dff" stop-opacity="0"/></radialGradient>
+  <linearGradient id="bubble" x1=".1" y1="0" x2=".9" y2="1"><stop stop-color="#8b7bff"/><stop offset=".52" stop-color="#5d7cff"/><stop offset="1" stop-color="#40d7ed"/></linearGradient>
+  <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#a9eaff"/></linearGradient>
+  <filter id="blur"><feGaussianBlur stdDeviation="24"/></filter>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur in="SourceAlpha" stdDeviation="9" result="b"/><feOffset dy="8"/><feComponentTransfer><feFuncA type="linear" slope=".35"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+ </defs>
+ <rect width="512" height="512" rx="122" fill="url(#bg)"/>
+ <circle cx="255" cy="248" r="185" fill="url(#glow)" filter="url(#blur)"/>
+ <rect x="2" y="2" width="508" height="508" rx="120" fill="none" stroke="#8d9bff" stroke-opacity=".2" stroke-width="4"/>
+ <g filter="url(#shadow)">
+  <path d="M112 169c0-31 25-56 56-56h173c31 0 56 25 56 56v119c0 31-25 56-56 56H226l-72 53c-11 8-26 0-26-14v-48c-10-10-16-24-16-40z" fill="#151b37" stroke="url(#bubble)" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M154 204h196M154 256h132" fill="none" stroke="url(#bubble)" stroke-width="18" stroke-linecap="round" opacity=".7"/>
+  <path d="M365 87l17 45 45 17-45 17-17 45-17-45-45-17 45-17z" fill="url(#spark)"/>
+  <path d="M112 91l9 24 24 9-24 9-9 24-9-24-24-9 24-9z" fill="#8d83ff" opacity=".9"/>
+ </g>
+ <circle cx="365" cy="383" r="9" fill="#56d8ee"/><circle cx="397" cy="383" r="9" fill="#8b7bff" opacity=".8"/>
+</svg>
