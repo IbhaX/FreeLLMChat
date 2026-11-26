@@ -103,3 +103,41 @@ def test_robots_points_to_sitemap() -> None:
     assert 'Sitemap: http://ichat.test/sitemap.xml' in response.text
     assert 'Disallow: /chat' in response.text
     assert 'Disallow: /v1/' in response.text
+
+
+def test_landing_has_full_seo_block() -> None:
+    client = TestClient(app)
+    response = client.get('/', headers={'host': 'ichat.test', 'x-forwarded-proto': 'https'})
+    html = response.text
+    assert html.count('<title>') == 1
+    assert html.count('name="description"') == 1
+    assert '<link rel="canonical" href="https://ichat.test/">' in html
+    assert 'property="og:image" content="https://ichat.test/static/img/logo.png"' in html
+    assert 'name="twitter:card" content="summary_large_image"' in html
+    assert 'application/ld+json' in html
+    assert 'content="index, follow' in html
+    assert 'x-robots-tag' not in response.headers
+
+
+@pytest.mark.parametrize('route', ['/chat', '/settings', '/share/example', '/pay'])
+def test_private_pages_are_noindex(route: str) -> None:
+    client = TestClient(app)
+    response = client.get(route)
+    assert response.headers['x-robots-tag'] == 'noindex, nofollow'
+    assert 'content="noindex, nofollow"' in response.text
+    assert 'rel="canonical"' not in response.text
+
+
+def test_web_manifest() -> None:
+    client = TestClient(app)
+    response = client.get('/site.webmanifest')
+    assert response.status_code == 200
+    assert response.json()['name'] == 'IbhaX'
+
+
+def test_pages_are_gzipped_but_api_is_not() -> None:
+    client = TestClient(app)
+    page = client.get('/', headers={'accept-encoding': 'gzip'})
+    assert page.headers.get('content-encoding') == 'gzip'
+    health = client.get('/healthz', headers={'accept-encoding': 'gzip'})
+    assert 'content-encoding' not in health.headers

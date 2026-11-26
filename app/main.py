@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from app.api.admin_routes import router as admin_router
@@ -36,6 +37,7 @@ from app.gateway import Gateway
 from app.logging_config import setup_logging
 from app.providers.registry import seed_providers
 from app.web.pages import VersionedStaticFiles, render_page
+from app.web.seo import SITEMAP_PAGES, public_origin, web_manifest
 
 
 @asynccontextmanager
@@ -132,6 +134,31 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+class PageGZipMiddleware:
+    """Gzip HTML pages, static assets and SEO files only.
+
+    API routes (including SSE chat streams) are passed through untouched so
+    streaming is never buffered by compression.
+    """
+
+    _PREFIXES = ("/static/", "/sitemap.xml", "/robots.txt", "/site.webmanifest")
+
+    def __init__(self, app, minimum_size: int = 1024) -> None:
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=minimum_size)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("method") in ("GET", "HEAD"):
+            path = scope.get("path", "")
+            is_page = "." not in path.rsplit("/", 1)[-1] and not path.startswith(
+                ("/v1", "/admin", "/api", "/media", "/healthz", "/docs", "/openapi"))
+            if path.startswith(self._PREFIXES) or is_page:
+                await self.gzip(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(PageGZipMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -223,106 +250,99 @@ async def media_file(fname: str):
 
 
 @app.get("/", include_in_schema=False)
-async def landing() -> Response:
-    return render_page(static_dir=static_dir, name="landing.html")
+async def landing(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="landing.html", request=request)
 
 
 @app.get("/dashboard", include_in_schema=False)
-async def dashboard() -> Response:
-    return render_page(static_dir=static_dir, name="dashboard.html")
+async def dashboard(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="dashboard.html", request=request)
 
 
 @app.get("/chat", include_in_schema=False)
-async def chat() -> Response:
-    return render_page(static_dir=static_dir, name="chat.html")
+async def chat(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="chat.html", request=request)
 
 
 @app.get("/keys", include_in_schema=False)
-async def keys_page() -> Response:
-    return render_page(static_dir=static_dir, name="keys.html")
+async def keys_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="keys.html", request=request)
 
 
 @app.get("/settings", include_in_schema=False)
-async def settings_page() -> Response:
-    return render_page(static_dir=static_dir, name="settings.html")
+async def settings_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="settings.html", request=request)
 
 
 @app.get("/profile", include_in_schema=False)
-async def profile_page() -> Response:
-    return render_page(static_dir=static_dir, name="profile.html")
+async def profile_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="profile.html", request=request)
 
 
 @app.get("/research", include_in_schema=False)
-async def research_page() -> Response:
-    return render_page(static_dir=static_dir, name="research.html")
+async def research_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="research.html", request=request)
 
 
 @app.get("/roleplay", include_in_schema=False)
-async def roleplay_page() -> Response:
-    return render_page(static_dir=static_dir, name="worlds.html")
+async def roleplay_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="worlds.html", request=request)
 
 
 @app.get("/roleplay/scene", include_in_schema=False)
-async def roleplay_scene_page() -> Response:
-    return render_page(static_dir=static_dir, name="roleplay.html")
+async def roleplay_scene_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="roleplay.html", request=request)
 
 
 @app.get("/agents", include_in_schema=False)
-async def agents_page() -> Response:
-    return render_page(static_dir=static_dir, name="agents.html")
+async def agents_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="agents.html", request=request)
 
 
 @app.get("/skills", include_in_schema=False)
-async def skills_page() -> Response:
-    return render_page(static_dir=static_dir, name="skills.html")
+async def skills_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="skills.html", request=request)
 
 
 @app.get("/library", include_in_schema=False)
-async def library_page() -> Response:
-    return render_page(static_dir=static_dir, name="library.html")
+async def library_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="library.html", request=request)
 
 
 @app.get("/memory", include_in_schema=False)
-async def memory_page() -> Response:
-    return render_page(static_dir=static_dir, name="memory.html")
+async def memory_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="memory.html", request=request)
 
 
 @app.get("/artifacts", include_in_schema=False)
-async def artifacts_page() -> Response:
-    return render_page(static_dir=static_dir, name="artifacts.html")
+async def artifacts_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="artifacts.html", request=request)
 
 
 @app.get("/connectors", include_in_schema=False)
-async def connectors_page() -> Response:
-    return render_page(static_dir=static_dir, name="connectors.html")
+async def connectors_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="connectors.html", request=request)
 
 
 @app.get("/pay", include_in_schema=False)
-async def pay_page() -> Response:
-    return render_page(static_dir=static_dir, name="pay.html")
+async def pay_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="pay.html", request=request)
 
 
 @app.get("/textbook/{run_id}", include_in_schema=False)
-async def textbook_page(run_id: int) -> Response:
-    return render_page(static_dir=static_dir, name="textbook.html")
+async def textbook_page(run_id: int, request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="textbook.html", request=request)
 
 
 @app.get("/share/{share_id}", include_in_schema=False)
-async def share_page(share_id: str) -> Response:
-    return render_page(static_dir=static_dir, name="share.html")
+async def share_page(share_id: str, request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="share.html", request=request)
 
 
 @app.get("/login", include_in_schema=False)
-async def login_page() -> Response:
-    return render_page(static_dir=static_dir, name="login.html")
+async def login_page(request: Request) -> Response:
+    return render_page(static_dir=static_dir, name="login.html", request=request)
 
-
-# Public, indexable pages. Everything else is behind sign-in.
-SITEMAP_PAGES: tuple[tuple[str, str, str, str], ...] = (
-    # (path, source template, changefreq, priority)
-    ("/", "landing.html", "weekly", "1.0"),
-    ("/login", "login.html", "monthly", "0.5"),
-)
 
 # App pages and APIs crawlers should skip.
 ROBOTS_DISALLOW: tuple[str, ...] = (
@@ -333,22 +353,12 @@ ROBOTS_DISALLOW: tuple[str, ...] = (
 )
 
 
-def _public_origin(request: Request) -> str:
-    configured = get_settings().public_base_url
-    if configured:
-        return configured.rstrip("/")
-    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
-    host = request.headers.get("x-forwarded-host") or request.headers.get(
-        "host", request.url.netloc)
-    return f"{proto.split(',')[0].strip()}://{host.split(',')[0].strip()}"
-
-
 @app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap(request: Request) -> Response:
     from datetime import datetime, timezone
     from xml.sax.saxutils import escape
 
-    origin = _public_origin(request)
+    origin = public_origin(request)
     entries = []
     for path, template, changefreq, priority in SITEMAP_PAGES:
         source = static_dir / template
@@ -374,9 +384,15 @@ async def sitemap(request: Request) -> Response:
 async def robots(request: Request) -> Response:
     lines = ["User-agent: *", "Allow: /$", "Allow: /login", "Allow: /static/"]
     lines += [f"Disallow: {path}" for path in ROBOTS_DISALLOW]
-    lines += ["", f"Sitemap: {_public_origin(request)}/sitemap.xml", ""]
+    lines += ["", f"Sitemap: {public_origin(request)}/sitemap.xml", ""]
     return Response("\n".join(lines), media_type="text/plain",
                     headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/site.webmanifest", include_in_schema=False)
+async def site_manifest() -> Response:
+    return JSONResponse(web_manifest(), media_type="application/manifest+json",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/healthz")

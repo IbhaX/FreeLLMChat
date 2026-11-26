@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from html import escape
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
@@ -15,6 +17,14 @@ _ASSET_ATTRIBUTE = re.compile(
     r'''(?P<prefix>\b(?:src|href)\s*=\s*)(?P<quote>["'])'''
     r'''(?P<url>/static/[^"']+)(?P=quote)'''
 )
+
+
+_TITLE = re.compile(r'<title>.*?</title>', re.IGNORECASE | re.DOTALL)
+_META_DESCRIPTION = re.compile(
+    r'<meta\s+name=["\']description["\'][^>]*>\s*', re.IGNORECASE)
+_SVG_DATA_ICON = re.compile(
+    r'<link\s+rel=["\']icon["\']\s+href=(?:"data:[^"]*"|\'data:[^\']*\')\s*>\s*',
+    re.IGNORECASE)
 
 
 _THEME_BOOTSTRAP = re.compile(
@@ -45,11 +55,26 @@ def asset_url(url: str, static_dir: Path) -> str:
     return urlunsplit(('', '', parts.path, urlencode(query), parts.fragment))
 
 
-def render_page(name: str, static_dir: Path) -> HTMLResponse:
+def apply_seo(markup: str, name: str, request: Request | None = None) -> str:
+    """Replace the page's title/description with the central SEO block."""
+    from app.web.seo import page_seo, seo_head
+
+    seo = page_seo(name)
+    markup = _META_DESCRIPTION.sub('', markup)
+    markup = _SVG_DATA_ICON.sub('', markup)
+    block = f'<title>{escape(seo.title)}</title>{seo_head(name, request)}'
+    if _TITLE.search(markup):
+        return _TITLE.sub(lambda match: block, markup, count=1)
+    return markup.replace('</head>', block + '</head>', 1)
+
+
+def render_page(
+    name: str, static_dir: Path, request: Request | None = None,
+) -> HTMLResponse:
     path = (static_dir / name).resolve()
     if not path.is_relative_to(static_dir.resolve()) or path.suffix != '.html':
         raise ValueError('Invalid page path')
-    markup = path.read_text(encoding='utf-8')
+    markup = apply_seo(path.read_text(encoding='utf-8'), name, request)
     theme_partial = static_dir / 'partials' / 'theme.html'
     if theme_partial.is_file():
         bootstrap = theme_partial.read_text(encoding='utf-8').replace(
@@ -71,7 +96,13 @@ def render_page(name: str, static_dir: Path) -> HTMLResponse:
         ),
         markup,
     )
-    return HTMLResponse(markup, headers={'Cache-Control': 'no-cache'})
+    from app.web.seo import robots_header
+
+    headers = {'Cache-Control': 'no-cache'}
+    robots = robots_header(name)
+    if robots:
+        headers['X-Robots-Tag'] = robots
+    return HTMLResponse(markup, headers=headers)
 
 
 class VersionedStaticFiles(StaticFiles):
