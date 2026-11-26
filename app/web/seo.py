@@ -149,7 +149,7 @@ def seo_head(name: str, request: Request | None = None) -> str:
         f'<meta name="theme-color" content="{THEME_COLOR}">',
         f'<meta name="application-name" content="{SITE_NAME}">',
         f'<meta name="apple-mobile-web-app-title" content="{SITE_NAME}">',
-        '<link rel="apple-touch-icon" href="/static/img/logo-mark.png">',
+        '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
         '<link rel="manifest" href="/site.webmanifest">',
         '<meta property="og:type" content="website">',
         f'<meta property="og:site_name" content="{SITE_NAME}">',
@@ -166,6 +166,12 @@ def seo_head(name: str, request: Request | None = None) -> str:
         f'<meta name="twitter:description" content="{e(seo.description)}">',
         f'<meta name="twitter:image" content="{e(image)}">',
     ]
+    tags.append(
+        '<script>'
+        'if("serviceWorker"in navigator)'
+        'navigator.serviceWorker.register("/sw.js",{scope:"/"});'
+        '</script>'
+    )
     if seo.indexable:
         tags.append(f'<link rel="canonical" href="{e(url)}">')
     if name == "landing.html" and origin:
@@ -175,17 +181,24 @@ def seo_head(name: str, request: Request | None = None) -> str:
 
 def web_manifest() -> dict:
     return {
-        "name": SITE_NAME,
-        "short_name": SITE_NAME,
+        "name": "IChat",
+        "short_name": "IChat",
         "description": DEFAULT_DESCRIPTION,
         "start_url": "/chat",
         "scope": "/",
         "display": "standalone",
         "background_color": THEME_COLOR,
         "theme_color": THEME_COLOR,
+        "orientation": "portrait-primary",
         "icons": [
             {"src": "/static/img/favicon.png", "sizes": "64x64", "type": "image/png"},
-            {"src": "/static/img/logo-mark.png", "sizes": "256x256",
+            {"src": "/static/img/icon-192.png", "sizes": "192x192",
              "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/icon-512.png", "sizes": "512x512",
+             "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/icon-512.png", "sizes": "512x512",
+             "type": "image/png", "purpose": "maskable"},
+            {"src": "/static/img/icon.svg", "sizes": "any",
+             "type": "image/svg+xml"},
         ],
     }

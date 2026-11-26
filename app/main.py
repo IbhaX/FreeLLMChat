@@ -395,6 +395,19 @@ async def site_manifest() -> Response:
                         headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker() -> Response:
+    return FileResponse(static_dir / "sw.js", media_type="text/javascript",
+                        headers={"Service-Worker-Allowed": "/",
+                                 "Cache-Control": "no-cache"})
+
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+async def apple_touch_icon() -> Response:
+    return FileResponse(static_dir / "img" / "apple-touch-icon.png",
+                        media_type="image/png")
+
+
 @app.get("/healthz")
 async def healthz() -> dict:
     return {"status": "ok"}

@@ -96,6 +96,12 @@ def render_page(
         ),
         markup,
     )
+    # Inject splash screen after <body> tag
+    splash_path = static_dir / 'partials' / 'splash.html'
+    if splash_path.is_file():
+        import re as _re
+        splash = splash_path.read_text(encoding='utf-8')
+        markup = _re.sub(r'(<body[^>]*>)', r'\1' + splash.replace('\\', '\\\\'), markup, count=1)
     from app.web.seo import robots_header
 
     headers = {'Cache-Control': 'no-cache'}
