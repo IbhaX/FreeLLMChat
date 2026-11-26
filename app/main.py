@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
@@ -315,6 +315,68 @@ async def share_page(share_id: str) -> Response:
 @app.get("/login", include_in_schema=False)
 async def login_page() -> Response:
     return render_page(static_dir=static_dir, name="login.html")
+
+
+# Public, indexable pages. Everything else is behind sign-in.
+SITEMAP_PAGES: tuple[tuple[str, str, str, str], ...] = (
+    # (path, source template, changefreq, priority)
+    ("/", "landing.html", "weekly", "1.0"),
+    ("/login", "login.html", "monthly", "0.5"),
+)
+
+# App pages and APIs crawlers should skip.
+ROBOTS_DISALLOW: tuple[str, ...] = (
+    "/v1/", "/admin", "/api/", "/media/", "/share/", "/textbook/",
+    "/dashboard", "/chat", "/keys", "/settings", "/profile", "/research",
+    "/roleplay", "/agents", "/skills", "/library", "/memory", "/artifacts",
+    "/connectors", "/pay",
+)
+
+
+def _public_origin(request: Request) -> str:
+    configured = get_settings().public_base_url
+    if configured:
+        return configured.rstrip("/")
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host") or request.headers.get(
+        "host", request.url.netloc)
+    return f"{proto.split(',')[0].strip()}://{host.split(',')[0].strip()}"
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap(request: Request) -> Response:
+    from datetime import datetime, timezone
+    from xml.sax.saxutils import escape
+
+    origin = _public_origin(request)
+    entries = []
+    for path, template, changefreq, priority in SITEMAP_PAGES:
+        source = static_dir / template
+        lastmod = ""
+        if source.is_file():
+            stamp = datetime.fromtimestamp(source.stat().st_mtime, tz=timezone.utc)
+            lastmod = f"<lastmod>{stamp.date().isoformat()}</lastmod>"
+        entries.append(
+            f"<url><loc>{escape(origin + path)}</loc>{lastmod}"
+            f"<changefreq>{changefreq}</changefreq>"
+            f"<priority>{priority}</priority></url>"
+        )
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + "".join(entries) + "</urlset>\n"
+    )
+    return Response(body, media_type="application/xml",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots(request: Request) -> Response:
+    lines = ["User-agent: *", "Allow: /$", "Allow: /login", "Allow: /static/"]
+    lines += [f"Disallow: {path}" for path in ROBOTS_DISALLOW]
+    lines += ["", f"Sitemap: {_public_origin(request)}/sitemap.xml", ""]
+    return Response("\n".join(lines), media_type="text/plain",
+                    headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/healthz")

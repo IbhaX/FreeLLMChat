@@ -20,6 +20,10 @@ class Settings(BaseSettings):
 
     host: str = "0.0.0.0"
     port: int = 8000
+    # Canonical public origin (e.g. https://ichat.example.com) used in
+    # sitemap.xml / robots.txt. Falls back to the request's base URL.
+    # Env var: PUBLIC_BASE_URL.
+    public_base_url: Optional[str] = None
 
     database_url: str = f"sqlite+aiosqlite:///{BASE_DIR / 'data' / 'gateway.db'}"
 

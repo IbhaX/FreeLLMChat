@@ -74,3 +74,32 @@ def test_only_matching_asset_versions_are_immutable(tmp_path: Path) -> None:
         cached = client.get(versioned, headers={'If-None-Match': response.headers['etag']})
         assert cached.status_code == 304
         assert cached.headers['cache-control'] == response.headers['cache-control']
+
+
+def test_sitemap_lists_public_pages() -> None:
+    from xml.etree import ElementTree
+
+    client = TestClient(app)
+    response = client.get('/sitemap.xml', headers={'host': 'ichat.test'})
+    assert response.status_code == 200
+    assert response.headers['content-type'].startswith('application/xml')
+    ns = {'s': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+    root = ElementTree.fromstring(response.content)
+    locs = [el.text for el in root.findall('s:url/s:loc', ns)]
+    assert locs == ['http://ichat.test/', 'http://ichat.test/login']
+
+
+def test_sitemap_respects_forwarded_proto() -> None:
+    client = TestClient(app)
+    response = client.get('/sitemap.xml', headers={
+        'host': 'ichat.test', 'x-forwarded-proto': 'https'})
+    assert '<loc>https://ichat.test/</loc>' in response.text
+
+
+def test_robots_points_to_sitemap() -> None:
+    client = TestClient(app)
+    response = client.get('/robots.txt', headers={'host': 'ichat.test'})
+    assert response.status_code == 200
+    assert 'Sitemap: http://ichat.test/sitemap.xml' in response.text
+    assert 'Disallow: /chat' in response.text
+    assert 'Disallow: /v1/' in response.text
