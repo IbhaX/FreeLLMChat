@@ -201,6 +201,107 @@ img{max-width:100%}
 .lp-float.f2{top:62%;right:5%}.lp-float.f2 i{background:var(--ln-acc)}
 .lp-float.f3{bottom:20%;right:9%}.lp-float.f3 i{background:var(--ln-acc3)}
 
+/* ---------- hero TV (mock agent / tool-call feed) ---------- */
+.lp-tv{position:absolute;z-index:4;top:50%;width:min(46vw,480px);
+  right:max(clamp(20px,3vw,40px),calc((100vw - 1240px)/2));
+  transform:translateY(-47%);--tv-glow:color-mix(in srgb,var(--ln-acc) 55%,transparent)}
+.lp-tv-set{position:relative;animation:lp-tv-float 9s ease-in-out infinite}
+@keyframes lp-tv-float{50%{transform:translateY(-8px)}}
+.lp-ant{position:relative;height:54px;margin-bottom:-6px}
+.lp-ant i{position:absolute;bottom:0;left:50%;width:3px;height:64px;border-radius:2px;
+  background:linear-gradient(#8a8d99,#3a3c46);transform-origin:bottom center}
+.lp-ant i::after{content:"";position:absolute;top:-6px;left:50%;width:9px;height:9px;margin-left:-4.5px;
+  border-radius:50%;background:radial-gradient(circle at 35% 35%,#d8dae2,#5a5c68)}
+.lp-ant i:nth-child(1){transform:rotate(-26deg);animation:lp-tv-sway 6s ease-in-out infinite}
+.lp-ant i:nth-child(2){transform:rotate(22deg);height:56px;animation:lp-tv-sway2 7s ease-in-out infinite}
+.lp-ant::after{content:"";position:absolute;bottom:-2px;left:50%;width:44px;height:14px;margin-left:-22px;
+  border-radius:22px 22px 4px 4px;background:linear-gradient(#2c2c32,#111114)}
+@keyframes lp-tv-sway{50%{transform:rotate(-20deg)}}
+@keyframes lp-tv-sway2{50%{transform:rotate(28deg)}}
+.lp-cab{position:relative;display:grid;grid-template-columns:1fr 58px;gap:12px;padding:14px;border-radius:22px;
+  background:linear-gradient(180deg,rgba(255,255,255,.10),transparent 16%,transparent 84%,rgba(0,0,0,.4)),
+    linear-gradient(100deg,#222226,#2e2e33 35%,#212125 60%,#2b2b30);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -6px 14px rgba(0,0,0,.5),0 0 0 1px #0a0a0c,
+    0 34px 80px -28px var(--tv-glow),0 30px 60px -22px rgba(0,0,0,.8)}
+.lp-bez{padding:10px;border-radius:15px;background:linear-gradient(145deg,#16161a,#08080a);
+  box-shadow:inset 0 0 0 1px #000,inset 0 3px 10px rgba(255,255,255,.05)}
+.lp-scr{position:relative;aspect-ratio:4/3;overflow:hidden;border-radius:16px/20px;background:#07090d;
+  isolation:isolate;box-shadow:inset 0 0 36px rgba(0,0,0,.9);display:flex;flex-direction:column;
+  font-family:var(--ln-mono);opacity:.0;transition:opacity .3s}
+.lp-tv.on .lp-scr{opacity:1}
+.lp-osd{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:center;
+  padding:9px 14px 7px;font-size:clamp(9px,.85vw,11px);letter-spacing:.14em;text-transform:uppercase;
+  color:#8c96b1;border-bottom:1px solid rgba(255,255,255,.06)}
+.lp-osd .lv{display:flex;align-items:center;gap:6px;color:#e8ecf6}
+.lp-osd .lv::before{content:"";width:7px;height:7px;border-radius:50%;background:#c25b5b;
+  box-shadow:0 0 8px #c25b5b;animation:lp-tv-blink 1.2s infinite}
+@keyframes lp-tv-blink{50%{opacity:.25}}
+.lp-log{position:relative;z-index:2;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;
+  justify-content:flex-end;gap:3px;padding:8px 14px 10px;
+  -webkit-mask-image:linear-gradient(transparent,#000 22%);mask-image:linear-gradient(transparent,#000 22%)}
+.lp-tl{font-size:clamp(9.5px,.98vw,12.5px);line-height:1.55;color:#b9c0d4;word-break:break-word;
+  animation:lp-tv-in .25s ease-out}
+@keyframes lp-tv-in{from{opacity:0;transform:translateY(5px)}}
+.lp-tg{display:inline-block;min-width:7.2ch;margin-right:.9ch;padding:0 .6ch;border-radius:3px;
+  font-size:.84em;font-weight:700;letter-spacing:.05em;text-align:center}
+.lp-tg.user{background:#2a2a30;color:#e8ecf6}
+.lp-tg.router{background:rgba(214,170,80,.16);color:#d6aa50}
+.lp-tg.agent{background:rgba(194,91,91,.2);color:#e58a8a}
+.lp-tg.tool{background:rgba(91,143,194,.2);color:#82b4ea}
+.lp-tg.ok{background:rgba(95,179,125,.2);color:#74d398}
+.lp-tg.warn{background:rgba(229,138,138,.14);color:#e58a8a}
+.lp-tl .mn{color:#e8ecf6}.lp-tl .ar{color:#7e88a6}
+.lp-tl .rs{color:#74d398}.lp-tl .rs.bad{color:#e58a8a}
+.lp-tl .sp{color:#82b4ea;animation:lp-tv-blink .7s steps(2) infinite}
+.lp-tl .cur::after{content:"\258D";color:#e8ecf6;animation:lp-tv-blink .8s steps(2) infinite}
+.lp-stat{position:relative;z-index:2;display:flex;justify-content:space-between;padding:6px 14px 8px;
+  font-size:clamp(8.5px,.8vw,10.5px);letter-spacing:.12em;text-transform:uppercase;color:#5d6682;
+  border-top:1px solid rgba(255,255,255,.06)}
+.lp-crt{position:absolute;inset:0;z-index:3;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%),
+    repeating-linear-gradient(0deg,rgba(0,0,0,.2) 0 1px,transparent 1px 3px),
+    linear-gradient(115deg,rgba(255,255,255,.1) 0%,rgba(255,255,255,.02) 28%,transparent 40%);
+  animation:lp-tv-flick 4s infinite}
+.lp-crt::after{content:"";position:absolute;left:0;right:0;height:22%;top:-25%;
+  background:linear-gradient(transparent,rgba(255,255,255,.05),transparent);animation:lp-tv-roll 7s linear infinite}
+@keyframes lp-tv-flick{0%,100%{opacity:1}48%{opacity:.93}50%{opacity:1}52%{opacity:.96}}
+@keyframes lp-tv-roll{to{top:110%}}
+.lp-pwr{position:absolute;inset:0;z-index:4;pointer-events:none;background:#fff;
+  transform:scaleY(.004) scaleX(0);opacity:0}
+.lp-tv.on .lp-pwr{animation:lp-tv-pwr .75s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes lp-tv-pwr{0%{opacity:1;transform:scaleY(.004) scaleX(0)}35%{opacity:1;transform:scaleY(.004) scaleX(1)}
+  70%{opacity:.9;transform:scaleY(1) scaleX(1)}100%{opacity:0;transform:scaleY(1) scaleX(1)}}
+.lp-chg{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;
+  background:repeating-linear-gradient(0deg,#cfd3df 0 2px,#252730 2px 5px)}
+.lp-scr.chg .lp-chg{animation:lp-tv-chg .35s steps(4) 1}
+@keyframes lp-tv-chg{0%{opacity:.55}100%{opacity:0}}
+.lp-pnl{display:flex;flex-direction:column;align-items:center;gap:12px;padding:10px 0;border-radius:12px;
+  background:linear-gradient(#2b2c33,#17181d);box-shadow:inset 0 0 0 1px #000,inset 0 2px 0 rgba(255,255,255,.07)}
+.lp-chno{font:700 12px/1 var(--ln-mono);color:#d6aa50;background:#0a0a0c;padding:4px 6px;border-radius:4px}
+.lp-knob{width:36px;height:36px;border-radius:50%;cursor:pointer;border:0;position:relative;
+  background:radial-gradient(circle at 35% 30%,#d9dae2,#8a8c99 45%,#40424d 80%);
+  box-shadow:0 4px 8px rgba(0,0,0,.6),inset 0 -2px 3px rgba(0,0,0,.4);transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.lp-knob::after{content:"";position:absolute;left:50%;top:4px;width:3px;height:11px;margin-left:-1.5px;
+  border-radius:2px;background:#1b1c22}
+.lp-knob.s{width:26px;height:26px}
+.lp-knob:focus-visible{outline:2px solid var(--ln-acc2)}
+.lp-grille{width:36px;flex:1;min-height:40px;border-radius:6px;
+  background:repeating-linear-gradient(0deg,#0c0c10 0 3px,#30313a 3px 5px)}
+.lp-led{width:8px;height:8px;border-radius:50%;background:#74d398;box-shadow:0 0 10px #74d398}
+.lp-legs{display:flex;justify-content:space-between;padding:0 18%;height:24px}
+.lp-legs i{width:10px;height:100%;background:linear-gradient(90deg,#17171a,#33343b,#17171a);border-radius:0 0 4px 4px}
+.lp-legs i:nth-child(1){transform:skewX(12deg)}.lp-legs i:nth-child(2){transform:skewX(-12deg)}
+.lp-tv-shadow{height:24px;margin:-8px 8% 0;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(0,0,0,.65),transparent);filter:blur(2px)}
+@media(max-width:1080px){.lp-tv{width:min(44vw,460px);right:3vw}}
+@media(max-width:920px){
+  .lp-hero{flex-direction:column;justify-content:center;padding-bottom:110px}
+  .lp-tv{position:relative;right:auto;top:auto;transform:none;width:min(88vw,520px);margin:34px auto 0}
+  .lp-tl{font-size:clamp(9px,2.5vw,12px)}
+  .lp-osd{font-size:9px}.lp-stat{font-size:8.5px}
+}
+@media(prefers-reduced-motion:reduce){.lp-tv-set,.lp-ant i,.lp-crt,.lp-crt::after{animation:none!important}}
+
 /* ---------- ticker ---------- */
 .lp-ticker{border-top:1px solid var(--ln-line);border-bottom:1px solid var(--ln-line);
   padding:26px 0;overflow:hidden;position:relative;
@@ -495,10 +596,6 @@ img{max-width:100%}
   <div class="lp-nogl-orb" aria-hidden="true"></div>
   <div class="lp-hero-fade" aria-hidden="true"></div>
 
-  <div class="lp-float f1">auto failover · 4 providers <i></i></div>
-  <div class="lp-float f2">person dossier · cited <i></i></div>
-  <div class="lp-float f3">research · streaming live <i></i></div>
-
   <div class="lp-wrap lp-hero-in">
     <span class="lp-eyebrow hero">One gateway · every model</span>
     <h1 class="lp-title" id="lpTitle">Every model.<br>One <span class="gr">workspace.</span></h1>
@@ -514,6 +611,33 @@ img{max-width:100%}
       <div><b data-count="500" data-suffix="+">0</b><span>models</span></div>
       <div><b data-count="21">0</b><span>expert agents</span></div>
       <div><b data-count="100" data-suffix="%">0</b><span>structured output</span></div>
+    </div>
+  </div>
+
+  <div class="lp-tv" id="lpTV" role="img" aria-label="Animated demo of agent and tool calls streaming in a chat session">
+    <div class="lp-tv-set" aria-hidden="true">
+      <div class="lp-ant"><i></i><i></i></div>
+      <div class="lp-cab">
+        <div class="lp-bez">
+          <div class="lp-scr">
+            <div class="lp-osd"><span class="ch">CH 01 · deep research</span><span class="lv">live</span></div>
+            <div class="lp-log"></div>
+            <div class="lp-stat"><span class="sc">agent trace</span><span class="ck">0.0s</span></div>
+            <div class="lp-crt"></div>
+            <div class="lp-chg"></div>
+            <div class="lp-pwr"></div>
+          </div>
+        </div>
+        <div class="lp-pnl">
+          <span class="lp-chno">01</span>
+          <button class="lp-knob" type="button" tabindex="-1" data-tvnext title="Change channel"></button>
+          <button class="lp-knob s" type="button" tabindex="-1" data-tvnext title="Change channel"></button>
+          <span class="lp-grille"></span>
+          <span class="lp-led"></span>
+        </div>
+      </div>
+      <div class="lp-legs"><i></i><i></i></div>
+      <div class="lp-tv-shadow"></div>
     </div>
   </div>
   <div class="lp-scroll">scroll<i></i></div>
@@ -834,6 +958,133 @@ img{max-width:100%}
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="/static/js/theme.js"></script>
+<script>
+/* Hero TV: scripted mock of agent + tool calls (no network, purely decorative). */
+(function lpTV(){
+  var tv=document.getElementById("lpTV"); if(!tv) return;
+  var scr=tv.querySelector(".lp-scr"), log=tv.querySelector(".lp-log");
+  var chEl=tv.querySelector(".lp-osd .ch"), scEl=tv.querySelector(".lp-stat .sc");
+  var ckEl=tv.querySelector(".lp-stat .ck"), chNo=tv.querySelector(".lp-chno");
+  var reduced=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var LABEL={user:"YOU",router:"ROUTER",agent:"AGENT",tool:"TOOL",ok:"DONE",warn:"WARN"};
+
+  /* k=kind, a=main text, b=args/detail, r=result, bad=failure, w=wait before result (ms) */
+  var SCENES=[
+   {title:"deep research",steps:[
+    {k:"user",a:"Compare solid-state battery makers. Cite sources."},
+    {k:"router",a:"select provider",r:"anthropic/claude-sonnet - 412ms"},
+    {k:"warn",a:"provider-2 returned 429",r:"auto failover to provider-3",bad:1},
+    {k:"agent",a:"planner",b:"spawn 4 sub-agents, 3 stages"},
+    {k:"tool",a:"web.search",b:'("solid-state battery makers 2026")',r:"8 results - 340ms"},
+    {k:"tool",a:"web.fetch",b:"(nature.com/articles/...)",r:"14.2 kB - 610ms"},
+    {k:"agent",a:"analyst",b:"cross-checking 5 sources"},
+    {k:"tool",a:"cite.verify",b:"(5 claims)",r:"5/5 verified"},
+    {k:"tool",a:"table.render",b:"(rows=6, cols=4)",r:"structured block ready"},
+    {k:"ok",a:"answer streamed",r:"6 sections - 5 citations - 6.1s"}]},
+   {title:"person dossier",steps:[
+    {k:"user",a:"Build a dossier on the CEO of Acme Robotics."},
+    {k:"router",a:"select provider",r:"openai/gpt - 388ms"},
+    {k:"agent",a:"researcher",b:"fan out: bio / news / filings"},
+    {k:"tool",a:"people.lookup",b:'("Acme Robotics CEO")',r:"3 profiles merged"},
+    {k:"tool",a:"news.search",b:'(range="12mo")',r:"14 articles - 520ms"},
+    {k:"tool",a:"filings.search",b:'(type="10-K")',r:"2 documents"},
+    {k:"agent",a:"fact-checker",b:"resolving 2 conflicting dates"},
+    {k:"tool",a:"timeline.render",b:"(events=9)",r:"timeline ready"},
+    {k:"ok",a:"dossier complete",r:"9 events - 11 citations - 7.4s"}]},
+   {title:"code + data",steps:[
+    {k:"user",a:"Plot monthly revenue from my CSV and flag anomalies."},
+    {k:"router",a:"select provider",r:"mistral/large - 301ms"},
+    {k:"agent",a:"coder",b:"writing python (pandas)"},
+    {k:"tool",a:"code.run",b:"(python, 38 lines)",r:"KeyError: 'date'",bad:1},
+    {k:"agent",a:"coder",b:"patching column name, retrying"},
+    {k:"tool",a:"code.run",b:"(python, 38 lines)",r:"stdout 214 lines - 1.2s"},
+    {k:"tool",a:"chart.render",b:"(line, 24 points)",r:"1 chart"},
+    {k:"ok",a:"analysis done",r:"2 anomalies flagged - 4.3s"}]}
+  ];
+
+  var alive=false, token=0, sceneIx=0, t0=0, clockT=null, started=false;
+  function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+  async function wait(ms,tk){
+    await sleep(ms);
+    while((!alive||document.hidden)&&tk===token) await sleep(250);
+    if(tk!==token) throw 0;
+  }
+  function el(tag,cls,txt,parent){var e=document.createElement(tag);if(cls)e.className=cls;
+    if(txt!=null)e.textContent=txt;if(parent)parent.appendChild(e);return e}
+  function newLine(k){
+    var d=el("div","lp-tl",null,log); el("span","lp-tg "+k,LABEL[k],d);
+    while(log.children.length>40) log.removeChild(log.firstChild);
+    return d;
+  }
+  function clock(){ckEl.textContent=((performance.now()-t0)/1000).toFixed(1)+"s"}
+  function label(i){
+    var n=("0"+(i+1)).slice(-2);
+    chEl.textContent="CH "+n+" · "+SCENES[i].title; chNo.textContent=n;
+    scEl.textContent="session "+n;
+  }
+  function renderStatic(i){
+    log.textContent=""; label(i);
+    SCENES[i].steps.forEach(function(s){
+      var d=newLine(s.k); el("span","mn",s.a,d);
+      if(s.b){d.appendChild(document.createTextNode(" "));el("span","ar",s.b,d)}
+      if(s.r){d.appendChild(document.createTextNode(" -> "));el("span","rs"+(s.bad?" bad":""),s.r,d)}
+    });
+  }
+  async function playStep(s,tk){
+    var d=newLine(s.k);
+    if(s.k==="user"){
+      var t=el("span","mn cur",null,d);
+      for(var i=0;i<s.a.length;i++){t.textContent+=s.a.charAt(i);await wait(26+Math.random()*30,tk)}
+      await wait(350,tk); t.className="mn"; return;
+    }
+    el("span","mn",s.a,d);
+    if(s.b){d.appendChild(document.createTextNode(" "));el("span","ar",s.b,d)}
+    if(s.r){
+      d.appendChild(document.createTextNode(" "));
+      var sp=el("span","sp","...",d);
+      await wait(s.k==="tool"?650+Math.random()*500:420,tk);
+      sp.remove(); d.appendChild(document.createTextNode("-> "));
+      el("span","rs"+(s.bad?" bad":""),s.r,d);
+    }
+  }
+  async function run(tk){
+    try{
+      while(true){
+        log.textContent=""; label(sceneIx); t0=performance.now();
+        await wait(500,tk);
+        var steps=SCENES[sceneIx].steps;
+        for(var i=0;i<steps.length;i++){await playStep(steps[i],tk);await wait(380+Math.random()*320,tk)}
+        await wait(3200,tk);
+        scr.classList.remove("chg"); void scr.offsetWidth; scr.classList.add("chg");
+        sceneIx=(sceneIx+1)%SCENES.length;
+        await wait(380,tk);
+      }
+    }catch(e){ if(e!==0) throw e; }
+  }
+  function start(){token++; run(token)}
+
+  tv.querySelectorAll("[data-tvnext]").forEach(function(b){
+    b.addEventListener("click",function(){
+      sceneIx=(sceneIx+1)%SCENES.length;
+      scr.classList.remove("chg"); void scr.offsetWidth; scr.classList.add("chg");
+      if(reduced){renderStatic(sceneIx);return}
+      start();
+    });
+  });
+
+  if(!clockT) clockT=setInterval(function(){if(alive&&!document.hidden&&started)clock()},100);
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      alive=e.isIntersecting;
+      if(alive&&!started){
+        started=true; tv.classList.add("on");
+        if(reduced){renderStatic(0)} else {setTimeout(start,750)}
+      }
+    });
+  },{threshold:.15});
+  io.observe(tv);
+})();
+</script>
 <script src="/static/js/landing.js"></script>
 </body>
 </html>
