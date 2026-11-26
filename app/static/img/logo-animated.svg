@@ -1,38 +1,81 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 150">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 160">
 <defs>
   <linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#a855f7"/>
     <stop offset="1" stop-color="#ec4899"/>
   </linearGradient>
-  <mask id="pm" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="150">
-    <rect width="100" height="150" fill="#fff"/>
-    <rect x="49" y="52" width="2" height="6" rx="1" fill="#000"/>
-    <rect x="48" y="66" width="4" height="12" rx="2" fill="#000"/>
-    <rect x="46.5" y="88" width="7" height="18" rx="3.5" fill="#000"/>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#c084fc"/>
+    <stop offset="1" stop-color="#f472b6"/>
+  </linearGradient>
+  <filter id="glow">
+    <feGaussianBlur stdDeviation="3" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <mask id="pm">
+    <rect width="120" height="160" fill="#fff"/>
+    <rect x="59" y="52" width="2" height="7" rx="1" fill="#000"/>
+    <rect x="58" y="66" width="4" height="12" rx="2" fill="#000"/>
+    <rect x="56.5" y="88" width="7" height="18" rx="3.5" fill="#000"/>
   </mask>
 </defs>
-<g mask="url(#pm)" fill="url(#pg)">
-  <circle cx="50" cy="24" r="14">
-    <animate attributeName="r" values="14;15.2;14" dur="2.6s" repeatCount="indefinite"/>
+
+<!-- Person figure with pulse -->
+<g mask="url(#pm)" fill="url(#pg)" filter="url(#glow)">
+  <circle cx="60" cy="24" r="14">
+    <animate attributeName="r" values="0;14" dur=".5s" fill="freeze"/>
   </circle>
-  <path d="M41 50H59L80 138Q81 144 75 144H25Q19 144 20 138Z"/>
+  <path d="M51 50H69L90 138Q91 144 85 144H35Q29 144 30 138Z">
+    <animate attributeName="opacity" values="0;1" dur=".4s" begin=".3s" fill="freeze"/>
+  </path>
+  <set attributeName="opacity" to="0"/>
+  <animate attributeName="opacity" values="0;1" dur=".5s" fill="freeze"/>
 </g>
-<!-- Chat bubble -->
+
+<!-- Orbiting particles -->
 <g>
-  <animateTransform attributeName="transform" type="translate" values="0,0;0,-2;0,0" dur="3s" repeatCount="indefinite"/>
-  <rect x="28" y="102" width="38" height="26" rx="8" fill="#ffffff" opacity=".95"/>
-  <polygon points="40,128 46,136 52,128" fill="#ffffff" opacity=".95"/>
-  <circle cx="40" cy="115" r="3" fill="#a855f7">
-    <animate attributeName="opacity" values="1;.3;1" dur="1.4s" begin="0s" repeatCount="indefinite"/>
-    <animate attributeName="r" values="3;3.5;3" dur="1.4s" begin="0s" repeatCount="indefinite"/>
+  <circle r="2.5" fill="#a855f7" opacity="0">
+    <animateMotion path="M60,80 C100,40 100,120 60,80" dur="2.5s" begin=".8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;.8;0" dur="2.5s" begin=".8s" repeatCount="indefinite"/>
   </circle>
-  <circle cx="48" cy="115" r="3" fill="#c084fc">
-    <animate attributeName="opacity" values="1;.3;1" dur="1.4s" begin=".2s" repeatCount="indefinite"/>
-    <animate attributeName="r" values="3;3.5;3" dur="1.4s" begin=".2s" repeatCount="indefinite"/>
+  <circle r="2" fill="#ec4899" opacity="0">
+    <animateMotion path="M60,80 C20,40 20,120 60,80" dur="2.8s" begin="1s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;.7;0" dur="2.8s" begin="1s" repeatCount="indefinite"/>
   </circle>
-  <circle cx="56" cy="115" r="3" fill="#ec4899">
-    <animate attributeName="opacity" values="1;.3;1" dur="1.4s" begin=".4s" repeatCount="indefinite"/>
-    <animate attributeName="r" values="3;3.5;3" dur="1.4s" begin=".4s" repeatCount="indefinite"/>
+  <circle r="1.5" fill="#c084fc" opacity="0">
+    <animateMotion path="M60,70 C90,30 30,30 60,70" dur="2s" begin="1.2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;.6;0" dur="2s" begin="1.2s" repeatCount="indefinite"/>
   </circle>
 </g>
+
+<!-- Chat bubble slides in -->
+<g opacity="0">
+  <animate attributeName="opacity" values="0;1" dur=".4s" begin=".7s" fill="freeze"/>
+  <animateTransform attributeName="transform" type="translate" values="20,0;0,0" dur=".5s" begin=".7s" fill="freeze"/>
+  <rect x="70" y="100" width="38" height="26" rx="8" fill="#fff" opacity=".95"/>
+  <polygon points="78,126 84,133 90,126" fill="#fff" opacity=".95"/>
+  <!-- Typing dots -->
+  <circle cx="82" cy="113" r="3" fill="url(#pg)">
+    <animate attributeName="r" values="3;3.8;3" dur="1s" begin="1.2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="1;.4;1" dur="1s" begin="1.2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="90" cy="113" r="3" fill="url(#bg)">
+    <animate attributeName="r" values="3;3.8;3" dur="1s" begin="1.4s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="1;.4;1" dur="1s" begin="1.4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="98" cy="113" r="3" fill="#ec4899">
+    <animate attributeName="r" values="3;3.8;3" dur="1s" begin="1.6s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="1;.4;1" dur="1s" begin="1.6s" repeatCount="indefinite"/>
+  </circle>
+</g>
+
+<!-- Signal rings emanating -->
+<circle cx="60" cy="24" r="20" fill="none" stroke="url(#pg)" stroke-width="1.5" opacity="0">
+  <animate attributeName="r" values="20;45" dur="2s" begin="1s" repeatCount="indefinite"/>
+  <animate attributeName="opacity" values=".5;0" dur="2s" begin="1s" repeatCount="indefinite"/>
+</circle>
+<circle cx="60" cy="24" r="20" fill="none" stroke="url(#pg)" stroke-width="1" opacity="0">
+  <animate attributeName="r" values="20;50" dur="2s" begin="1.5s" repeatCount="indefinite"/>
+  <animate attributeName="opacity" values=".3;0" dur="2s" begin="1.5s" repeatCount="indefinite"/>
+</circle>
 </svg>
