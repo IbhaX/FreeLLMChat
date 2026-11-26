@@ -1,0 +1,31 @@
+INFO:     Started server process [30206]
+INFO:     Waiting for application startup.
+{"ts": "2026-11-22T17:18:14", "level": "INFO", "logger": "nova.ollama", "msg": "No Ollama server reachable; ollama provider disabled", "request_id": "-"}
+{"ts": "2026-11-22T17:18:14", "level": "INFO", "logger": "nova", "msg": "Seeded/refreshed 21 built-in expert agents", "request_id": "-"}
+{"ts": "2026-11-22T17:18:14", "level": "INFO", "logger": "nova", "msg": "Seeded/refreshed 268 agency-agents catalog entries", "request_id": "-"}
+{"ts": "2026-11-22T17:18:14", "level": "INFO", "logger": "nova", "msg": "Loaded 19 packaged skills (anthropics/skills)", "request_id": "-"}
+{"ts": "2026-11-22T17:18:14", "level": "INFO", "logger": "astrapy.data.database", "msg": "findCollections", "request_id": "-"}
+{"ts": "2026-11-22T17:18:16", "level": "INFO", "logger": "astrapy.data.database", "msg": "finished findCollections", "request_id": "-"}
+{"ts": "2026-11-22T17:18:16", "level": "INFO", "logger": "nova.jobs", "msg": "job runner localhost-3b3264 started (poll 1.0s, lease 30s)", "request_id": "-"}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+INFO:     104.23.97.42:0 - "GET / HTTP/1.1" 200 OK
+INFO:     104.22.224.126:0 - "GET / HTTP/1.1" 200 OK
+INFO:     104.22.224.126:0 - "GET /v1/auth/me HTTP/1.1" 200 OK
+INFO:     172.70.208.33:0 - "GET / HTTP/1.1" 200 OK
+INFO:     172.70.208.33:0 - "GET /v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:0 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.69.122.245:0 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+INFO:     172.69.122.245:0 - "GET / HTTP/1.1" 200 OK
+INFO:     172.69.166.58:0 - "GET /textbook/4 HTTP/1.1" 200 OK
+INFO:     172.69.176.6:0 - "GET /v1/research/runs/4/document/stream HTTP/1.1" 200 OK
+INFO:     172.69.176.6:0 - "GET /v1/research/runs/4 HTTP/1.1" 200 OK
+INFO:     172.69.176.6:0 - "GET / HTTP/1.1" 200 OK
+INFO:     172.69.176.6:0 - "GET /v1/auth/me HTTP/1.1" 200 OK
+INFO:     172.69.123.136:0 - "GET / HTTP/1.1" 200 OK
+INFO:     104.23.227.98:0 - "GET / HTTP/1.1" 200 OK
+INFO:     172.235.29.116:51564 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [30206]

@@ -12,8 +12,8 @@ import webbrowser
 
 import uvicorn
 
-PORT = int(os.environ.get("PORT", "5000"))
-HOST = "127.0.0.1"
+PORT = int(os.environ.get("PORT", "8080"))
+HOST = "0.0.0.0"
 
 
 def _open_browser(url: str) -> None:

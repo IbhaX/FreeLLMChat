@@ -305,8 +305,10 @@
   (function heroGL() {
     var canvas = q("#lpGL");
     var hero = q("#lpHero");
-    if (!canvas || !hero) return;
-    if (!window.THREE || reduced) { document.body.classList.add("no-gl"); canvas.style.display = "none"; return; }
+    if (!canvas) return;
+    /* Orb removed — hide canvas entirely */
+    canvas.style.display = "none";
+    return;
 
     var renderer;
     try {
