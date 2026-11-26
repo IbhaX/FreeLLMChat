@@ -202,9 +202,7 @@ img{max-width:100%}
 .lp-float.f3{bottom:20%;right:9%}.lp-float.f3 i{background:var(--ln-acc3)}
 
 /* ---------- hero TV (mock agent / tool-call feed) ---------- */
-.lp-tv{position:absolute;z-index:4;top:50%;width:min(46vw,480px);
-  right:max(clamp(20px,3vw,40px),calc((100vw - 1240px)/2));
-  transform:translateY(-47%);--tv-glow:color-mix(in srgb,var(--ln-acc) 55%,transparent)}
+.lp-tv{position:relative;width:100%;max-width:540px;justify-self:end;--tv-glow:color-mix(in srgb,var(--ln-acc) 55%,transparent)}
 .lp-tv-set{position:relative;animation:lp-tv-float 9s ease-in-out infinite}
 @keyframes lp-tv-float{50%{transform:translateY(-8px)}}
 .lp-ant{position:relative;height:54px;margin-bottom:-6px}
@@ -225,12 +223,12 @@ img{max-width:100%}
     0 34px 80px -28px var(--tv-glow),0 30px 60px -22px rgba(0,0,0,.8)}
 .lp-bez{padding:10px;border-radius:15px;background:linear-gradient(145deg,#16161a,#08080a);
   box-shadow:inset 0 0 0 1px #000,inset 0 3px 10px rgba(255,255,255,.05)}
-.lp-scr{position:relative;aspect-ratio:4/3;overflow:hidden;border-radius:16px/20px;background:#07090d;
+.lp-scr{container-type:inline-size;position:relative;aspect-ratio:4/3;overflow:hidden;border-radius:16px/20px;background:#07090d;
   isolation:isolate;box-shadow:inset 0 0 36px rgba(0,0,0,.9);display:flex;flex-direction:column;
   font-family:var(--ln-mono);opacity:.0;transition:opacity .3s}
 .lp-tv.on .lp-scr{opacity:1}
 .lp-osd{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:center;
-  padding:9px 14px 7px;font-size:clamp(9px,.85vw,11px);letter-spacing:.14em;text-transform:uppercase;
+  padding:9px 14px 7px;font-size:9.5px;font-size:clamp(8px,2.1cqw,11px);letter-spacing:.14em;text-transform:uppercase;
   color:#8c96b1;border-bottom:1px solid rgba(255,255,255,.06)}
 .lp-osd .lv{display:flex;align-items:center;gap:6px;color:#e8ecf6}
 .lp-osd .lv::before{content:"";width:7px;height:7px;border-radius:50%;background:#c25b5b;
@@ -239,7 +237,7 @@ img{max-width:100%}
 .lp-log{position:relative;z-index:2;flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;
   justify-content:flex-end;gap:3px;padding:8px 14px 10px;
   -webkit-mask-image:linear-gradient(transparent,#000 22%);mask-image:linear-gradient(transparent,#000 22%)}
-.lp-tl{font-size:clamp(9.5px,.98vw,12.5px);line-height:1.55;color:#b9c0d4;word-break:break-word;
+.lp-tl{font-size:11px;font-size:clamp(9px,2.55cqw,12.5px);line-height:1.55;color:#b9c0d4;word-break:break-word;
   animation:lp-tv-in .25s ease-out}
 @keyframes lp-tv-in{from{opacity:0;transform:translateY(5px)}}
 .lp-tg{display:inline-block;min-width:7.2ch;margin-right:.9ch;padding:0 .6ch;border-radius:3px;
@@ -255,7 +253,7 @@ img{max-width:100%}
 .lp-tl .sp{color:#82b4ea;animation:lp-tv-blink .7s steps(2) infinite}
 .lp-tl .cur::after{content:"\258D";color:#e8ecf6;animation:lp-tv-blink .8s steps(2) infinite}
 .lp-stat{position:relative;z-index:2;display:flex;justify-content:space-between;padding:6px 14px 8px;
-  font-size:clamp(8.5px,.8vw,10.5px);letter-spacing:.12em;text-transform:uppercase;color:#5d6682;
+  font-size:9px;font-size:clamp(7.5px,2cqw,10.5px);letter-spacing:.12em;text-transform:uppercase;color:#5d6682;
   border-top:1px solid rgba(255,255,255,.06)}
 .lp-crt{position:absolute;inset:0;z-index:3;pointer-events:none;
   background:radial-gradient(120% 90% at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%),
@@ -293,13 +291,30 @@ img{max-width:100%}
 .lp-legs i:nth-child(1){transform:skewX(12deg)}.lp-legs i:nth-child(2){transform:skewX(-12deg)}
 .lp-tv-shadow{height:24px;margin:-8px 8% 0;border-radius:50%;
   background:radial-gradient(closest-side,rgba(0,0,0,.65),transparent);filter:blur(2px)}
-@media(max-width:1080px){.lp-tv{width:min(44vw,460px);right:3vw}}
-@media(max-width:920px){
-  .lp-hero{flex-direction:column;justify-content:center;padding-bottom:110px}
-  .lp-tv{position:relative;right:auto;top:auto;transform:none;width:min(88vw,520px);margin:34px auto 0}
-  .lp-tl{font-size:clamp(9px,2.5vw,12px)}
-  .lp-osd{font-size:9px}.lp-stat{font-size:8.5px}
+.lp-hero-cols{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);
+  align-items:center;gap:clamp(28px,4vw,72px)}
+.lp-hero-copy{min-width:0}
+.lp-hero-cols .lp-title{font-size:clamp(36px,5.3vw,74px);max-width:none}
+.lp-hero-cols .lp-hero-stats{flex-wrap:wrap;gap:20px clamp(22px,3vw,40px)}
+.lp-hero{padding-bottom:84px}
+@media(max-width:1100px){.lp-hero-cols{grid-template-columns:minmax(0,1fr) minmax(0,.86fr)}}
+@media(max-width:940px){
+  .lp-hero-cols{grid-template-columns:1fr;gap:44px}
+  .lp-hero-cols .lp-title{font-size:clamp(36px,11vw,68px)}
+  .lp-tv{justify-self:center;max-width:520px}
+  .lp-scroll{display:none}
+  .lp-hero{padding-bottom:64px}
 }
+@media(max-width:520px){
+  .lp-hero-cols .lp-hero-stats{display:grid;grid-template-columns:repeat(2,max-content);gap:18px 40px}
+  .lp-cab{grid-template-columns:1fr 44px;gap:8px;padding:10px;border-radius:16px}
+  .lp-bez{padding:7px;border-radius:11px}
+  .lp-knob{width:28px;height:28px}.lp-knob.s{width:20px;height:20px}
+  .lp-grille{width:28px}.lp-chno{font-size:10px;padding:3px 4px}
+  .lp-ant{height:42px}.lp-ant i{height:50px}.lp-ant i:nth-child(2){height:44px}
+  .lp-tv-set{animation:none}
+}
+@media(max-height:720px) and (min-width:941px){.lp-scroll{display:none}}
 @media(prefers-reduced-motion:reduce){.lp-tv-set,.lp-ant i,.lp-crt,.lp-crt::after{animation:none!important}}
 
 /* ---------- ticker ---------- */
@@ -597,6 +612,8 @@ img{max-width:100%}
   <div class="lp-hero-fade" aria-hidden="true"></div>
 
   <div class="lp-wrap lp-hero-in">
+    <div class="lp-hero-cols">
+      <div class="lp-hero-copy">
     <span class="lp-eyebrow hero">One gateway · every model</span>
     <h1 class="lp-title" id="lpTitle">Every model.<br>One <span class="gr">workspace.</span></h1>
     <p class="lp-sub">IbhaX routes across providers with automatic failover, renders rich
@@ -612,8 +629,7 @@ img{max-width:100%}
       <div><b data-count="21">0</b><span>expert agents</span></div>
       <div><b data-count="100" data-suffix="%">0</b><span>structured output</span></div>
     </div>
-  </div>
-
+      </div>
   <div class="lp-tv" id="lpTV" role="img" aria-label="Animated demo of agent and tool calls streaming in a chat session">
     <div class="lp-tv-set" aria-hidden="true">
       <div class="lp-ant"><i></i><i></i></div>
@@ -640,6 +656,9 @@ img{max-width:100%}
       <div class="lp-tv-shadow"></div>
     </div>
   </div>
+    </div>
+  </div>
+
   <div class="lp-scroll">scroll<i></i></div>
 </header>
 
@@ -1059,7 +1078,7 @@ img{max-width:100%}
         sceneIx=(sceneIx+1)%SCENES.length;
         await wait(380,tk);
       }
-    }catch(e){ if(e!==0) throw e; }
+    }catch(e){ /* aborted (channel change) or non-fatal; the TV is decorative */ }
   }
   function start(){token++; run(token)}
 
@@ -1085,6 +1104,6 @@ img{max-width:100%}
   io.observe(tv);
 })();
 </script>
-<script src="/static/js/landing.js"></script>
+<script src="/static/js/landing.js?v=4"></script>
 </body>
 </html>

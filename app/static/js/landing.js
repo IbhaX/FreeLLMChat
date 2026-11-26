@@ -77,26 +77,26 @@
   /* ---------- split the hero title into word spans ---------- */
   var title = q("#lpTitle");
   if (title) {
-    qa("br", title).forEach(function (br) {
-      br.replaceWith(document.createTextNode("\n"));
-    });
-    var wrap = function (node) {
-      var out = document.createDocumentFragment();
-      node.textContent.split(/(\s+)/).forEach(function (tok) {
-        if (!tok) return;
-        if (/^\s+$/.test(tok)) { out.append(document.createTextNode(" ")); return; }
-        var s = document.createElement("span");
-        s.className = "w";
-        s.textContent = tok;
-        out.append(s);
+    /* keep <br> as a real line break; wrap every word (at any depth) in .w */
+    var wrapWords = function (node) {
+      Array.prototype.slice.call(node.childNodes).forEach(function (c) {
+        if (c.nodeType === 3) {
+          var out = document.createDocumentFragment();
+          c.textContent.split(/(\s+)/).forEach(function (tok) {
+            if (!tok) return;
+            if (/^\s+$/.test(tok)) { out.append(document.createTextNode(" ")); return; }
+            var s = document.createElement("span");
+            s.className = "w";
+            s.textContent = tok;
+            out.append(s);
+          });
+          c.replaceWith(out);
+        } else if (c.nodeType === 1 && c.tagName !== "BR" && c.className !== "w") {
+          wrapWords(c);
+        }
       });
-      node.replaceWith(out);
     };
-    Array.prototype.slice.call(title.childNodes).forEach(function (n) {
-      if (n.nodeType === 3) wrap(n);
-      else if (n.nodeType === 1) Array.prototype.slice.call(n.childNodes)
-        .forEach(function (c) { if (c.nodeType === 3) wrap(c); });
-    });
+    wrapWords(title);
   }
 
   /* ---------- entrance timeline ---------- */
