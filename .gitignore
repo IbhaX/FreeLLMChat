@@ -21,3 +21,5 @@ server_pay.log
 # Bundled runtime assets under app/data/ (seeded agent/skill catalogs,
 # skill resource files) are required at boot — do not ignore them.
 !app/data/
+chat.log
+nohup.out
