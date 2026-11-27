@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import AsyncGenerator
 
-from sqlalchemy import event
+from sqlalchemy import event, inspect
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -29,13 +29,15 @@ def get_engine() -> AsyncEngine:
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         _engine = create_async_engine(url, echo=False, pool_pre_ping=True)
 
-        @event.listens_for(_engine.sync_engine, "connect")
-        def _set_sqlite_pragma(dbapi_conn, _record):  # type: ignore[no-untyped-def]
-            cursor = dbapi_conn.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.execute("PRAGMA busy_timeout=30000")
-            cursor.close()
+        if url.startswith("sqlite"):
+
+            @event.listens_for(_engine.sync_engine, "connect")
+            def _set_sqlite_pragma(dbapi_conn, _record):  # type: ignore[no-untyped-def]
+                cursor = dbapi_conn.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.execute("PRAGMA busy_timeout=30000")
+                cursor.close()
 
     return _engine
 
@@ -54,6 +56,17 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+async def _table_cols(conn, table: str) -> set[str]:
+    """Existing column names of ``table`` ({} if missing); works on SQLite and PostgreSQL."""
+    if conn.dialect.name == "sqlite":
+        rows = (await conn.exec_driver_sql(f"PRAGMA table_info({table})")).fetchall()
+        return {r[1] for r in rows}
+    return await conn.run_sync(
+        lambda c: {col["name"] for col in inspect(c).get_columns(table)}
+        if inspect(c).has_table(table) else set()
+    )
+
+
 async def init_db() -> None:
     """Create all tables (dev convenience; Alembic owns migrations)."""
     from app.models import Base
@@ -63,43 +76,23 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         # Lightweight column migration for existing DBs (create_all won't
         # alter existing tables).
-        cols = {
-            r[1]
-            for r in (await conn.exec_driver_sql(
-                "PRAGMA table_info(request_logs)")).fetchall()
-        }
+        cols = await _table_cols(conn, "request_logs")
         for col in ("request_input", "response_text"):
             if col not in cols:
                 await conn.exec_driver_sql(
                     f"ALTER TABLE request_logs ADD COLUMN {col} TEXT")
         # create_all adds new tables but never alters existing ones.
-        rr_cols = {
-            r[1]
-            for r in (await conn.exec_driver_sql(
-                "PRAGMA table_info(research_runs)")).fetchall()
-        }
+        rr_cols = await _table_cols(conn, "research_runs")
         if rr_cols and "conversation_id" not in rr_cols:
             await conn.exec_driver_sql(
                 "ALTER TABLE research_runs ADD COLUMN conversation_id VARCHAR(64)")
-        p_cols = {
-            r[1]
-            for r in (await conn.exec_driver_sql(
-                "PRAGMA table_info(providers)")).fetchall()
-        }
+        p_cols = await _table_cols(conn, "providers")
         if p_cols and "pricing" not in p_cols:
             await conn.exec_driver_sql(
                 "ALTER TABLE providers ADD COLUMN pricing JSON")
         # Extended character columns for the roleplay studio.
-        c_cols = {
-            r[1]
-            for r in (await conn.exec_driver_sql(
-                "PRAGMA table_info(characters)")).fetchall()
-        }
-        rp_cols = {
-            r[1]
-            for r in (await conn.exec_driver_sql(
-                "PRAGMA table_info(roleplay_rooms)")).fetchall()
-        }
+        c_cols = await _table_cols(conn, "characters")
+        rp_cols = await _table_cols(conn, "roleplay_rooms")
         if rp_cols:
             rp_adds = {
                 "summary": "TEXT DEFAULT ''",
@@ -131,11 +124,7 @@ async def init_db() -> None:
                 await conn.exec_driver_sql(
                     f"ALTER TABLE characters ADD COLUMN {col} {ddl}")
         # Profile fields on users (bio / avatar / GitHub link).
-        u_cols = {
-            r[1]
-            for r in (await conn.exec_driver_sql(
-                "PRAGMA table_info(users)")).fetchall()
-        }
+        u_cols = await _table_cols(conn, "users")
         u_adds = {
             "bio": "VARCHAR(512) DEFAULT ''",
             "avatar_url": "VARCHAR(512) DEFAULT ''",
@@ -152,20 +141,12 @@ async def init_db() -> None:
                 await conn.exec_driver_sql(
                     f"ALTER TABLE users ADD COLUMN {col} {ddl}")
         # Per-user memory isolation on persistent snippets.
-        mem_cols = {
-            r[1]
-            for r in (await conn.exec_driver_sql(
-                "PRAGMA table_info(memories)")).fetchall()
-        }
+        mem_cols = await _table_cols(conn, "memories")
         if mem_cols and "owner_id" not in mem_cols:
             await conn.exec_driver_sql(
                 "ALTER TABLE memories ADD COLUMN owner_id INTEGER")
         # Activity-log v2: normalized event fields on the agent ledger.
-        ae_cols = {
-            r[1]
-            for r in (await conn.exec_driver_sql(
-                "PRAGMA table_info(agent_events)")).fetchall()
-        }
+        ae_cols = await _table_cols(conn, "agent_events")
         ae_adds = {
             "kind": "VARCHAR(24) DEFAULT 'note'",
             "title": "VARCHAR(512) DEFAULT ''",

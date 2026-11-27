@@ -69,7 +69,7 @@ def media_dir() -> Path:
     """The shared generated-media dir (data/media)."""
     from app.config import get_settings
 
-    p = Path(get_settings().database_url.split("///")[-1]).parent / "media"
+    p = get_settings().data_path / "media"
     p.mkdir(parents=True, exist_ok=True)
     return p
 

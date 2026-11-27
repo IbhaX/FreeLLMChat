@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     public_base_url: Optional[str] = None
 
     database_url: str = f"sqlite+aiosqlite:///{BASE_DIR / 'data' / 'gateway.db'}"
+    # Where media / research snapshots live. Independent of database_url so the
+    # app can run on PostgreSQL. Env var: DATA_DIR.
+    data_dir: str = str(BASE_DIR / "data")
+
+    @property
+    def data_path(self) -> Path:
+        return Path(self.data_dir)
 
     # Required token for /admin/* endpoints.
     admin_token: str = "admin-change-me"

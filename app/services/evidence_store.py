@@ -94,8 +94,7 @@ def _norm_ws(text: str) -> str:
 
 
 def _data_dir() -> Path:
-    db_url = get_settings().database_url
-    return Path(db_url.split("///")[-1]).parent
+    return get_settings().data_path
 
 
 def store_text_file(text: str, subdir: str = "texts") -> str:

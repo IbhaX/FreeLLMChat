@@ -121,8 +121,7 @@ async def _log_call(
 # ---------------------------------------------------------------- storage
 
 def _research_dir(sub: str) -> Path:
-    db_url = get_settings().database_url
-    root = Path(db_url.split("///")[-1]).parent
+    root = get_settings().data_path
     p = root / get_settings().research_snapshot_dir / sub
     p.mkdir(parents=True, exist_ok=True)
     return p
@@ -529,8 +528,7 @@ async def read_pdf(
             pdf_bytes = resp.content
             final_url = str(resp.url)
     elif path:
-        data_root = Path(
-            get_settings().database_url.split("///")[-1]).parent.resolve()
+        data_root = get_settings().data_path.resolve()
         p = Path(path).resolve()
         if not str(p).startswith(str(data_root)) or not p.is_file():
             pdf_bytes, result = None, _err(

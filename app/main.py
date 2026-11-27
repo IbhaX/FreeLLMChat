@@ -240,9 +240,7 @@ async def media_file(fname: str):
 
     if "/" in fname or "\\" in fname or fname.startswith("."):
         return JSONResponse({"error": "bad name"}, status_code=400)
-    media_dir = (
-        Path(get_settings().database_url.split("///")[-1]).parent / "media"
-    )
+    media_dir = get_settings().data_path / "media"
     path = media_dir / fname
     if not path.is_file():
         return JSONResponse({"error": "not found"}, status_code=404)
