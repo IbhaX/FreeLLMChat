@@ -1,7 +1,40 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
- <defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8b7bff"/><stop offset=".55" stop-color="#5d7cff"/><stop offset="1" stop-color="#40d7ed"/></linearGradient><radialGradient id="g"><stop stop-color="#6b4dff" stop-opacity=".5"/><stop offset="1" stop-color="#6b4dff" stop-opacity="0"/></radialGradient></defs>
- <circle cx="256" cy="256" r="220" fill="url(#g)"><animate attributeName="r" values="190;225;190" dur="3.2s" repeatCount="indefinite"/></circle>
- <path d="M92 171c0-36 29-65 65-65h198c36 0 65 29 65 65v132c0 36-29 65-65 65H224l-82 61c-13 10-31 0-31-16v-55c-12-12-19-28-19-46z" fill="#151b37" stroke="url(#b)" stroke-width="13" stroke-linejoin="round"/>
- <path d="M151 207h210M151 266h140" stroke="url(#b)" stroke-width="19" stroke-linecap="round" opacity=".8"/>
- <path d="M371 63l20 53 53 20-53 20-20 53-20-53-53-20 53-20z" fill="#fff"><animateTransform attributeName="transform" type="rotate" from="0 371 136" to="360 371 136" dur="18s" repeatCount="indefinite"/></path>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="iChat">
+  <title>iChat</title>
+  <desc>iChat — The dot is a speech bubble, and three typing dots inside it show the AI writing back.</desc>
+  <defs><linearGradient id="ichat-tile" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="64">
+      <stop offset="0" stop-color="#119C8F"/><stop offset="1" stop-color="#0A6A62"/>
+    </linearGradient>
+    <linearGradient id="ichat-sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient></defs>
+  <style>
+    .ichat-tile { opacity: 0; transform-box: fill-box; transform-origin: center; transform: scale(.94);
+      animation: ichat-in .55s cubic-bezier(.2,.75,.25,1) forwards; }
+    .ichat-stem { transform-box: fill-box; transform-origin: 50% 100%; transform: scaleY(0);
+      animation: ichat-in .5s cubic-bezier(.2,.75,.25,1) .15s forwards; }
+    .ichat-dot { opacity: 0; transform: translateY(-3px); animation: ichat-in .45s cubic-bezier(.2,.75,.25,1) .38s forwards; }
+    .ichat-accent { opacity: 0; transform-box: fill-box; transform-origin: center; transform: scale(.9);
+      animation: ichat-in .5s cubic-bezier(.2,.75,.25,1) .58s forwards; }
+    .ichat-t2 { animation-delay: .68s; } .ichat-t3 { animation-delay: .78s; }
+    @keyframes ichat-in { to { opacity: 1; transform: none; } }
+    .ichat-car { opacity: 0; transform-box: fill-box; transform-origin: center;
+      animation: ichat-car 2.1s cubic-bezier(.45,0,.3,1) .85s forwards; }
+    @keyframes ichat-car { 0% { opacity: 0; transform: translateY(3px); } 14% { opacity: 1; }
+      78% { opacity: 1; } 100% { opacity: 0; transform: translateY(-19px) scale(.42); } }
+    @media (prefers-reduced-motion: reduce) {
+      .ichat-tile, .ichat-stem, .ichat-dot, .ichat-accent, .ichat-wm { animation: none; opacity: 1; transform: none; }
+      .ichat-car { display: none; }
+    }
+  </style>
+  <g transform="translate(0 0)">
+    <g class="ichat-tile">
+      <rect width="64" height="64" rx="14.5" fill="url(#ichat-tile)"/>
+      <rect x=".5" y=".5" width="63" height="63" rx="14" fill="none" stroke="url(#ichat-sheen)"/>
+    </g>
+    <g class="ichat-dot"><rect x="22" y="7.5" width="20" height="13" rx="5" fill="#fff"/><path d="M25 19 L23.2 24.4 L30.5 19.5 Z" fill="#fff" stroke="#fff" stroke-width=".6" stroke-linejoin="round"/></g>
+    <g class="ichat-accent ichat-t1"><circle cx="27.3" cy="14" r="1.5" fill="url(#ichat-tile)"/></g>
+    <g class="ichat-accent ichat-t2"><circle cx="32" cy="14" r="1.5" fill="url(#ichat-tile)"/></g>
+    <g class="ichat-accent ichat-t3"><circle cx="36.7" cy="14" r="1.5" fill="url(#ichat-tile)"/></g>
+    <g class="ichat-stem"><path d="M28.2 25 H35.8 L37.2 50.4 Q37.3 52.2 35.5 52.2 H28.5 Q26.7 52.2 26.8 50.4 Z" fill="#fff"/></g>
+  </g>
 </svg>

@@ -1,20 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
- <defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#11152b"/><stop offset="1" stop-color="#070a13"/></linearGradient>
-  <radialGradient id="glow"><stop stop-color="#6b4dff" stop-opacity=".55"/><stop offset="1" stop-color="#6b4dff" stop-opacity="0"/></radialGradient>
-  <linearGradient id="bubble" x1=".1" y1="0" x2=".9" y2="1"><stop stop-color="#8b7bff"/><stop offset=".52" stop-color="#5d7cff"/><stop offset="1" stop-color="#40d7ed"/></linearGradient>
-  <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#a9eaff"/></linearGradient>
-  <filter id="blur"><feGaussianBlur stdDeviation="24"/></filter>
-  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur in="SourceAlpha" stdDeviation="9" result="b"/><feOffset dy="8"/><feComponentTransfer><feFuncA type="linear" slope=".35"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
- </defs>
- <rect width="512" height="512" rx="122" fill="url(#bg)"/>
- <circle cx="255" cy="248" r="185" fill="url(#glow)" filter="url(#blur)"/>
- <rect x="2" y="2" width="508" height="508" rx="120" fill="none" stroke="#8d9bff" stroke-opacity=".2" stroke-width="4"/>
- <g filter="url(#shadow)">
-  <path d="M112 169c0-31 25-56 56-56h173c31 0 56 25 56 56v119c0 31-25 56-56 56H226l-72 53c-11 8-26 0-26-14v-48c-10-10-16-24-16-40z" fill="#151b37" stroke="url(#bubble)" stroke-width="12" stroke-linejoin="round"/>
-  <path d="M154 204h196M154 256h132" fill="none" stroke="url(#bubble)" stroke-width="18" stroke-linecap="round" opacity=".7"/>
-  <path d="M365 87l17 45 45 17-45 17-17 45-17-45-45-17 45-17z" fill="url(#spark)"/>
-  <path d="M112 91l9 24 24 9-24 9-9 24-9-24-24-9 24-9z" fill="#8d83ff" opacity=".9"/>
- </g>
- <circle cx="365" cy="383" r="9" fill="#56d8ee"/><circle cx="397" cy="383" r="9" fill="#8b7bff" opacity=".8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="iChat">
+  <title>iChat</title>
+  <desc>iChat — The dot is a speech bubble, and three typing dots inside it show the AI writing back.</desc>
+  <defs><linearGradient id="ichat-tile" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="64">
+      <stop offset="0" stop-color="#119C8F"/><stop offset="1" stop-color="#0A6A62"/>
+    </linearGradient>
+    <linearGradient id="ichat-sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient></defs>
+  
+  <g transform="translate(0 0)">
+    <g>
+      <rect width="64" height="64" rx="14.5" fill="url(#ichat-tile)"/>
+      <rect x=".5" y=".5" width="63" height="63" rx="14" fill="none" stroke="url(#ichat-sheen)"/>
+    </g>
+    <g><rect x="22" y="7.5" width="20" height="13" rx="5" fill="#fff"/><path d="M25 19 L23.2 24.4 L30.5 19.5 Z" fill="#fff" stroke="#fff" stroke-width=".6" stroke-linejoin="round"/></g>
+    <g><circle cx="27.3" cy="14" r="1.5" fill="url(#ichat-tile)"/></g>
+    <g><circle cx="32" cy="14" r="1.5" fill="url(#ichat-tile)"/></g>
+    <g><circle cx="36.7" cy="14" r="1.5" fill="url(#ichat-tile)"/></g>
+    <g><path d="M28.2 25 H35.8 L37.2 50.4 Q37.3 52.2 35.5 52.2 H28.5 Q26.7 52.2 26.8 50.4 Z" fill="#fff"/></g>
+  </g>
 </svg>
