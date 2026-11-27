@@ -1,0 +1,14 @@
+# iChat
+
+> iChat is one workspace for every leading AI model. It routes across providers with automatic failover, renders rich structured answers, and runs deep research, agents and roleplay. Part of the IbhaX family of apps (https://ibhax.com).
+
+## Pages
+- [Home](https://ichat.ibhax.com/): what iChat does
+- [Sign in](https://ichat.ibhax.com/login): accounts are required to chat; conversations are private to the user
+
+## For AI agents
+- iChat is a web app; there is no public content to crawl beyond the home page. Shared conversations are only visible to people who have the share link.
+
+## Optional
+- [Sitemap](https://ichat.ibhax.com/sitemap.xml)
+- [IbhaX](https://ibhax.com/): the other apps

@@ -387,6 +387,13 @@ async def robots(request: Request) -> Response:
                     headers={"Cache-Control": "public, max-age=3600"})
 
 
+@app.get("/llms.txt", include_in_schema=False)
+@app.get("/llm.txt", include_in_schema=False)
+async def llms_txt() -> Response:
+    return Response((static_dir / "llms.txt").read_text(encoding="utf-8"), media_type="text/plain",
+                    headers={"Cache-Control": "public, max-age=3600"})
+
+
 @app.get("/site.webmanifest", include_in_schema=False)
 async def site_manifest() -> Response:
     return JSONResponse(web_manifest(), media_type="application/manifest+json",
