@@ -317,3 +317,12 @@
     }
   });
 })();
+
+/* Phone install banner (loads the shared kit once the page is ready). */
+(function(){
+  function add(){ if(document.getElementById('ibInstallJs')) return;
+    var s=document.createElement('script'); s.id='ibInstallJs'; s.src='/static/install-banner.js?v=1'; s.defer=true;
+    s.dataset.name='iChat'; s.dataset.icon='/static/img/ichat-mark-v4-192.png'; s.dataset.acc='#8b3a3a'; s.dataset.css='/static/install-banner.css?v=1';
+    document.body.appendChild(s); }
+  if(document.body) add(); else document.addEventListener('DOMContentLoaded', add);
+})();

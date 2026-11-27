@@ -2,7 +2,7 @@
   <title>iChat</title>
   <desc>iChat — The dot is a speech bubble, and three typing dots inside it show the AI writing back.</desc>
   <defs><linearGradient id="ichat-tile" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="64">
-      <stop offset="0" stop-color="#119C8F"/><stop offset="1" stop-color="#0A6A62"/>
+      <stop offset="0" stop-color="#b84c4c"/><stop offset="1" stop-color="#742c2c"/>
     </linearGradient>
     <linearGradient id="ichat-sheen" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/>

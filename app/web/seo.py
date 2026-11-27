@@ -106,7 +106,7 @@ def _structured_data(origin: str, seo: PageSEO) -> str:
             "@id": f"{origin}/#org",
             "name": SITE_NAME,
             "url": f"{origin}/",
-            "logo": f"{origin}/static/img/ichat-mark-v4-512.png?v=b3",
+            "logo": f"{origin}/static/img/ichat-mark-v4-512.png?v=c1",
         },
         {
             "@type": "WebSite",
@@ -150,7 +150,7 @@ def seo_head(name: str, request: Request | None = None) -> str:
         f'<meta name="application-name" content="{SITE_NAME}">',
         f'<meta name="apple-mobile-web-app-title" content="{SITE_NAME}">',
         '<meta name="mobile-web-app-capable" content="yes">',
-        '<link rel="apple-touch-icon" sizes="180x180" href="/static/img/ichat-mark-v4-apple.png?v=b3">',
+        '<link rel="apple-touch-icon" sizes="180x180" href="/static/img/ichat-mark-v4-apple.png?v=c1">',
         '<link rel="manifest" href="/site.webmanifest?v=ichat-install-v5">',
         '<meta property="og:type" content="website">',
         f'<meta property="og:site_name" content="{SITE_NAME}">',
@@ -195,11 +195,11 @@ def web_manifest() -> dict:
         "categories": ["productivity", "utilities"],
         "prefer_related_applications": False,
         "icons": [
-            {"src": "/static/img/ichat-mark-v4-192.png?v=b3", "sizes": "192x192",
+            {"src": "/static/img/ichat-mark-v4-192.png?v=c1", "sizes": "192x192",
              "type": "image/png", "purpose": "any"},
-            {"src": "/static/img/ichat-mark-v4-512.png?v=b3", "sizes": "512x512",
+            {"src": "/static/img/ichat-mark-v4-512.png?v=c1", "sizes": "512x512",
              "type": "image/png", "purpose": "any"},
-            {"src": "/static/img/ichat-mark-v4-512.png?v=b3", "sizes": "512x512",
+            {"src": "/static/img/ichat-mark-v4-512.png?v=c1", "sizes": "512x512",
              "type": "image/png", "purpose": "maskable"},
         ],
     }
