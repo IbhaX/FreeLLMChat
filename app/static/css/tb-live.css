@@ -97,7 +97,7 @@
 @keyframes tbl-shimmer-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .tbl-cover-emb{
   width:52px;height:52px;border-radius:14px;flex:none;
-  background:url('/static/img/logo-mark.png') center/contain no-repeat,
+  background:url('/static/img/ichat-mark-v4-192.png?v=b3') center/contain no-repeat,
     color-mix(in srgb,var(--accent,#6d6af8) 18%,transparent);
 }
 .tbl-cover-kick{

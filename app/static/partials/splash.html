@@ -1,20 +1,31 @@
-<div id="splash" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#0d0d0d;overflow:hidden;transition:opacity .6s ease-out">
-  <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 40%,rgba(139,58,58,.08),transparent 60%);pointer-events:none"></div>
-  <div id="splash-inner" style="text-align:center;transform:scale(.85);opacity:0;transition:transform .8s cubic-bezier(.2,.8,.2,1),opacity .6s">
-    <img src="/static/img/logo-animated.svg?v=3" alt="iChat" style="width:90px;height:135px;margin:0 auto 18px;filter:drop-shadow(0 0 30px rgba(139,58,58,.3))">
-    <div style="font-family:Inter,system-ui,sans-serif;font-size:30px;font-weight:700;background:linear-gradient(135deg,#8b3a3a,#5e2626);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.5px">iChat</div>
-    <div style="font-family:Inter,system-ui,sans-serif;font-size:11px;color:#6a7394;margin-top:8px;letter-spacing:2px;text-transform:uppercase">Every model · One workspace</div>
-    <div style="margin-top:24px;width:40px;height:2px;background:linear-gradient(90deg,#8b3a3a,#5e2626);border-radius:2px;margin-left:auto;margin-right:auto;animation:splash-bar 2s ease-in-out infinite"><style>@keyframes splash-bar{0%,100%{transform:scaleX(1);opacity:.5}50%{transform:scaleX(2.5);opacity:1}}</style></div>
-  </div>
+<style>
+#splash{position:fixed!important;inset:0;z-index:99999;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 50% 35%,rgba(104,91,255,.10),transparent 48%),rgba(5,7,17,.22);backdrop-filter:blur(5px) saturate(1.08);-webkit-backdrop-filter:blur(5px) saturate(1.08);overflow:hidden;transition:opacity .55s ease}
+#splash .ichat-load-card{position:relative;width:min(390px,100%);padding:31px 27px 26px;text-align:center;border-radius:28px;overflow:hidden;background:linear-gradient(150deg,rgba(27,31,57,.98),rgba(11,14,28,.99));border:1px solid rgba(150,148,255,.23);box-shadow:0 32px 95px #0009,inset 0 1px #ffffff12;transform:translateY(18px) scale(.96);opacity:0;transition:transform .7s cubic-bezier(.2,.8,.2,1),opacity .55s}
+#splash .ichat-load-card:before{content:"";position:absolute;top:0;left:18%;right:18%;height:1px;background:linear-gradient(90deg,transparent,#9b8cff,#55d9f2,transparent)}
+#splash .ichat-orbit{position:relative;width:92px;height:92px;margin:0 auto 17px;border-radius:27px;display:grid;place-items:center;background:radial-gradient(circle,rgba(115,105,255,.2),rgba(75,190,226,.05));border:1px solid rgba(151,153,255,.25);box-shadow:0 12px 35px rgba(83,87,220,.18)}
+#splash .ichat-orbit:before,#splash .ichat-orbit:after{content:"";position:absolute;border:1px solid rgba(119,160,255,.38);border-radius:50%;inset:-8px;animation:ichat-orbit 5s linear infinite}
+#splash .ichat-orbit:after{inset:-15px;border-color:rgba(74,211,237,.2);animation-direction:reverse;animation-duration:8s}
+#splash .ichat-orbit img{width:62px;height:62px;object-fit:contain;filter:drop-shadow(0 4px 18px rgba(111,123,255,.4))}
+#splash .ichat-name{font:700 28px/1.2 Inter,system-ui,sans-serif;letter-spacing:-.7px;color:#f0f1ff}
+#splash .ichat-kicker{margin-top:8px;color:#8d98bc;font:600 9px/1.5 ui-monospace,monospace;letter-spacing:.2em}
+#splash .ichat-message{margin-top:24px;color:#aeb6d1;font:500 12px/1.5 Inter,system-ui,sans-serif}
+#splash .ichat-track{height:3px;margin:15px auto 0;width:100%;background:#ffffff14;border-radius:9px;overflow:hidden}
+#splash .ichat-track i{display:block;width:38%;height:100%;background:linear-gradient(90deg,#8172ff,#4bd3ed);border-radius:9px;animation:ichat-load 1.5s ease-in-out infinite}
+@keyframes ichat-orbit{to{transform:rotate(360deg)}}@keyframes ichat-load{from{transform:translateX(-110%)}to{transform:translateX(290%)}}
+@media(prefers-reduced-motion:reduce){#splash .ichat-orbit:before,#splash .ichat-orbit:after,#splash .ichat-track i{animation:none}#splash .ichat-track i{width:55%}}
+</style>
+<div id="splash" role="status" aria-live="polite" style="position:fixed!important;inset:0!important;z-index:2147483000!important;display:grid!important;place-items:center!important;width:100vw!important;height:100dvh!important;min-height:100vh!important;box-sizing:border-box!important;margin:0!important;">
+ <div class="ichat-load-card" id="splash-inner">
+  <div class="ichat-orbit"><img src="/static/img/ichat-mark-v4-192.png?v=b3" alt="" aria-hidden="true"></div>
+  <div class="ichat-name">iChat</div><div class="ichat-kicker">EVERY MODEL · ONE WORKSPACE</div>
+  <div class="ichat-message">Connecting your AI workspace…</div><div class="ichat-track"><i></i></div>
+ </div>
 </div>
 <script>
-(function(){
-  var s=document.getElementById('splash');
-  var inner=document.getElementById('splash-inner');
-  requestAnimationFrame(function(){requestAnimationFrame(function(){inner.style.transform='scale(1)';inner.style.opacity='1'})});
-  function hide(){s.style.opacity='0';setTimeout(function(){s.remove()},600)}
-  if(document.readyState==='complete')setTimeout(hide,2400);
-  else window.addEventListener('load',function(){setTimeout(hide,2400)});
-  setTimeout(hide,3500);
+(function(){var s=document.getElementById('splash'),inner=document.getElementById('splash-inner');
+ requestAnimationFrame(function(){requestAnimationFrame(function(){inner.style.transform='none';inner.style.opacity='1'})});
+ var done=false;function hide(){if(done)return;done=true;s.style.opacity='0';setTimeout(function(){s.remove()},600)}
+ if(document.readyState==='complete')setTimeout(hide,1800);else window.addEventListener('load',function(){setTimeout(hide,1800)},{once:true});
+ setTimeout(hide,4000);
 })();
 </script>

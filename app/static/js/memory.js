@@ -119,7 +119,7 @@
     S.brain=new T.Group();S.scene.add(S.brain);
     S.ray=new T.Raycaster();S.ray.params.Points.threshold=.045;
     S.ptr=new T.Vector2();
-    shell();ambientFibers();nodesPoints();ambientPoints();edgesLines();
+    shell();ambientFibers();nodesPoints();ambientPoints();dendriticArbors();edgesLines();
     pulsesPoints();ringSprite();
     sizeCanvas();startLoop();entrance();
   }
@@ -183,7 +183,13 @@
         for(const j of b){
           if(j<=i)continue;
           const q=all[j],d2=(p[0]-q[0])**2+(p[1]-q[1])**2+(p[2]-q[2])**2;
-          if(d2<.024&&Math.random()<.5)pos.push(p[0],p[1],p[2],q[0],q[1],q[2]);
+          if(d2<.024&&Math.random()<.5){
+            const T=S.THREE,a=new T.Vector3(...p),z=new T.Vector3(...q),d=z.clone().sub(a);
+            const axis=Math.abs(d.y)<.8*d.length()?new T.Vector3(0,1,0):new T.Vector3(1,0,0);
+            const bend=d.clone().cross(axis).normalize().multiplyScalar((Math.random()-.5)*.10);
+            const cp=a.clone().add(z).multiplyScalar(.5).add(bend);
+            pushCurveSegments(pos,new T.QuadraticBezierCurve3(a,cp,z),5);
+          }
         }
       }
     });
@@ -263,6 +269,58 @@
     S.ptsAmb=new T.Points(geo,pointsMaterial());S.brain.add(S.ptsAmb);
   }
 
+  /* Organic neurites: gently bending, multi-segment paths instead of
+     ruler-straight graph edges. The control point is deterministic per pair. */
+  function neuriteCurve(A,B){
+    const T=S.THREE,a=new T.Vector3(A.x,A.y,A.z),b=new T.Vector3(B.x,B.y,B.z);
+    const d=b.clone().sub(a),mid=a.clone().add(b).multiplyScalar(.5);
+    let axis=Math.abs(d.y)<.82*d.length()?new T.Vector3(0,1,0):new T.Vector3(1,0,0);
+    let bend=new T.Vector3().crossVectors(d,axis).normalize();
+    const seed=hash(String(A.id||'')+'::'+String(B.id||''));
+    const sign=(seed&1)?1:-1,amount=(.10+(seed%17)/100)*sign;
+    bend.multiplyScalar(amount*Math.min(1.35,d.length()+.18));
+    mid.add(bend);
+    return new T.QuadraticBezierCurve3(a,mid,b);
+  }
+  function pushCurveSegments(out,curve,steps){
+    const pts=curve.getPoints(steps);
+    for(let i=0;i<pts.length-1;i++){
+      const a=pts[i],b=pts[i+1];out.push(a.x,a.y,a.z,b.x,b.y,b.z);
+    }
+  }
+  /* Dendritic arbor around each stored memory: branching, curved local
+     filaments make the cells read like neurons rather than graph vertices. */
+  function dendriticArbors(){
+    const T=S.THREE,rand=rnd(82731),pos=[],col=[];
+    S.nodes.forEach((n,idx)=>{
+      const base=new T.Vector3(n.x,n.y,n.z),color=new T.Color(CATS[n.category].c);
+      const branches=3+(idx%3);
+      let segmentCount=0;
+      for(let j=0;j<branches;j++){
+        const theta=rand()*Math.PI*2,phi=.45+rand()*2.15;
+        const dir=new T.Vector3(Math.cos(theta)*Math.sin(phi),Math.cos(phi),Math.sin(theta)*Math.sin(phi)).normalize();
+        const length=.075+rand()*.095;
+        const end=base.clone().addScaledVector(dir,length);
+        const bend=dir.clone().cross(new T.Vector3(.2,1,.3)).normalize().multiplyScalar((rand()-.5)*.075);
+        const mid=base.clone().addScaledVector(dir,length*.52).add(bend);
+        const curve=new T.QuadraticBezierCurve3(base.clone(),mid,end);
+        pushCurveSegments(pos,curve,7);segmentCount+=7;
+        // one delicate secondary dendrite on selected primary branches
+        if(j%2===0){
+          const fork=curve.getPoint(.68),side=dir.clone().cross(new T.Vector3(1,.2,.4)).normalize();
+          const tip=fork.clone().addScaledVector(side,(rand()-.5)*.10).addScaledVector(dir,.055);
+          const cp=fork.clone().lerp(tip,.48).addScaledVector(side,.018);
+          pushCurveSegments(pos,new T.QuadraticBezierCurve3(fork,cp,tip),5);segmentCount+=5;
+        }
+      }
+      for(let j=0;j<segmentCount;j++)col.push(color.r*.65,color.g*.65,color.b*.65,color.r*.65,color.g*.65,color.b*.65);
+    });
+    const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));
+    geo.setAttribute('color',new T.Float32BufferAttribute(col,3));
+    S.dendrites=new T.LineSegments(geo,new T.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.34,depthWrite:false,blending:T.AdditiveBlending}));
+    S.brain.add(S.dendrites);
+  }
+
   function edgesLines(){
     const T=S.THREE;
     const build=(kind)=>{
@@ -271,8 +329,8 @@
         const A=S.byId.get(e.a),B=S.byId.get(e.b);if(!A||!B)return;
         const c=new T.Color(EDGE_COLORS[kind]);
         const f=kind==='conversation'?1:.25+e.w*.75;
-        pos.push(A.x,A.y,A.z,B.x,B.y,B.z);
-        col.push(c.r*f,c.g*f,c.b*f,c.r*f,c.g*f,c.b*f);
+        const curve=neuriteCurve(A,B);pushCurveSegments(pos,curve,12);
+        for(let k=0;k<12;k++)col.push(c.r*f,c.g*f,c.b*f,c.r*f,c.g*f,c.b*f);
       });
       const geo=new T.BufferGeometry();
       geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));
@@ -293,8 +351,8 @@
       const A=S.byId.get(e.a),B=S.byId.get(e.b);if(!A||!B)return;
       if(!S.cats.has(A.category)||!S.cats.has(B.category))return;
       const c=new T.Color(EDGE_COLORS.similarity),f=.25+e.w*.75;
-      pos.push(A.x,A.y,A.z,B.x,B.y,B.z);
-      col.push(c.r*f,c.g*f,c.b*f,c.r*f,c.g*f,c.b*f);
+      const curve=neuriteCurve(A,B);pushCurveSegments(pos,curve,12);
+      for(let k=0;k<12;k++)col.push(c.r*f,c.g*f,c.b*f,c.r*f,c.g*f,c.b*f);
     });
     const geo=new T.BufferGeometry();
     geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));
@@ -417,7 +475,8 @@
         const i=S.nodes.findIndex(n=>n.id===p.e.b);
         if(i>=0)S.flash[i]=1;return false;}
       const A=S.byId.get(p.e.a),B=S.byId.get(p.e.b);if(!A||!B)return false;
-      pos[k*3]=A.x+(B.x-A.x)*p.t;pos[k*3+1]=A.y+(B.y-A.y)*p.t;pos[k*3+2]=A.z+(B.z-A.z)*p.t;
+      const point=neuriteCurve(A,B).getPoint(p.t);
+      pos[k*3]=point.x;pos[k*3+1]=point.y;pos[k*3+2]=point.z;
       const c=new T.Color(p.e.kind==='conversation'?EDGE_COLORS.conversation:'#cfe4ff');
       col[k*3]=c.r;col[k*3+1]=c.g;col[k*3+2]=c.b;k++;return true;
     });
@@ -494,28 +553,45 @@
     stage=$('#memStage');const cv=$('#memCanvas');
     new ResizeObserver(sizeCanvas).observe(stage);
     let down=null,moved=false;
-    cv.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY,rx:S.rotT.x,ry:S.rotT.y};moved=false;S.idle=0;try{cv.setPointerCapture(e.pointerId);}catch(_){}cv.classList.add('dragging');});
+    cv.style.touchAction='none';
+    cv.addEventListener('contextmenu',e=>e.preventDefault());
+    cv.addEventListener('pointerdown',e=>{
+      if(e.pointerType==='mouse'&&e.button!==0&&e.button!==2)return;
+      down={x:e.clientX,y:e.clientY,rx:S.rotT.x,ry:S.rotT.y,px:S.brain.position.x,py:S.brain.position.y,pan:e.button===2||e.shiftKey||e.pointerType==='pen'&&e.button===2};
+      moved=false;S.idle=0;try{cv.setPointerCapture(e.pointerId);}catch(_){}cv.classList.add('dragging');
+      if(e.pointerType!=='mouse')e.preventDefault();
+    });
     cv.addEventListener('pointermove',e=>{
       const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top;
       S.idle=0;
       if(down){const dx=e.clientX-down.x,dy=e.clientY-down.y;
         if(Math.abs(dx)+Math.abs(dy)>4)moved=true;
-        S.rotT.y=down.ry+dx*.005;
-        S.rotT.x=Math.max(-.9,Math.min(.9,down.rx+dy*.005));return;}
+        if(down.pan){
+          const scale=S.dist*.0018;
+          S.brain.position.x=down.px+dx*scale;
+          S.brain.position.y=down.py-dy*scale;
+        }else{
+          S.rotT.y=down.ry+dx*.007;
+          S.rotT.x=Math.max(-1.35,Math.min(1.35,down.rx+dy*.007));
+        }
+        return;}
       const n=S.renderer?pick(px,py):null;
       if(n!==S.hover){S.hover=n;cv.classList.toggle('point',!!n);tip(n,px,py);}
       else if(n)tip(n,px,py);
       if(S.ring){S.ring.visible=!!(n||S.sel);
         const h=n||S.sel;if(h)S.ring.position.set(h.x,h.y,h.z);}
     });
-    cv.addEventListener('pointerup',e=>{
+    const finishPointer=e=>{
       cv.classList.remove('dragging');
       if(down&&!moved){
         const r=cv.getBoundingClientRect(),n=pick(e.clientX-r.left,e.clientY-r.top);
         n?select(n,false):deselect();
       }
       down=null;
-    });
+    };
+    cv.addEventListener('pointerup',finishPointer);
+    cv.addEventListener('pointercancel',finishPointer);
+    cv.addEventListener('lostpointercapture',()=>{down=null;cv.classList.remove('dragging');});
     cv.addEventListener('dblclick',e=>{
       const r=cv.getBoundingClientRect(),n=pick(e.clientX-r.left,e.clientY-r.top);
       if(n)select(n,true);

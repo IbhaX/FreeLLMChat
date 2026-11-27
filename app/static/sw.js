@@ -1,11 +1,14 @@
-const VERSION = 'ichat-v2';
+const VERSION = 'ichat-v8-brand3';
 const SHELL = [
   '/',
   '/chat',
   '/static/css/main.css',
   '/static/js/main.js',
-  '/static/img/icon.svg',
-  '/static/img/favicon.png',
+  '/static/img/ichat-mark-v4-192.png?v=b3',
+  '/static/img/ichat-mark-v4-192.png?v=b3',
+  '/static/img/ichat-mark-v4-512.png?v=b3',
+  '/static/img/ichat-mark-v4-apple.png?v=b3',
+  '/site.webmanifest?v=ichat-install-v5',
 ];
 
 self.addEventListener('install', e => {

@@ -392,7 +392,7 @@ async def robots(request: Request) -> Response:
 @app.get("/site.webmanifest", include_in_schema=False)
 async def site_manifest() -> Response:
     return JSONResponse(web_manifest(), media_type="application/manifest+json",
-                        headers={"Cache-Control": "public, max-age=86400"})
+                        headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 @app.get("/sw.js", include_in_schema=False)
@@ -404,8 +404,9 @@ async def service_worker() -> Response:
 
 @app.get("/apple-touch-icon.png", include_in_schema=False)
 async def apple_touch_icon() -> Response:
-    return FileResponse(static_dir / "img" / "apple-touch-icon.png",
-                        media_type="image/png")
+    return FileResponse(static_dir / "img" / "ichat-apple-touch-v3.png",
+                        media_type="image/png",
+                        headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 @app.get("/healthz")

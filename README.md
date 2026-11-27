@@ -1,4 +1,4 @@
-# IbhaX Gateway
+# iChat Gateway
 
 One OpenAI-compatible endpoint (`http://localhost:8000/v1`) that unifies the free
 tiers of many LLM providers, with multi-key rotation, quota tracking, cooldowns,
@@ -110,7 +110,7 @@ it's OpenAI-compatible. Custom adapters live in `app/providers/`; register in
 | Cloudflare | dash.cloudflare.com → Workers AI + API token | Needs account ID too (`CLOUDFLARE_ACCOUNT_ID`) |
 | NVIDIA | build.nvidia.com → API key | Prototyping only, not for production |
 | Cohere | dashboard.cohere.com → API keys | Trial: non-commercial, ~1k calls/month |
-| SambaIbhaX | cloud.sambanova.ai → API | Very low daily cap |
+| SambaiChat | cloud.sambanova.ai → API | Very low daily cap |
 | Cerebras | cloud.cerebras.ai | $5 credits / 30 days, needs verified card |
 
 ## Free-tier caveats
